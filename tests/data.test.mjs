@@ -36,3 +36,16 @@ test('筆順の path: 数がくっついていない（丸めた時に区切り�
     assert.doesNotMatch(d, /\d*\.\d+\.\d/, `${c}: ${d}`);
   }
 });
+
+test('ひらがな・カタカナ: 46字ずつ、画数どおりの筆順、例語はその字を含む', () => {
+  for (const [s, re] of [['h', /^[ぁ-ゖー]+$/], ['k', /^[ァ-ヶー]+$/]]) {
+    const o = [...D.grades[s].order];
+    assert.equal(o.length, 46); assert.equal(new Set(o).size, 46);
+    for (const c of o) {
+      const k = D.kana[c];
+      assert.equal(k.s, s, c); assert.equal(ST[c].length, k.n, c);
+      for (const [w, kana, r, t] of k.w) assert.ok(re.test(w) && w.includes(c) && /^[ぁ-ゖー]+$/.test(kana) && kana.includes(r) && t === 'kana', `${c} ${w}`);
+    }
+  }
+  assert.equal(D.kana['あ'].n, 3); assert.equal(D.kana['き'].n, 4); assert.equal(D.kana['そ'].n, 1); assert.equal(D.kana['ネ'].n, 4);
+});

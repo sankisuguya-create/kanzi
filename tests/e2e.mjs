@@ -263,11 +263,23 @@ await page.click('#show');
 await page.click('.ptab[data-g="1"]');
 for (const c of '一右雨円王音') await page.click(`.cell[data-c="${c}"]`);
 check(await page.isDisabled('.cell[data-c="下"]') && (await page.textContent('.sub')).includes('1〜6字'), '提示: 6字まで選べて、7字目は押せない');
+await page.check('#opt-color');
 await page.click('#go');
 await page.waitForSelector('#stage.single');
 for (let i = 0; i < 6; i++) await page.mouse.click(683, 384);
 await page.waitForSelector('#stage.all');
 check((await page.$$('#stage .all-grid svg')).length === 6, '提示: 6字をならべて表示');
+// 一〜四画目の色分け: 1〜4画目が4色、5画目からは黒（番号は出さない）
+const col = await page.evaluate(() => [...document.querySelectorAll('#stage .all-grid svg')].map((svg) => ({
+  ink: [...svg.querySelectorAll('.ink path')].map((p) => getComputedStyle(p).stroke),
+  texts: svg.querySelectorAll('text').length
+})));
+const ONE = 'rgb(15, 94, 168)', TWO = 'rgb(200, 106, 0)', THREE = 'rgb(110, 67, 16)', FOUR = 'rgb(0, 128, 107)', BLACK = 'rgb(17, 17, 17)';
+const 音 = col[5]; // 音は9画
+check(音.ink.slice(0, 5).join('|') === [ONE, TWO, THREE, FOUR, BLACK].join('|') && 音.ink.slice(5).every((c) => c === BLACK), '提示: 一〜四画目に色、五画目からは黒（音）');
+check(col[0].ink.length === 1 && col[0].ink[0] === ONE, '提示: 一画の字（一）は1色');
+check(col.every((x) => x.texts === 0), '提示: 画の番号は出さない');
+await checkFonts('提示（色分け）');
 await shot('13-show-6');
 await page.keyboard.press('Escape');
 await page.click('#cancel');
@@ -323,6 +335,38 @@ await page.goto(URL0); await page.waitForSelector('#go-test');
 check((await page.textContent('#go-test')).includes('はんい') && !/[範囲]/.test(await page.textContent('#app')), '表記: 6年でも「次の漢字テストの はんい」（はん囲 にしない）');
 await page.click('#go-read');
 check((await page.textContent('.chooser [data-id="test"]')).includes('はんい') && !/[範囲]/.test(await page.textContent('.chooser')), '表記: はじめかたも「はんい」');
+
+// ---- ひらがな・カタカナ（1年。先生が見せると決めた時だけ。見る・書くだけ）
+await page.evaluate(() => localStorage.setItem('kanzi.settings', JSON.stringify({ grades: { '3-1': ['h', 'k', 1] } })));
+await page.goto(URL0); await page.waitForSelector('.tab');
+check((await page.$$eval('.tabs .tab', (b) => b.map((x) => x.textContent))).join(',') === 'ひらがな,カタカナ,1年' && (await page.getAttribute('.tab[data-g="1"]', 'aria-selected')) === 'true', 'かな: タブは ひらがな・カタカナ・1年（1年で開く）');
+await page.click('.tab[data-g="h"]');
+check(!(await page.$('#go-read')) && !(await page.$('#go-fk')) && (await page.textContent('#go-browse')).includes('ひらがなを ぜんぶ見る') && (await page.textContent('#go-browse')).includes('46'), 'かな: ひらがなは「見る」と「書く」だけ（46字）');
+await shot('15-kana-menu');
+await page.click('#go-browse'); await page.click('.kc[data-c="あ"]'); await page.waitForSelector('.monitor');
+check((await page.textContent('.vmeta')).includes('3かく・ひらがな') && (await page.textContent('.vwords')).includes('あめ') && (await page.$$('.monitor .ink path')).length === 3, 'かな: 「あ」を見る（3画の書き順・ことば あめ）');
+await checkFonts('かな（見る）');
+await page.click('#back'); await page.click('#back');
+await page.click('#go-write'); await page.click('.chooser [data-id="rnd"]'); await page.waitForSelector('.pad');
+const hq = await page.evaluate(() => ({ c: KanziState.session.cur, rt: document.querySelector('.prompt rt').textContent, box: !!document.querySelector('.prompt .box'), say: !!document.getElementById('say') }));
+check(/^[ぁ-ん]$/.test(hq.c) && hq.box && hq.rt === '' && hq.say, `かな: ひらがなを書く問題は、ことばの□＋読み上げ（□の上に答えを出さない。${hq.c}）`);
+await shot('16-kana-write-h');
+await drawChar();
+await page.waitForSelector('.res', { timeout: 10000 });
+check((await page.textContent('.res')).includes('できた'), 'かな: ひらがなを正しく書くと「できた」');
+await page.click('#back');
+await page.click('.tab[data-g="k"]');
+await page.click('#go-write'); await page.click('.chooser [data-id="rnd"]'); await page.waitForSelector('.pad');
+const kq = await page.evaluate(() => ({ c: KanziState.session.cur, rt: document.querySelector('.prompt rt').textContent }));
+check(/^[ァ-ン]$/.test(kq.c) && kq.rt === String.fromCharCode(kq.c.charCodeAt(0) - 0x60), `かな: カタカナを書く問題は、□の上に ひらがな（${kq.c} ← ${kq.rt}）`);
+await shot('17-kana-write-k');
+await drawChar();
+await page.waitForSelector('.res', { timeout: 10000 });
+check((await page.textContent('.res')).includes('できた'), 'かな: カタカナを正しく書くと「できた」');
+await checkFonts('かな（書く）');
+await page.click('#back');
+await page.goto(URL0 + '?teacher=1'); await page.waitForSelector('#d-grades');
+check((await page.textContent('#d-grades-now')).startsWith('ひらがな・カタカナ・1年') && !!(await page.$('.gchecks input[data-g="h"]')), '先生: 見せる学年に ひらがな・カタカナ');
 
 check(errors.length === 0, 'コンソールエラーなし' + (errors.length ? ': ' + errors.join(' / ') : ''));
 await browser.close();

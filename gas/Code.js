@@ -116,11 +116,15 @@ function requireClass_(klass) {
   return me;
 }
 
-// 見せる学年。未設定なら組名の先頭の数字（例: 3-1 → 3年）、それもなければ3年
+// 見せる学年（h＝ひらがな・k＝カタカナ・1〜6年）。未設定なら組名の先頭の数字（例: 3-1 → 3年）、それもなければ3年
+function tabList_(list) {
+  var seen = {};
+  return (list || []).map(function (g) { g = String(g).trim(); return g === 'h' || g === 'k' ? g : Number(g); })
+    .filter(function (g) { var ok = (g === 'h' || g === 'k' || (g >= 1 && g <= 6)) && !seen[g]; seen[g] = true; return ok; });
+}
 function grades_(klass) {
-  var v = String(setting_('grades:' + klass) || '');
-  var list = v.split(',').map(Number).filter(function (g) { return g >= 1 && g <= 6; });
-  if (list.length) return list;
+  var list = tabList_(String(setting_('grades:' + klass) || '').split(','));
+  if (list.some(function (g) { return typeof g === 'number'; })) return list;
   var m = String(klass).match(/^\s*([1-6])/); // 学級キー「学年-組」の学年
   return [m ? Number(m[1]) : 3];
 }
@@ -236,8 +240,8 @@ function api_teacherView(klass) {
 
 function api_setGrades(klass, list) {
   requireClass_(klass);
-  list = (list || []).map(Number).filter(function (g) { return g >= 1 && g <= 6; });
-  if (!list.length) throw new Error('1つ以上の学年をえらんでください');
+  list = tabList_(list);
+  if (!list.some(function (g) { return typeof g === 'number'; })) throw new Error('1年〜6年から1つ以上えらんでください');
   setSetting_('grades:' + klass, list.join(','));
   return list;
 }

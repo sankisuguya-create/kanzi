@@ -146,6 +146,33 @@ for (const c of allChars) {
   strokes[c] = ps.map((p) => compactPath(p[1]));
 }
 
+// ---- ひらがな・カタカナ（1年。清音46字ずつ。漢字ではないが、見る・かくを同じ形で学習する）
+// 正本は data-src/kana-hira.txt・kana-kata.txt（字|画数|例語）。画数は教科書の標準で、KanjiVG の画数と一致することを検査する
+const KANA = { h: { file: 'kana-hira.txt', re: /^[ぁ-ゖー]+$/ }, k: { file: 'kana-kata.txt', re: /^[ァ-ヶー]+$/ } };
+const kana = {};
+for (const s of Object.keys(KANA)) {
+  const rows = lines(KANA[s].file).map((l) => l.split('|'));
+  if (rows.length !== 46 || new Set(rows.map((r) => r[0])).size !== 46) err(`${KANA[s].file}: 46字ちょうど・重複なしでない（${rows.length}行）`);
+  KANA[s].order = rows.map((r) => r[0]).join('');
+  for (const [c, n, word] of rows) {
+    if (!KANA[s].re.test(c) || c.length !== 1) { err(`${KANA[s].file}: ${c} が1字の${s === 'h' ? 'ひらがな' : 'カタカナ'}でない`); continue; }
+    if (word && (!KANA[s].re.test(word) || !word.includes(c))) err(`${KANA[s].file}: ${c} の例語「${word}」がその字を含む${s === 'h' ? 'ひらがな' : 'カタカナ'}だけのことばでない`);
+    const fn = c.codePointAt(0).toString(16).padStart(5, '0') + '.svg', fp = path.join(KVG_CACHE, fn);
+    if (!fs.existsSync(fp)) {
+      const res = await fetch(`https://raw.githubusercontent.com/KanjiVG/kanjivg/master/kanji/${fn}`);
+      if (!res.ok) { err(`${c}: KanjiVG取得失敗 ${res.status}`); continue; }
+      fs.writeFileSync(fp, await res.text());
+    }
+    const ps = [...fs.readFileSync(fp, 'utf8').matchAll(/<path id="kvg:[0-9a-f]+-s(\d+)"[^>]*?\sd="([^"]+)"/g)]
+      .map((m) => [Number(m[1]), m[2].replace(/\s+/g, ' ').trim()]).sort((a, b) => a[0] - b[0]);
+    if (ps.length !== Number(n)) err(`${c}: KanjiVGの画数${ps.length}が教科書の画数${n}と違う`);
+    strokes[c] = ps.map((p) => compactPath(p[1]));
+    // 例語: [ことば, ことばの ひらがな, この字の ひらがな, 'kana']（漢字の例語と同じ並び。カタカナは ひらがなに直した読みを持つ）
+    const w = word ? [[word, kata2hira(word), kata2hira(c), 'kana']] : [];
+    kana[c] = { s, n: ps.length, w, on: [], kun: [] };
+  }
+}
+
 if (warns.length) console.log(`--- 目視確認（形態素解析と正本のよみが違う ${warns.length}件。多くは解析側の揺れ）\n` + warns.join('\n'));
 if (errors.length) { console.error(`--- エラー ${errors.length}件\n` + errors.join('\n')); process.exit(1); }
 
@@ -154,10 +181,11 @@ const kanji = {};
 for (const g of GRADES) for (const c of orders[g]) kanji[c] = { g, n: strokes[c].length, w: entries.get(c), on: readings.get(c).on, kun: readings.get(c).kun };
 const grades = {};
 for (const g of GRADES) grades[g] = { order: orders[g].join('') };
+for (const s of Object.keys(KANA)) grades[s] = { order: KANA[s].order }; // h＝ひらがな・k＝カタカナ
 const head = '// 自動生成（tools/build-data.mjs）。直接編集しない。正本は data-src/。\n';
-fs.writeFileSync(path.join(ROOT, 'src', 'data.js'), head + `var KANZI_DATA = ${JSON.stringify({ grades, kanji })};\n`);
+fs.writeFileSync(path.join(ROOT, 'src', 'data.js'), head + `var KANZI_DATA = ${JSON.stringify({ grades, kanji, kana })};\n`);
 fs.writeFileSync(path.join(ROOT, 'src', 'strokes.js'),
   head + '// 筆順データ: KanjiVG (c) Ulrich Apel ほか, CC BY-SA 3.0 https://kanjivg.tagaini.net/\n' +
   '// 各画の SVG path（109x109 座標、書く順）。\n' +
   `var KANZI_STROKES = ${JSON.stringify(strokes)};\n`);
-console.log(`OK: ${GRADES.map((g) => g + '年' + orders[g].length + '字').join('・')}、例語${[...entries.values()].reduce((a, w) => a + w.length, 0)}語`);
+console.log(`OK: ひらがな46字・カタカナ46字、${GRADES.map((g) => g + '年' + orders[g].length + '字').join('・')}、例語${[...entries.values()].reduce((a, w) => a + w.length, 0)}語`);
