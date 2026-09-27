@@ -172,6 +172,8 @@ check(ms < 20, `木の描画（最大状態）1回 ${ms.toFixed(1)}ms`);
 // ---- 先生画面: 見せる学年・進度
 await page.goto(URL0 + '?teacher=1');
 await page.waitForSelector('.gchecks');
+check((await page.textContent('.top .sub')).startsWith('3年1組'), '先生: 担当学級（3年1組）で開く');
+check((await page.$$('.kids tbody tr')).length === 30 && (await page.textContent('.kids thead')).includes('おぼえた字'), '先生: 担当学級の子どもごとの記録（30人）');
 await page.check('.gchecks input[data-g="4"]');
 await page.waitForSelector('.ttab[data-g="4"]');
 check((await page.getAttribute('.ttab[data-g="4"]', 'aria-selected')) === 'true', '先生: 4年を足すと いちばん上の4年が開く');

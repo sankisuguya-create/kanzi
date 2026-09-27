@@ -48,7 +48,7 @@
   // 起動時の情報: { role, email, klass, progress, grades(見せる学年), pointers{学年:進度}, orders{学年:並び}, classes, demo }
   function init() {
     if (!isGas) {
-      var role = /teacher/.test(location.search) ? 'teacher' : 'student', s = demoSettings(), klass = 'デモ';
+      var role = /teacher/.test(location.search) ? 'teacher' : 'student', s = demoSettings(), klass = '3-1';
       return Promise.resolve({ role: role, demo: true, email: 'demo', klass: klass, progress: Sched.norm(store.get(key)),
         grades: demoGrades(klass), pointers: demoPointers(klass), orders: s.orders, classes: [klass] });
     }
@@ -92,6 +92,18 @@
     }
     return Promise.resolve({ students: 30, perChar: out });
   }
+  // 子どもごとの記録 [{ no, name, last, sessions, items, learned, miss:[字...] }]（担当の先生だけ）
+  function students(klass) {
+    if (isGas) return gas('api_students', klass);
+    var seed = 11, out = [], now = Date.now(), chars = KANZI_DATA.grades[3].order;
+    function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    for (var i = 1; i <= 30; i++) {
+      var used = rnd() > 0.1, sessions = used ? Math.floor(rnd() * 40) : 0;
+      out.push({ no: i, name: 'じどう' + i, last: used ? now - Math.floor(rnd() * 12) * 86400000 : 0, sessions: sessions, items: sessions * 8,
+        learned: used ? Math.floor(rnd() * 120) : 0, miss: used ? [0, 1, 2].map(function () { return chars.charAt(Math.floor(rnd() * 200)); }) : [] });
+    }
+    return Promise.resolve(out);
+  }
   function pointersOf(klass) { return isGas ? gas('api_pointers', klass) : Promise.resolve(demoPointers(klass)); }
   function setPointer(klass, grade, n) {
     if (isGas) return gas('api_setPointer', klass, grade, n);
@@ -108,5 +120,5 @@
   }
 
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
-    stats: stats, pointersOf: pointersOf, setPointer: setPointer, gradesOf: gradesOf, setGrades: setGrades, setOrder: setOrder, store: store };
+    stats: stats, students: students, pointersOf: pointersOf, setPointer: setPointer, gradesOf: gradesOf, setGrades: setGrades, setOrder: setOrder, store: store };
 })(this);

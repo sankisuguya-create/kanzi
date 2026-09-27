@@ -414,26 +414,46 @@
     on('#menu', menu);
   }
 
-  // ================= 先生用（設計書 §5。児童ごとの記録は出さない）
+  // ================= 先生用（設計書 §5・§13。担当学級だけ。子どもごとの記録は先生画面にだけ出す）
   var ALL_GRADES = [1, 2, 3, 4, 5, 6];
+  // 学級キー「学年-組」を「3年1組」の形に
+  function klassLabel(k) { var m = String(k).match(/^([1-6])-(.+)$/); return m ? m[1] + '年' + m[2] + (/組$/.test(m[2]) ? '' : '組') : String(k); }
+  function dateLabel(ms) {
+    if (!ms) return '—';
+    var d = new Date(ms), days = Math.floor((Date.now() - ms) / 86400000);
+    return (d.getMonth() + 1) + '/' + d.getDate() + (days <= 0 ? '（きょう）' : days <= 6 ? '（' + days + '日前）' : '');
+  }
   function teacher(klass, tgrade) {
     clearScreen();
     klass = klass || S.klass || (S.info.classes || [])[0] || '';
     S.klass = klass;
-    app.innerHTML = '<header class="top t"><h1>かんじドリル 先生用</h1><p class="sub">' + esc(klass) + (S.info.demo ? '（架空のデータ）' : '') + '</p>' +
+    app.innerHTML = '<header class="top t"><h1>かんじドリル 先生用</h1><p class="sub">' + esc(klassLabel(klass)) + (S.info.demo ? '（架空のデータ）' : '') + '</p>' +
       '<button class="try" id="show">書き順を 大きく見せる</button><button class="try" id="try">児童画面を ためす</button></header><main class="teacher"><p>よみこみ中…</p></main>';
     on('#try', function () { startTrial(klass); });
     on('#show', function () { showPick(); });
-    Promise.all([Platform.gradesOf(klass), Platform.pointersOf(klass)]).then(function (r) {
+    if (!klass) {
+      $('#try').hidden = true;
+      $('.teacher').innerHTML = '<section><h2>担当の学級がありません</h2><p>スプレッドシートの「教師」シートに、あなたのメールアドレスと 学年・組 を入れてください（1人で何行でも。組を空けると その学年の全学級）。「書き順を 大きく見せる」は使えます。</p></section>';
+      return;
+    }
+    Promise.all([Platform.gradesOf(klass), Platform.pointersOf(klass), Platform.students(klass)]).then(function (r) {
+      var kids = r[2] || [];
       var grades = r[0], pointers = r[1] || {};
       tgrade = tgrade && grades.indexOf(tgrade) >= 0 ? tgrade : Math.max.apply(null, grades);
       return Platform.stats(klass, tgrade).then(function (st) {
         var order = orderOf(tgrade), pointer = pointers[tgrade] || 0, isTop = tgrade === Math.max.apply(null, grades);
-        var classes = (S.info.classes || []).length > 1 ? '<p><label>組 <select id="klass">' + S.info.classes.map(function (k) { return '<option' + (k === klass ? ' selected' : '') + '>' + esc(k) + '</option>'; }).join('') + '</select></label></p>' : '';
+        var classes = (S.info.classes || []).length > 1 ? '<p><label>学級 <select id="klass">' + S.info.classes.map(function (k) { return '<option value="' + esc(k) + '"' + (k === klass ? ' selected' : '') + '>' + esc(klassLabel(k)) + '</option>'; }).join('') + '</select></label></p>' : '';
+        var kidsHtml = '<section><h2>子どもごとの記録（' + kids.length + '人）</h2><p class="hint">この画面だけに出します（児童の画面には出しません）。「終えた回」は よむ・かく・カードを最後までやった回数、「おぼえた字」は よむで続けて正解して箱3以上になった字の数。</p>' +
+          (kids.length ? '<div class="kids-wrap"><table class="kids"><thead><tr><th>番号</th><th>名前</th><th>最後に使った日</th><th>終えた回（問題数）</th><th>おぼえた字</th><th>まちがいの多い字</th></tr></thead><tbody>' +
+            kids.map(function (k) {
+              var idle = !k.last || (Date.now() - k.last) > 7 * 86400000;
+              return '<tr' + (idle ? ' class="idle"' : '') + '><td>' + esc(k.no) + '</td><td>' + esc(k.name) + '</td><td>' + (idle ? '▲ ' : '') + esc(dateLabel(k.last)) + '</td>' +
+                '<td>' + k.sessions + '（' + k.items + '）</td><td>' + k.learned + '</td><td class="kmiss">' + esc((k.miss || []).join(' ')) + '</td></tr>';
+            }).join('') + '</tbody></table></div><p class="hint">▲＝7日以上 使っていない</p>' : '<p>名簿に この学級の子どもが いません（「名簿」シートの 学年・組 を確認してください）。</p>') + '</section>';
         var hard = Object.keys(st.perChar).filter(function (c) { return D.kanji[c] && D.kanji[c].g === tgrade; })
           .map(function (c) { var v = st.perChar[c]; return { c: c, s: v[0], b: v[1], r: v[0] ? v[1] / v[0] : 0 }; })
           .filter(function (x) { return x.s >= 3 && x.b > 0; }).sort(function (a, b) { return b.r - a.r; }).slice(0, 20);
-        $('.teacher').innerHTML = classes +
+        $('.teacher').innerHTML = classes + kidsHtml +
           '<section><h2>児童に見せる学年</h2><p class="hint">児童のメニューは、いちばん上の学年のタブで開きます。上のタブで学年を切り替えられます。</p>' +
           '<div class="gchecks">' + ALL_GRADES.map(function (g) { return '<label class="opt"><input type="checkbox" data-g="' + g + '"' + (grades.indexOf(g) >= 0 ? ' checked' : '') + '> ' + g + '年</label>'; }).join('') + '</div>' +
           '<p class="hint" id="gmsg" aria-live="polite"></p></section>' +

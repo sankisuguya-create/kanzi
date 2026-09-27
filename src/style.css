@@ -303,3 +303,11 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
   .monitor { order: -1; justify-content: center; }
 }
 .tools[hidden] { display: none; }
+
+/* 先生: 子どもごとの記録 */
+.kids-wrap { overflow-x: auto; }
+.kids { border-collapse: collapse; width: 100%; font-size: 17px; background: var(--card); }
+.kids th, .kids td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; white-space: nowrap; }
+.kids th { background: var(--fill-a); font-weight: 700; }
+.kids tr.idle td { background: var(--fill-b); }
+.kids .kmiss { font-size: 22px; letter-spacing: .2em; font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", serif; }
