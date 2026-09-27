@@ -1,7 +1,7 @@
 {
   "name": "kanzi",
   "private": true,
-  "description": "3年生 漢字ドリル",
+  "description": "漢字の森（小学1〜6年の漢字ドリル）",
   "scripts": {
     "build": "node tools/build-data.mjs && node tools/build-gas.mjs",
     "build:data": "node tools/build-data.mjs",

@@ -63,6 +63,11 @@ await page.evaluate(() => localStorage.clear());
 await page.reload();
 await page.waitForSelector('#go-browse');
 
+// ---- タイトル
+check((await page.textContent('.top h1')).startsWith('漢字の') && (await page.$$('.top h1 .mori g')).length === 3 &&
+  (await page.evaluate(() => new Set([1, 2, 3].map((i) => getComputedStyle(document.querySelector('.mori .tree' + i + ' path')).stroke)).size)) === 3, 'タイトル: 漢字の森（森の3つの木が別の色）');
+check((await page.title()) === '漢字の森', 'タイトル: タブの名前も 漢字の森');
+
 // ---- メニューと学年タブ
 check((await page.$$eval('.tabs .tab', (b) => b.map((x) => x.textContent))).join() === '1年,2年,3年', 'メニュー: 見せる学年のタブ（デモは1〜3年）');
 check((await page.getAttribute('.tab[data-g="3"]', 'aria-selected')) === 'true', 'メニュー: いちばん上の学年（3年）で開く');

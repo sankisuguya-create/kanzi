@@ -1,4 +1,4 @@
-// かんじドリル GASサーバー（設計書 §7）。スプレッドシートにバインドして使う。
+// 漢字の森 GASサーバー（設計書 §7）。スプレッドシートにバインドして使う。
 // シート: 名簿[メール, 学年, 組, 番号, 名前]（児童）／ 教師[メール, 学年, 組]（担当。1人で複数行可。組が空なら その学年の全学級）
 //         進捗[メール, read, write, meta, 更新] ／ 設定[キー, 値]
 // 学級のキーは「学年-組」（例 3-1）。設定のキー: grades:<学級>（見せる学年 "1,2,3"）／ pointer:<学級>:<学年>（授業の進度）／ order:<学年>（出題順）
@@ -9,7 +9,7 @@ var GRADE_LEN = { 1: 80, 2: 160, 3: 200, 4: 202, 5: 193, 6: 191 };
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('かんじドリル')
+    .setTitle('漢字の森')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 

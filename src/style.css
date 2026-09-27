@@ -311,3 +311,12 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .kids th { background: var(--fill-a); font-weight: 700; }
 .kids tr.idle td { background: var(--fill-b); }
 .kids .kmiss { font-size: 22px; letter-spacing: .2em; font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", serif; }
+
+/* タイトル「漢字の森」: 森の3つの木を別の色に（飾り。識別には使わない） */
+.title { display: inline-flex; align-items: center; gap: .05em; }
+.title .mori { width: 1.12em; height: 1.16em; margin: 0 .04em; overflow: visible; position: relative; top: -.07em; }
+.title .mori path { fill: none; stroke-width: 8.5; stroke-linecap: round; stroke-linejoin: round; }
+.title .mori .tree1 path { stroke: #5A9E1E; } /* 若葉 */
+.title .mori .tree2 path { stroke: #1F6B3A; } /* 深緑 */
+.title .mori .tree3 path { stroke: #B5541B; } /* 紅葉 */
+.title .title-extra { margin-left: .4em; }

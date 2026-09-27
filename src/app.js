@@ -55,6 +55,15 @@
   function clearScreen() { cleanup.forEach(function (f) { try { f(); } catch (e) {} }); cleanup = []; }
   function onKey(fn) { document.addEventListener('keydown', fn); cleanup.push(function () { document.removeEventListener('keydown', fn); }); }
 
+  // タイトル「漢字の森」。森は筆順データの線で描き、3つの木（1〜4画・5〜8画・9〜12画）を別の色にする（色は飾り）
+  function titleHtml(extra) {
+    var st = ST['森'], trees = [[0, 4], [4, 8], [8, 12]];
+    var mori = '<svg class="mori" viewBox="8 5.5 94.3 98" role="img" aria-label="森">' + trees.map(function (t, i) {
+      return '<g class="tree' + (i + 1) + '">' + st.slice(t[0], t[1]).map(function (d) { return '<path d="' + d + '"/>'; }).join('') + '</g>';
+    }).join('') + '</svg>';
+    return '<h1 class="title">漢字の' + mori + (extra ? '<span class="title-extra">' + extra + '</span>' : '') + '</h1>';
+  }
+
   // ================= 児童: メニュー
   function tabs(cur, cls) {
     if (S.grades.length < 2) return '';
@@ -72,7 +81,7 @@
     Platform.store.set(pk, act);
     var nSel = Sched.selected(p, orderOf(g)).length;
     app.innerHTML =
-      '<header class="top"><h1>かんじドリル</h1>' + tabs(g) + '</header>' +
+      '<header class="top">' + titleHtml() + tabs(g) + '</header>' +
       '<main class="menu">' +
       '<section class="tree-box">' + Tree.render(act, learned, chars.length, prev) + '</section>' +
       '<section class="actions">' +
@@ -427,7 +436,7 @@
     clearScreen();
     klass = klass || S.klass || (S.info.classes || [])[0] || '';
     S.klass = klass;
-    app.innerHTML = '<header class="top t"><h1>かんじドリル 先生用</h1><p class="sub">' + esc(klassLabel(klass)) + (S.info.demo ? '（架空のデータ）' : '') + '</p>' +
+    app.innerHTML = '<header class="top t">' + titleHtml('先生用') + '<p class="sub">' + esc(klassLabel(klass)) + (S.info.demo ? '（架空のデータ）' : '') + '</p>' +
       '<button class="try" id="show">書き順を 大きく見せる</button><button class="try" id="try">児童画面を ためす</button></header><main class="teacher"><p>よみこみ中…</p></main>';
     on('#try', function () { startTrial(klass); });
     on('#show', function () { showPick(); });

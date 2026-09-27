@@ -1,4 +1,4 @@
-# kanzi — 漢字学習サイトの設計
+# 漢字の森 — 漢字学習サイトの設計
 
 小学生が**自分で予習・復習する**ための漢字学習アプリの設計書。先行研究と根拠は [research.md](research.md)（`S`＝制度・基準、`R`＝研究、`T`＝実装資源）。
 設計理念は `-` リポジトリの [サイト設計理念](https://github.com/sankisuguya-create/-/blob/main/principles/site-design-philosophy.md)・[低コスト評価軸](https://github.com/sankisuguya-create/-/blob/main/principles/low-cost-evaluation-axes.md) に従う（以下「原則N」はその番号）。
