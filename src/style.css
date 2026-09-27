@@ -1,0 +1,171 @@
+/* 色は color-coding スキルの既定トークン。識別に使う色は2重符号化（語・記号・形）と組にする */
+:root {
+  --ink: #1A1A1A;
+  --ink-sub: #616870;
+  --ink-link: #0F5EA8;
+  --ink-alert: #C0330A;
+  --cat-1: #0F5EA8;
+  --cat-2: #C86A00;
+  --cat-3: #6E4310;
+  --fill-a: #D7E8F8;
+  --fill-b: #FBE3B4;
+  --solid-on: #0F5EA8;
+  --paper: #FBF9F4;
+  --card: #FFFFFF;
+  --line: #C9CDD2;
+  /* 木の色は装飾（識別に使わない） */
+  --leaf-0: #4E8A3E; --leaf-1: #6BA34F; --leaf-2: #3F7535;
+  --tap: 64px; /* 児童のタップ対象の下限より大きく（評価軸 §2） */
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: "BIZ UDPGothic", "Noto Sans JP", "Noto Sans CJK JP", "Hiragino Sans", sans-serif;
+  font-size: 20px; line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+}
+#app { max-width: 1100px; margin: 0 auto; padding: 12px 16px 24px; min-height: 100%; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
+
+/* ---- 見出し */
+.top { display: flex; align-items: baseline; gap: 14px; padding: 4px 4px 8px; }
+.top h1 { margin: 0; font-size: 34px; letter-spacing: .06em; color: var(--cat-3); }
+.top .sub { margin: 0; color: var(--ink-sub); font-size: 18px; }
+.demo-note { text-align: center; color: var(--ink-sub); font-size: 15px; }
+
+/* ---- ボタン */
+.big {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  width: 100%; min-height: 104px; padding: 12px 16px;
+  font-size: 30px; font-weight: 700; letter-spacing: .08em;
+  background: var(--card); border: 3px solid var(--ink); border-radius: 18px;
+}
+.big.primary { background: var(--solid-on); border-color: var(--solid-on); color: #fff; }
+.big .meta { font-size: 18px; font-weight: 400; letter-spacing: 0; }
+.big .next-chars { font-size: 22px; letter-spacing: .3em; }
+.big:active { transform: translateY(2px); }
+.done-note { font-size: 22px; font-weight: 400; border-style: dashed; border-color: var(--line); color: var(--ink-sub); }
+
+/* ---- メニュー */
+.menu { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; align-items: center; }
+.tree-box { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 8px 8px 4px; }
+.tree { width: 100%; height: auto; display: block; }
+.tree-cap { margin: 2px 0 6px; text-align: center; font-size: 18px; }
+.tree-cap b { font-size: 24px; }
+.tree-cap .sep { display: inline-block; width: 18px; }
+.ico-leaf, .ico-fruit { display: inline-block; vertical-align: -2px; margin-right: 4px; }
+.ico-leaf { width: 18px; height: 10px; border-radius: 50%; background: var(--leaf-1); transform: rotate(-25deg); }
+.ico-fruit { width: 14px; height: 14px; border-radius: 50%; background: var(--cat-2); border: 1.5px solid var(--cat-3); }
+.actions { display: grid; gap: 18px; }
+.t-ground { fill: #E6DDC8; }
+.t-trunk { fill: var(--cat-3); }
+.t-branch { fill: none; stroke: var(--cat-3); stroke-linecap: round; }
+.t-leaf.l0 { fill: var(--leaf-0); } .t-leaf.l1 { fill: var(--leaf-1); } .t-leaf.l2 { fill: var(--leaf-2); }
+.t-sprout { fill: var(--leaf-1); }
+.t-fruit { fill: var(--cat-2); stroke: var(--cat-3); stroke-width: 1; }
+.t-new { transform-box: fill-box; transform-origin: center; animation: pop .5s ease-out both; }
+@keyframes pop { from { transform: scale(0); } 60% { transform: scale(1.5); } to { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .t-new { animation: none; } }
+
+/* ---- 上のバー */
+.bar { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; margin-bottom: 10px; }
+.bar button { min-height: 56px; min-width: 110px; padding: 0 16px; font-size: 20px; border: 2px solid var(--line); background: var(--card); border-radius: 12px; }
+.bar .prog { text-align: center; color: var(--ink-sub); font-size: 20px; }
+
+/* ---- よむ */
+.read { display: grid; gap: 18px; justify-items: center; }
+.card {
+  width: min(100%, 720px); min-height: 46vh; position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--card); border: 3px solid var(--ink); border-radius: 22px; padding: 18px;
+}
+.card .word { font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", "Noto Serif CJK JP", serif; line-height: 1.1; }
+.card .tg { font-size: clamp(96px, 22vmin, 190px); }
+.card .ot { font-size: clamp(56px, 12vmin, 110px); }
+.card .kana { font-size: 40px; letter-spacing: .15em; visibility: hidden; min-height: 1.3em; }
+.card.flipped .kana { visibility: visible; }
+.card .tap-hint { position: absolute; bottom: 12px; color: var(--ink-sub); font-size: 18px; }
+.card.flipped .tap-hint { visibility: hidden; }
+.judge { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; width: min(100%, 720px); visibility: hidden; }
+.judge.show { visibility: visible; }
+.judge button { min-height: 92px; font-size: 30px; font-weight: 700; border-radius: 18px; letter-spacing: .1em; }
+.btn-mada { background: var(--card); border: 3px solid var(--ink); }
+.btn-ok { background: var(--solid-on); border: 3px solid var(--solid-on); color: #fff; }
+.speak { min-height: 56px; padding: 0 22px; font-size: 20px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; }
+
+/* ---- 書字パッド */
+.padbox { width: min(62vh, 520px, calc(100vw - 32px)); aspect-ratio: 1; margin: 0 auto; }
+.pv-pad .padbox { width: min(52vh, 440px, calc(100vw - 32px)); }
+.pad { width: 100%; height: 100%; display: block; touch-action: none; user-select: none; background: var(--card); border-radius: 12px; }
+.pad-frame { fill: none; stroke: var(--ink); stroke-width: 1; }
+.pad-grid { stroke: var(--line); stroke-width: .6; stroke-dasharray: 2 2; }
+.pad-guide path { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 5; }
+.pad-guide .g-hide { display: none; }
+.pad-guide .g-all { stroke: #D5D8DC; }
+.pad-guide .g-next { stroke: #9FC3E6; }
+.pad-guide .g-demo { stroke: var(--ink); stroke-width: 4.5; }
+.start-dot { fill: var(--cat-1); }
+.pad-ink polyline { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 4.5; }
+.stroke-live, .stroke-ok { stroke: var(--ink); }
+.stroke-miss { stroke: var(--ink-alert); stroke-dasharray: 3 3; opacity: .8; transition: opacity .4s; }
+
+/* ---- かく */
+.write { display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: start; }
+.wl { display: grid; gap: 10px; align-content: start; }
+.prompt { margin: 0; font-size: 56px; font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", serif; }
+.prompt .box { display: inline-block; width: 1em; height: 1em; border: 3px solid var(--ink); vertical-align: -0.1em; background: var(--fill-b); }
+.prompt rt { font-size: 24px; font-family: sans-serif; letter-spacing: .1em; }
+.prompt-kana { margin: 0; color: var(--ink-sub); font-size: 22px; letter-spacing: .1em; }
+.stages { display: flex; gap: 8px; list-style: none; padding: 0; margin: 4px 0; flex-wrap: wrap; }
+.stages li { padding: 4px 12px; border: 2px solid var(--line); border-radius: 999px; color: var(--ink-sub); font-size: 18px; }
+.stages li.cur { border-color: var(--ink); color: var(--ink); font-weight: 700; background: var(--fill-a); }
+.stages li.past::after { content: " ✓"; }
+.msg { min-height: 1.6em; margin: 0; font-size: 22px; font-weight: 700; }
+.tools { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.tools button { min-height: var(--tap); padding: 0 20px; font-size: 20px; background: var(--card); border: 2px solid var(--ink); border-radius: 12px; }
+.result { display: grid; gap: 10px; }
+.res { margin: 0; font-size: 34px; font-weight: 700; }
+.res.good { color: var(--cat-1); }
+.res.again { color: var(--ink); }
+.res-note { margin: 0; color: var(--ink-sub); }
+
+/* ---- よしゅう */
+.preview { display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: start; }
+.pv-pad { display: grid; gap: 10px; }
+.pv-pad .strokes { color: var(--ink-sub); }
+.pv-info { display: grid; gap: 14px; align-content: start; }
+.words { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.words li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px 14px; }
+.pw { font-size: 44px; font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", serif; }
+.pw b { font-weight: 400; text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
+.pk { font-size: 24px; letter-spacing: .1em; }
+.say { min-width: var(--tap); min-height: var(--tap); font-size: 26px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; }
+.pv-guide { margin: 0; font-size: 22px; font-weight: 700; }
+
+/* ---- おわり */
+.done { display: grid; gap: 18px; justify-items: center; text-align: center; padding-top: 10vh; max-width: 560px; margin: 0 auto; }
+.done-big { font-size: 40px; font-weight: 700; margin: 0; }
+
+/* ---- 先生用 */
+.top.t h1 { font-size: 26px; }
+.teacher section { margin: 14px 0 22px; }
+.teacher h2 { font-size: 22px; margin: 0 0 6px; }
+.teacher .hint { color: var(--ink-sub); font-size: 16px; margin: 0 0 8px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 4px; }
+.cell { min-height: 46px; font-size: 22px; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
+.cell.taught { background: var(--fill-a); border: 2px solid var(--cat-1); font-weight: 700; }
+.hard { columns: 2; font-size: 18px; }
+.hard .hc { font-size: 26px; margin-right: 8px; }
+.teacher textarea { width: 100%; font-size: 20px; }
+.teacher details { font-size: 18px; }
+.teacher details button { min-height: 48px; padding: 0 16px; }
+
+/* ---- 縦長（タブレット持ち）・狭い画面 */
+@media (max-aspect-ratio: 1/1), (max-width: 760px) {
+  .menu, .write, .preview { grid-template-columns: 1fr; }
+  .padbox, .pv-pad .padbox { width: min(calc(100vw - 32px), 52vh); }
+  .card { min-height: 38vh; }
+  .tree { max-height: 42vh; }
+}

@@ -1,0 +1,120 @@
+// data-src/ の正本と KanjiVG から src/data-g3.js・src/strokes-g3.js を生成し、同時に検査する。
+// 検査に落ちたら書き出さずに終了コード1。警告（読みの自動照合の不一致）は目視確認用に表示するだけ。
+import fs from 'node:fs';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+
+const require = createRequire(import.meta.url);
+const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const GRADE = 3;
+const EXPECT_COUNT = { 1: 80, 2: 160, 3: 200, 4: 202, 5: 193, 6: 191 }; // 学年別漢字配当表（S2）
+const KVG_CACHE = path.join(ROOT, '.cache', 'kanjivg');
+
+const errors = [];
+const warns = [];
+const err = (m) => errors.push(m);
+
+// ---- 辞書（学年・音訓・画数）
+const dic = JSON.parse(fs.readFileSync(path.join(ROOT, 'node_modules', 'kanjidic2-json', 'KANJIS.json'), 'utf8'));
+const byChar = new Map(dic.map((k) => [k.literal, k]));
+const gradeOf = (c) => byChar.get(c)?.grade ?? 99;
+for (const g of [1, 2, 3, 4, 5, 6]) {
+  const n = dic.filter((k) => k.grade === g).length;
+  if (n !== EXPECT_COUNT[g]) err(`辞書の${g}年の字数が${n}（期待${EXPECT_COUNT[g]}）`);
+}
+const gradeChars = dic.filter((k) => k.grade === GRADE).map((k) => k.literal);
+
+// ---- 正本の読み込み
+const lines = (f) => fs.readFileSync(path.join(ROOT, 'data-src', f), 'utf8').split('\n').filter((l) => l.trim() && !l.startsWith('#'));
+const order = [...lines('order-g3.txt').join('').replace(/\s/g, '')];
+if (order.length !== gradeChars.length || new Set(order).size !== order.length || !order.every((c) => gradeOf(c) === GRADE))
+  err(`order-g3.txt が${GRADE}年の${gradeChars.length}字の並べ替えになっていない（${order.length}字）`);
+
+const kata2hira = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+const soften = { か: 'が', き: 'ぎ', く: 'ぐ', け: 'げ', こ: 'ご', さ: 'ざ', し: 'じ', す: 'ず', せ: 'ぜ', そ: 'ぞ', た: 'だ', ち: 'ぢ', つ: 'づ', て: 'で', と: 'ど', は: 'ば', ひ: 'び', ふ: 'ぶ', へ: 'べ', ほ: 'ぼ' };
+const half = { は: 'ぱ', ひ: 'ぴ', ふ: 'ぷ', へ: 'ぺ', ほ: 'ぽ' };
+// 連濁・半濁・促音化を許して、辞書の読みに一致するか。一致したら on/kun を返す
+function readingType(ch, r) {
+  const k = byChar.get(ch);
+  const on = (k.readings.ja_on || []).map(kata2hira);
+  const kun = (k.readings.ja_kun || []).flatMap((s) => { const b = s.replace(/^-|-$/g, ''); return [b.split('.')[0], b.replace('.', '')]; });
+  const variants = (base) => {
+    const v = new Set([base]);
+    const f = base[0];
+    if (soften[f]) v.add(soften[f] + base.slice(1));
+    if (half[f]) v.add(half[f] + base.slice(1));
+    if (/[つくちき]$/.test(base)) v.add(base.slice(0, -1) + 'っ');
+    [...v].forEach((x) => { if (/[つくちき]$/.test(x)) v.add(x.slice(0, -1) + 'っ'); });
+    if (f === 'じ') v.add('ぢ' + base.slice(1));
+    return v;
+  };
+  if (on.some((b) => variants(b).has(r))) return 'on';
+  if (kun.some((b) => variants(b).has(r))) return 'kun';
+  return null;
+}
+
+const entries = new Map();
+for (const line of lines('words-g3.txt')) {
+  const [ch, rest] = line.split('|');
+  if (entries.has(ch)) err(`${ch}: 重複`);
+  const words = rest.split(',').map((s) => s.split(':'));
+  const out = [];
+  for (const [w, k, r] of words) {
+    if (!w || !k || !r) { err(`${ch}: 書式エラー「${line}」`); continue; }
+    if (!w.includes(ch)) err(`${ch}: 例語「${w}」に字が含まれない`);
+    for (const c of w) if (/\p{Script=Han}/u.test(c) && gradeOf(c) > GRADE) err(`${ch}: 例語「${w}」に${GRADE}年より上の字「${c}」`);
+    if (!k.includes(r)) err(`${ch}: 例語「${w}」のよみ「${k}」に字のよみ「${r}」が含まれない`);
+    const t = readingType(ch, r);
+    if (!t) err(`${ch}: よみ「${r}」が辞書の音訓に一致しない`);
+    out.push([w, k, r, t]);
+  }
+  entries.set(ch, out);
+}
+for (const c of gradeChars) if (!entries.has(c)) err(`${c}: 例語がない`);
+for (const c of entries.keys()) if (gradeOf(c) !== GRADE) err(`${c}: ${GRADE}年の字ではない`);
+
+// ---- 例語全体のよみを形態素解析で照合（警告のみ）
+const kuromoji = require('kuromoji');
+const tokenizer = await new Promise((res, rej) =>
+  kuromoji.builder({ dicPath: path.join(path.dirname(require.resolve('kuromoji')), '..', 'dict') }).build((e, t) => (e ? rej(e) : res(t))));
+for (const [ch, ws] of entries) for (const [w, k] of ws) {
+  const guess = kata2hira(tokenizer.tokenize(w).map((t) => t.reading || t.surface_form).join(''));
+  if (guess !== k) warns.push(`${ch}: 「${w}」 正本=${k} 解析=${guess}`);
+}
+
+// ---- KanjiVG（筆順）
+fs.mkdirSync(KVG_CACHE, { recursive: true });
+const strokes = {};
+for (const c of order) {
+  const fn = c.codePointAt(0).toString(16).padStart(5, '0') + '.svg';
+  const fp = path.join(KVG_CACHE, fn);
+  if (!fs.existsSync(fp)) {
+    const res = await fetch(`https://raw.githubusercontent.com/KanjiVG/kanjivg/master/kanji/${fn}`);
+    if (!res.ok) { err(`${c}: KanjiVG取得失敗 ${res.status}`); continue; }
+    fs.writeFileSync(fp, await res.text());
+  }
+  const svg = fs.readFileSync(fp, 'utf8');
+  const ps = [...svg.matchAll(/<path id="kvg:[0-9a-f]+-s(\d+)"[^>]*?\sd="([^"]+)"/g)]
+    .map((m) => [Number(m[1]), m[2].replace(/\s+/g, ' ').trim()])
+    .sort((a, b) => a[0] - b[0]);
+  if (ps.some((p, i) => p[0] !== i + 1)) err(`${c}: KanjiVGの画番号が連番でない`);
+  const expect = byChar.get(c).strokeCounts[0];
+  if (ps.length !== expect) err(`${c}: KanjiVGの画数${ps.length}が辞書の画数${expect}と違う`);
+  strokes[c] = ps.map((p) => p[1]);
+}
+
+if (warns.length) console.log(`--- 目視確認（形態素解析と正本のよみが違う ${warns.length}件。多くは解析側の揺れ）\n` + warns.join('\n'));
+if (errors.length) { console.error(`--- エラー ${errors.length}件\n` + errors.join('\n')); process.exit(1); }
+
+// ---- 書き出し
+const kanji = {};
+for (const c of order) kanji[c] = { n: strokes[c].length, w: entries.get(c) };
+const head = '// 自動生成（tools/build-data.mjs）。直接編集しない。正本は data-src/。\n';
+fs.writeFileSync(path.join(ROOT, 'src', 'data-g3.js'),
+  head + `var KANZI_DATA = ${JSON.stringify({ grade: GRADE, order: order.join(''), kanji })};\n`);
+fs.writeFileSync(path.join(ROOT, 'src', 'strokes-g3.js'),
+  head + '// 筆順データ: KanjiVG (c) Ulrich Apel ほか, CC BY-SA 3.0 https://kanjivg.tagaini.net/\n' +
+  '// 各画の SVG path（109x109 座標、書く順）。\n' +
+  `var KANZI_STROKES = ${JSON.stringify(strokes)};\n`);
+console.log(`OK: ${order.length}字、例語${[...entries.values()].reduce((a, w) => a + w.length, 0)}語`);
