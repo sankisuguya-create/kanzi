@@ -206,9 +206,15 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 #stage .show-svg .frame { fill: none; stroke: #9AA0A6; stroke-width: .9; }
 #stage .show-svg .cross { stroke: #9AA0A6; stroke-width: .7; stroke-dasharray: 2.2 2.2; }
 #stage .show-svg path { fill: none; stroke: #111; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }
-#stage .kun, #stage .on { writing-mode: vertical-rl; display: flex; gap: 2vw; align-items: center; justify-content: center; height: 94vh; letter-spacing: .1em; line-height: 1.15; }
-#stage .kun, #stage .on { flex-direction: column; } /* 読みが複数なら縦書きの列を横にならべる */
-#stage .rd .okuri { color: var(--ink-link); } /* 送り仮名: 大きさはそのまま、青 */
+/* 読み: 1文字ずつ縦に積み、読みが複数なら右から左へ列をならべる（教科書の縦書きと同じ並び） */
+#stage .kun, #stage .on { display: flex; flex-direction: row-reverse; gap: .35em; align-items: center; justify-content: center; height: 94vh; }
+#stage .rd { display: flex; flex-direction: column; align-items: center; font-weight: 700; }
+#stage .rd .ch { display: block; line-height: 1.12; }
+#stage .rd .ch.small { transform: translate(.16em, -.16em) scale(.9); } /* 縦書きの小書き仮名は右上に寄せる */
+#stage .rd .ch.long { transform: rotate(90deg); }
+#stage .rd .ch.okuri { color: var(--ink-link); } /* 送り仮名: 大きさはそのまま、青、太字 */
+/* 語幹と送り仮名の区切り: 短い縦棒（色だけに頼らない） */
+#stage .rd .sep { display: block; width: .12em; height: .45em; margin: .12em 0; background: var(--ink-link); border-radius: .06em; }
 #stage .stage-pos { position: absolute; bottom: 8px; left: 12px; color: var(--ink-sub); font-size: 18px; }
 #stage.all { display: flex; align-items: center; justify-content: center; }
 #stage .all-grid { display: grid; justify-content: center; align-content: center; }

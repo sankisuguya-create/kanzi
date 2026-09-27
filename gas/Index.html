@@ -214,9 +214,15 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 #stage .show-svg .frame { fill: none; stroke: #9AA0A6; stroke-width: .9; }
 #stage .show-svg .cross { stroke: #9AA0A6; stroke-width: .7; stroke-dasharray: 2.2 2.2; }
 #stage .show-svg path { fill: none; stroke: #111; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }
-#stage .kun, #stage .on { writing-mode: vertical-rl; display: flex; gap: 2vw; align-items: center; justify-content: center; height: 94vh; letter-spacing: .1em; line-height: 1.15; }
-#stage .kun, #stage .on { flex-direction: column; } /* 読みが複数なら縦書きの列を横にならべる */
-#stage .rd .okuri { color: var(--ink-link); } /* 送り仮名: 大きさはそのまま、青 */
+/* 読み: 1文字ずつ縦に積み、読みが複数なら右から左へ列をならべる（教科書の縦書きと同じ並び） */
+#stage .kun, #stage .on { display: flex; flex-direction: row-reverse; gap: .35em; align-items: center; justify-content: center; height: 94vh; }
+#stage .rd { display: flex; flex-direction: column; align-items: center; font-weight: 700; }
+#stage .rd .ch { display: block; line-height: 1.12; }
+#stage .rd .ch.small { transform: translate(.16em, -.16em) scale(.9); } /* 縦書きの小書き仮名は右上に寄せる */
+#stage .rd .ch.long { transform: rotate(90deg); }
+#stage .rd .ch.okuri { color: var(--ink-link); } /* 送り仮名: 大きさはそのまま、青、太字 */
+/* 語幹と送り仮名の区切り: 短い縦棒（色だけに頼らない） */
+#stage .rd .sep { display: block; width: .12em; height: .45em; margin: .12em 0; background: var(--ink-link); border-radius: .06em; }
 #stage .stage-pos { position: absolute; bottom: 8px; left: 12px; color: var(--ink-sub); font-size: 18px; }
 #stage.all { display: flex; align-items: center; justify-content: center; }
 #stage .all-grid { display: grid; justify-content: center; align-content: center; }
@@ -1233,16 +1239,23 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
   }
   // 読みがなの大きさ: 基本は 14vh（以前の倍）。長い読み・複数の読みが左右の余白に収まらない時だけ縮める
   function readSize(list) {
-    var len = Math.max.apply(null, list.map(function (r) { return r.replace('.', '').length; }).concat([1]));
+    var len = Math.max.apply(null, list.map(function (r) { return r.replace('.', '').length + (r.indexOf('.') >= 0 ? 0.7 : 0); }).concat([1]));
     var side = Math.max(120, (window.innerWidth - Math.min(window.innerHeight, window.innerWidth * 0.78)) / 2);
     var px = Math.min(window.innerHeight * 0.14, window.innerHeight * 0.88 / (len * 1.15), side * 0.9 / (list.length * 1.25 || 1));
     return Math.floor(px) + 'px';
   }
+  // 読みを1文字ずつ縦に積む（CSS の縦書きより位置が安定し、区切りの縦棒を字の間に確実に置ける）
+  var SMALL_KANA = 'ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮ';
+  function stackChars(str, cls) {
+    return Array.from(str).map(function (ch) {
+      var c = 'ch' + (cls ? ' ' + cls : '') + (SMALL_KANA.indexOf(ch) >= 0 ? ' small' : '') + (ch === 'ー' ? ' long' : '');
+      return '<span class="' + c + '">' + esc(ch) + '</span>';
+    }).join('');
+  }
   function readingHtml(list, kun) {
     return list.map(function (r) {
-      if (!kun) return '<span class="rd">' + esc(r) + '</span>';
-      var p = r.split('.');
-      return '<span class="rd">' + esc(p[0]) + (p[1] ? '<span class="okuri">' + esc(p[1]) + '</span>' : '') + '</span>';
+      var p = kun ? r.split('.') : [r];
+      return '<span class="rd">' + stackChars(p[0]) + (p[1] ? '<span class="sep" aria-hidden="true"></span>' + stackChars(p[1], 'okuri') : '') + '</span>';
     }).join('');
   }
 

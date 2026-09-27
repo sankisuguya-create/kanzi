@@ -369,16 +369,23 @@
   }
   // 読みがなの大きさ: 基本は 14vh（以前の倍）。長い読み・複数の読みが左右の余白に収まらない時だけ縮める
   function readSize(list) {
-    var len = Math.max.apply(null, list.map(function (r) { return r.replace('.', '').length; }).concat([1]));
+    var len = Math.max.apply(null, list.map(function (r) { return r.replace('.', '').length + (r.indexOf('.') >= 0 ? 0.7 : 0); }).concat([1]));
     var side = Math.max(120, (window.innerWidth - Math.min(window.innerHeight, window.innerWidth * 0.78)) / 2);
     var px = Math.min(window.innerHeight * 0.14, window.innerHeight * 0.88 / (len * 1.15), side * 0.9 / (list.length * 1.25 || 1));
     return Math.floor(px) + 'px';
   }
+  // 読みを1文字ずつ縦に積む（CSS の縦書きより位置が安定し、区切りの縦棒を字の間に確実に置ける）
+  var SMALL_KANA = 'ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮ';
+  function stackChars(str, cls) {
+    return Array.from(str).map(function (ch) {
+      var c = 'ch' + (cls ? ' ' + cls : '') + (SMALL_KANA.indexOf(ch) >= 0 ? ' small' : '') + (ch === 'ー' ? ' long' : '');
+      return '<span class="' + c + '">' + esc(ch) + '</span>';
+    }).join('');
+  }
   function readingHtml(list, kun) {
     return list.map(function (r) {
-      if (!kun) return '<span class="rd">' + esc(r) + '</span>';
-      var p = r.split('.');
-      return '<span class="rd">' + esc(p[0]) + (p[1] ? '<span class="okuri">' + esc(p[1]) + '</span>' : '') + '</span>';
+      var p = kun ? r.split('.') : [r];
+      return '<span class="rd">' + stackChars(p[0]) + (p[1] ? '<span class="sep" aria-hidden="true"></span>' + stackChars(p[1], 'okuri') : '') + '</span>';
     }).join('');
   }
 

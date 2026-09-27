@@ -204,6 +204,7 @@ await page.waitForTimeout(6000);
 await page.screenshot({ path: path.join(SHOTS, '15-show-single.png') });
 check((await page.$$('#stage .show-svg line.cross')).length === 2 && !!(await page.$('#stage .show-svg rect.frame')), '提示: 十字の点線と外枠がある');
 check(await page.evaluate(() => { const o = document.querySelector('#stage .kun .okuri'); return o && getComputedStyle(o).color === 'rgb(15, 94, 168)' && getComputedStyle(o).fontSize === getComputedStyle(o.parentNode).fontSize; }), '提示: 送り仮名は同じ大きさで青');
+check(!!(await page.$('#stage .kun .sep')) && await page.evaluate(() => getComputedStyle(document.querySelector('#stage .kun .rd')).fontWeight === '700'), '提示: 送り仮名の前に区切り、読みがなは太字');
 check(await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('#stage .kun')).fontSize)) >= 100, '提示: 読みがなは約14vh（768pxで100px以上）');
 check((await page.textContent('#stage .on')).includes('アク') && (await page.textContent('#stage .kun')).includes('わる'), '提示: 右に音読み・左に訓読み');
 await page.mouse.click(683, 384);
