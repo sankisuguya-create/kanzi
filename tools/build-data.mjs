@@ -60,14 +60,15 @@ for (const line of lines('words-g3.txt')) {
   if (entries.has(ch)) err(`${ch}: 重複`);
   const words = rest.split(',').map((s) => s.split(':'));
   const out = [];
-  for (const [w, k, r] of words) {
-    if (!w || !k || !r) { err(`${ch}: 書式エラー「${line}」`); continue; }
+  for (const [w, kk, r] of words) {
+    if (!w || !kk || !r) { err(`${ch}: 書式エラー「${line}」`); continue; }
+    const [k, ...alts] = kk.split('/');
     if (!w.includes(ch)) err(`${ch}: 例語「${w}」に字が含まれない`);
     for (const c of w) if (/\p{Script=Han}/u.test(c) && gradeOf(c) > GRADE) err(`${ch}: 例語「${w}」に${GRADE}年より上の字「${c}」`);
     if (!k.includes(r)) err(`${ch}: 例語「${w}」のよみ「${k}」に字のよみ「${r}」が含まれない`);
     const t = readingType(ch, r);
     if (!t) err(`${ch}: よみ「${r}」が辞書の音訓に一致しない`);
-    out.push([w, k, r, t]);
+    out.push(alts.length ? [w, k, r, t, alts] : [w, k, r, t]);
   }
   entries.set(ch, out);
 }
@@ -78,9 +79,9 @@ for (const c of entries.keys()) if (gradeOf(c) !== GRADE) err(`${c}: ${GRADE}年
 const kuromoji = require('kuromoji');
 const tokenizer = await new Promise((res, rej) =>
   kuromoji.builder({ dicPath: path.join(path.dirname(require.resolve('kuromoji')), '..', 'dict') }).build((e, t) => (e ? rej(e) : res(t))));
-for (const [ch, ws] of entries) for (const [w, k] of ws) {
+for (const [ch, ws] of entries) for (const [w, k, , , alts] of ws) {
   const guess = kata2hira(tokenizer.tokenize(w).map((t) => t.reading || t.surface_form).join(''));
-  if (guess !== k) warns.push(`${ch}: 「${w}」 正本=${k} 解析=${guess}`);
+  if (guess !== k && !(alts || []).includes(guess)) warns.push(`${ch}: 「${w}」 正本=${k} 解析=${guess}`);
 }
 
 // ---- KanjiVG（筆順）

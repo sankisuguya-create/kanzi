@@ -59,6 +59,13 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .ico-leaf { width: 18px; height: 10px; border-radius: 50%; background: var(--leaf-1); transform: rotate(-25deg); }
 .ico-fruit { width: 14px; height: 14px; border-radius: 50%; background: var(--cat-2); border: 1.5px solid var(--cat-3); }
 .actions { display: grid; gap: 18px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.two .big { font-size: 26px; min-height: 96px; }
+.big[disabled] { opacity: .45; cursor: default; }
+.card.flash { cursor: pointer; font: inherit; color: inherit; }
+.card .fy { font-size: clamp(48px, 10vmin, 96px); letter-spacing: .12em; }
+.card .fback { margin-top: 14px; display: block; border-top: 2px dashed var(--line); padding-top: 10px; }
+.card .fback[hidden] { display: none; }
 .t-ground { fill: #E6DDC8; }
 .t-trunk { fill: var(--cat-3); }
 .t-branch { fill: none; stroke: var(--cat-3); stroke-linecap: round; }
@@ -88,6 +95,19 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .card.flipped .kana { visibility: visible; }
 .card .tap-hint { position: absolute; bottom: 12px; color: var(--ink-sub); font-size: 18px; }
 .card.flipped .tap-hint { visibility: hidden; }
+.answer { display: grid; gap: 8px; width: min(100%, 720px); }
+.answer .q { font-size: 20px; font-weight: 700; }
+.answer-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; }
+#yomi { min-height: 76px; font-size: 40px; padding: 0 16px; letter-spacing: .1em; border: 3px solid var(--ink); border-radius: 14px; background: var(--card); font-family: inherit; min-width: 0; }
+#yomi:focus { outline: 4px solid var(--cat-1); outline-offset: 2px; }
+#yomi[readonly] { background: var(--paper); }
+.answer .btn-ok { min-width: 160px; font-size: 26px; font-weight: 700; border-radius: 14px; }
+.rmsg { min-height: 1.5em; margin: 0; font-size: 26px; font-weight: 700; }
+.rmsg.good { color: var(--cat-1); }
+.rmsg.ng, .rmsg.ans { color: var(--ink-alert); }
+.after { display: flex; gap: 14px; align-items: center; width: min(100%, 720px); justify-content: flex-end; }
+.after .big { width: auto; min-width: 240px; min-height: 76px; }
+.after .btn-mada { min-height: 60px; padding: 0 22px; font-size: 20px; border-radius: 12px; }
 .judge { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; width: min(100%, 720px); visibility: hidden; }
 .judge.show { visibility: visible; }
 .judge button { min-height: 92px; font-size: 30px; font-weight: 700; border-radius: 18px; letter-spacing: .1em; }

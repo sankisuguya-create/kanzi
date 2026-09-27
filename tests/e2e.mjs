@@ -56,7 +56,7 @@ await page.evaluate(() => localStorage.clear());
 await page.reload();
 await page.waitForSelector('#go-preview');
 await page.screenshot({ path: path.join(SHOTS, '1-menu-empty.png') });
-check(!(await page.$('#go-review')), '最初は ふくしゅう がない');
+check(!!(await page.$('#go-read[disabled]')) && !!(await page.$('#go-write[disabled]')), '最初は よむ・かく は よしゅうしてから');
 
 // ---- よしゅう 5字
 await page.click('#go-preview');
@@ -84,19 +84,43 @@ await page.evaluate(() => {
   localStorage.setItem('kanzi.g3.demo', JSON.stringify(p));
 });
 await page.reload();
-await page.waitForSelector('#go-review');
+await page.waitForSelector('#go-read:not([disabled])');
 await page.screenshot({ path: path.join(SHOTS, '4-menu-due.png') });
-await page.click('#go-review');
+await page.click('#go-read');
 
-// よむ: 1枚目 おぼえた → 取り消し → まだ、残りは おぼえた
-await page.click('#card');
-await page.screenshot({ path: path.join(SHOTS, '5-read-flipped.png') });
+// よむ: 読みをひらがなで入力する
+const answerOf = () => page.evaluate(() => { const c = KanziState.session.cur, e = KanziState.p.read[c], w = KANZI_DATA.kanji[c].w; return w[(e[2] || 0) % w.length][1]; });
+// 1枚目: 漢字を入れても消える → ローマ字で打つと ひらがなになる → 1回目で正解
+await page.waitForSelector('#yomi');
+await page.fill('#yomi', '悪');
+check((await page.inputValue('#yomi')) === '' && (await page.textContent('#rmsg')).includes('ひらがな'), 'よむ: 漢字は入らず「ひらがなで」と出る');
+const ans1 = await answerOf();
+await page.keyboard.type('warui');
+check((await page.inputValue('#yomi')) === 'わるい', `よむ: ローマ字で打つと ひらがなになる（${await page.inputValue('#yomi')}）`);
+await page.screenshot({ path: path.join(SHOTS, '5-read-input.png') });
 const c1 = await page.evaluate(() => KanziState.session.cur);
-await page.click('#ok');
-await page.click('#undo');
-check(await page.evaluate((c) => KanziState.p.read[c][2] === 0 && KanziState.session.cur === c, c1), '「ひとつ もどる」で直前の採点を取り消せる');
-await page.click('#card'); await page.click('#mada');
-for (let i = 0; i < 4; i++) { await page.click('#card'); await page.click('#ok'); }
+const box1 = await page.evaluate((c) => KanziState.p.read[c][0], c1);
+await page.keyboard.press('Enter');
+await page.waitForSelector('#next');
+check(ans1 === 'わるい' && (await page.textContent('#rmsg')).includes('せいかい') && (await page.evaluate((c) => KanziState.p.read[c][0], c1)) === Math.min(box1 + 1, 5), 'よむ: 1回目で正解 → 箱が1つ進む');
+await page.screenshot({ path: path.join(SHOTS, '5-read-flipped.png') });
+await page.waitForFunction((c) => KanziState.session.cur !== c, c1, { timeout: 5000 });
+// 2枚目: 2回まちがえる → 答えが出て 箱1
+const c2 = await page.evaluate(() => KanziState.session.cur);
+await page.fill('#yomi', 'あああ'); await page.keyboard.press('Enter');
+check((await page.textContent('#rmsg')).includes('もういちど'), 'よむ: 1回目の まちがいは打ち直せる');
+await page.fill('#yomi', 'いいい'); await page.keyboard.press('Enter');
+await page.waitForSelector('#next');
+check((await page.textContent('#rmsg')).includes(await page.evaluate((c) => { const w = KANZI_DATA.kanji[c].w; return w[0][1]; }, c2)) && await page.evaluate((c) => KanziState.p.read[c][0] === 1, c2), 'よむ: 2回まちがえると答えを見せて 箱1');
+await page.screenshot({ path: path.join(SHOTS, '5b-read-wrong.png') });
+await page.click('#next');
+// 3枚目: わからない
+await page.click('#idk');
+await page.waitForSelector('#next'); await page.click('#next');
+// 残り2枚は正解を入力
+for (let i = 0; i < 2; i++) { await page.fill('#yomi', await answerOf()); await page.keyboard.press('Enter'); await page.waitForSelector('#next'); await page.click('#next'); }
+await page.waitForSelector('#menu'); await page.click('#menu');
+await page.click('#go-write');
 
 // かく1字目（箱0）: なぞる → ヒント → じぶんで を正しく書く
 await page.waitForSelector('.stages');
@@ -108,7 +132,8 @@ for (let s = 0; s < 3; s++) {
 await page.waitForSelector('.res');
 check((await page.textContent('.res')).includes('できた'), 'かく: 3段階を正しく書くと「できた」');
 await page.screenshot({ path: path.join(SHOTS, '7-write-done.png') });
-await page.click('#next');
+await page.waitForSelector('.res', { state: 'detached' });
+check(true, 'かく: 結果のあと自動で次へ進む');
 
 // かく2字目: なぞり・ヒントは正しく、じぶんで は書き順を逆に（字体は合う）→ 受け付け＋筆順アニメ
 for (let s = 0; s < 2; s++) {
@@ -126,7 +151,6 @@ await drawChar([...Array(n2).keys()].reverse());
 await page.waitForSelector('.res', { timeout: 60000 });
 const res2 = await page.textContent('.result');
 check(res2.includes('できた') && res2.includes('かきじゅん'), `かく: 書き順が違っても字体が合えば「できた」＋書き順の確認（${n2}画）`);
-await page.click('#next');
 await page.waitForSelector('#menu');
 await page.click('#menu');
 await page.waitForSelector('.tree');
@@ -156,12 +180,27 @@ await page.click('.cell[data-i="9"]');
 check((await page.textContent('#ptr')) === '10', '先生: 進度を押すと10字目までになる');
 await page.screenshot({ path: path.join(SHOTS, '11-teacher.png'), fullPage: true });
 
+// ---- フラッシュカード（かんじ→よみ、よみ→かんじ）
+await page.goto(URL0); await page.waitForSelector('#go-fk');
+await page.click('#go-fk');
+check(await page.isHidden('#fback'), 'フラッシュ: はじめは答えが見えない');
+await page.click('#card');
+check(await page.isVisible('#fback'), 'フラッシュ: タップで答え');
+await page.screenshot({ path: path.join(SHOTS, '14-flash.png') });
+const f1 = await page.evaluate(() => KanziState.session.i);
+await page.click('#card');
+check((await page.evaluate(() => KanziState.session.i)) === f1 + 1, 'フラッシュ: もう一度タップで次へ');
+await page.click('#back'); await page.click('#go-fy');
+check((await page.textContent('#card .fy')).length > 0, 'フラッシュ: よみ→かんじ は ひらがなが表');
+await page.click('#back');
+await page.goto(URL0 + '?teacher=1'); await page.waitForSelector('.grid');
+
 // ---- 先生のおためし: 先生画面から児童画面を開き、1日すすめて ふくしゅう まで試す
 const demoBefore = await page.evaluate(() => localStorage.getItem('kanzi.g3.demo'));
 await page.click('#try');
 await page.waitForSelector('#trial-bar');
 await page.waitForSelector('#go-preview');
-check(!(await page.$('#go-review')), 'おためし: 新しい記録で始まる');
+check(!!(await page.$('#go-read[disabled]')), 'おためし: 新しい記録で始まる');
 await page.click('#go-preview');
 for (let i = 0; i < 5; i++) {
   await page.waitForFunction(() => /なぞって/.test(document.querySelector('#guide')?.textContent || ''), null, { timeout: 30000 });
@@ -169,13 +208,18 @@ for (let i = 0; i < 5; i++) {
 }
 await page.click('#menu');
 await page.click('#tb-day');
-await page.waitForSelector('#go-review');
-check((await page.textContent('#go-review')).includes('5まい'), 'おためし: 1日すすめると よしゅうした5字が ふくしゅうに出る');
+check((await page.textContent('#go-read')).includes('5もん'), 'おためし: 1日すすめると よしゅうした5字が よむに出る');
 await page.screenshot({ path: path.join(SHOTS, '12-trial-menu.png') });
-await page.click('#go-review');
-await page.click('#card'); await page.click('#ok');
+await page.click('#go-read');
+await page.fill('#yomi', await answerOf()); await page.keyboard.press('Enter'); await page.waitForSelector('#next');
 check((await page.evaluate(() => localStorage.getItem('kanzi.g3.demo'))) === demoBefore, 'おためしで児童の記録（kanzi.g3.demo）は変わらない');
 check(await page.evaluate(() => !!localStorage.getItem('kanzi.g3.trial.demo')), 'おためしの記録は kanzi.g3.trial.* に保存');
+await page.click('#back');
+await page.click('#tb-write');
+await page.click('#go-write');
+const sawWrite = !!(await page.waitForSelector('.stages', { timeout: 5000 }).catch(() => null));
+check(sawWrite, 'おためし: 「かく問題を 出す」で書き問題がすぐ出る');
+await page.screenshot({ path: path.join(SHOTS, '13-trial-write.png') });
 await page.click('#tb-back');
 await page.waitForSelector('.grid');
 check(!(await page.$('#trial-bar')), 'おためし: 先生画面にもどると帯が消える');

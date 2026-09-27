@@ -43,34 +43,68 @@
     var act = Sched.activity(p), learned = Sched.learned(p), total = S.order.length;
     var pk = 'kanzi.g3.prevAct.' + (S.trial ? 'trial.' : '') + S.info.email, prev = Platform.store.get(pk);
     Platform.store.set(pk, act);
+    var started = Object.keys(p.read).length;
+    function modeBtn(id, label, n, dis) {
+      return '<button class="big' + (n ? ' primary' : '') + '" id="' + id + '"' + (dis ? ' disabled' : '') + '>' + label + '<span class="meta">' + (dis ? 'よしゅうしてから' : n ? n + 'もん' : 'れんしゅう') + '</span></button>';
+    }
     app.innerHTML =
-      '<header class="top"><h1>ヤルッキー</h1><p class="sub">3年生 かんじドリル</p></header>' +
+      '<header class="top"><h1>3年生 かんじドリル</h1></header>' +
       '<main class="menu">' +
-      '<section class="tree-box">' + Tree.render(act, learned, total, prev) +
-      '<p class="tree-cap"><span class="ico-leaf" aria-hidden="true"></span>はっぱ＝やった数 <b>' + act + '</b>' +
-      '<span class="sep"></span><span class="ico-fruit" aria-hidden="true"></span>み＝おぼえた字 <b>' + learned + '</b> / ' + total + '</p></section>' +
+      '<section class="tree-box">' + Tree.render(act, learned, total, prev) + '</section>' +
       '<section class="actions">' +
-      (nDue ? '<button class="big primary" id="go-review">ふくしゅう<span class="meta">' + nDue + 'まい</span></button>'
-            : '<div class="big done-note">きょうの ふくしゅうは おわり ✓</div>') +
       (queue.length ? '<button class="big" id="go-preview">よしゅう<span class="meta next-chars">' + esc(queue.slice(0, Sched.PREVIEW_CHUNK).join(' ')) + '</span></button>'
                     : '<div class="big done-note">3年の字は ぜんぶ よしゅうしたよ</div>') +
+      '<div class="two">' + modeBtn('go-read', 'よむ', due.read.length, !started) + modeBtn('go-write', 'かく', due.write.length, !started) + '</div>' +
+      '<div class="two"><button class="big" id="go-fk">カード<span class="meta">かんじ → よみ</span></button>' +
+      '<button class="big" id="go-fy">カード<span class="meta">よみ → かんじ</span></button></div>' +
       '</section></main>' + (S.info.demo ? '<p class="demo-note">デモ（この端末にだけ保存）</p>' : '');
-    on('#go-review', startReview);
     on('#go-preview', startPreview);
+    on('#go-read', function () { startMode('read'); });
+    on('#go-write', function () { startMode('write'); });
+    on('#go-fk', function () { startFlash('k'); });
+    on('#go-fy', function () { startFlash('y'); });
   }
 
   // ---------------- ふくしゅう
-  function startReview() {
-    var d = Sched.dueList(S.p, today(), S.order);
-    S.session = { items: d.read.map(function (c) { return { t: 'read', c: c }; }).concat(d.write.map(function (c) { return { t: 'write', c: c }; })), i: 0, n: 0 };
+  // よむ／かく: 期限が来た字を出す。期限の字がなければ、よしゅう済みの字から箱の小さい順に練習として出す
+  var PRACTICE = { read: 10, write: 5 };
+  function startMode(kind) {
+    var p = S.p, t = today(), d = Sched.dueList(p, t, S.order), list = d[kind];
+    if (!list.length) {
+      var tbl = kind === 'read' ? p.read : p.write;
+      list = Object.keys(p.read).sort(function (a, b) { return ((tbl[a] || [0])[0] - (tbl[b] || [0])[0]) || (S.order.indexOf(a) - S.order.indexOf(b)); }).slice(0, PRACTICE[kind]);
+    }
+    if (kind === 'write') list.forEach(function (c) { if (!p.write[c]) p.write[c] = [0, t, 0, 0]; }); // かくモードは読みの条件を待たない
+    S.session = { items: list.map(function (c) { return { t: kind, c: c }; }), i: 0, n: 0 };
     nextItem();
+  }
+
+  // フラッシュカード: 答えの入力なし。タップで答え → もう一度タップで次へ。記録はしない
+  function startFlash(dir) {
+    var cs = Object.keys(S.p.read);
+    if (!cs.length) cs = S.order.slice(0, 10).split('');
+    for (var i = cs.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), x = cs[i]; cs[i] = cs[j]; cs[j] = x; }
+    S.session = { items: cs.map(function (c) { return { t: 'flash', c: c, dir: dir }; }), i: 0, n: 0 };
+    nextItem();
+  }
+  function flashCard(c, dir) {
+    var w = wordFor(c, S.session.i), kan = Array.from(w[0]).map(function (ch) { return '<span class="' + (ch === c ? 'tg' : 'ot') + '">' + esc(ch) + '</span>'; }).join('');
+    var front = dir === 'k' ? '<span class="word">' + kan + '</span>' : '<span class="fy">' + esc(w[1]) + '</span>';
+    var back = dir === 'k' ? '<span class="fy">' + esc(w[1]) + '</span>' : '<span class="word">' + kan + '</span>';
+    app.innerHTML = bar() + '<main class="read"><button class="card flash" id="card">' + front + '<span class="fback" id="fback" hidden>' + back + '</span></button></main>';
+    on('#back', backToMenu);
+    var shown = false;
+    on('#card', function () {
+      if (!shown) { shown = true; $('#fback').hidden = false; $('#card').classList.add('flipped'); speak(w[1]); return; }
+      S.session.i++; S.session.n++; nextItem();
+    });
   }
   function nextItem() {
     var s = S.session;
     if (s.i >= s.items.length) return reviewDone();
     var it = s.items[s.i];
     s.cur = it.c;
-    if (it.t === 'read') readCard(it.c); else writeCard(it.c);
+    if (it.t === 'read') readCard(it.c); else if (it.t === 'write') writeCard(it.c); else flashCard(it.c, it.dir);
   }
   function bar(extra) {
     var s = S.session;
@@ -79,46 +113,65 @@
   }
   function backToMenu() { flush(); menu(); }
 
+  // よむ: 読みをひらがなで入力して機械が採点する（設計書 D3）。
+  // 1回目で正解した時だけ「できた」。間違えたら1回だけ打ち直せ、2回目も違えば答えを見せる。
   function readCard(c) {
     var e = S.p.read[c], w = wordFor(c, e && e[2]);
+    var answers = [w[1]].concat(w[4] || []);
     var chars = Array.from(w[0]).map(function (ch) { return '<span class="' + (ch === c ? 'tg' : 'ot') + '">' + esc(ch) + '</span>'; }).join('');
-    app.innerHTML = bar(S.lastRec && S.lastRec.kind === 'read' ? '<button class="undo" id="undo">ひとつ もどる</button>' : '<span></span>') +
+    app.innerHTML = bar() +
       '<main class="read">' +
-      '<button class="card" id="card" aria-label="タップすると こたえが 見られる"><span class="kana" id="kana">' + esc(w[1]) + '</span><span class="word">' + chars + '</span>' +
-      '<span class="tap-hint" id="tap">タップして こたえを 見る</span></button>' +
-      '<div class="judge" id="judge"><button class="btn-mada" id="mada">まだ</button><button class="btn-ok" id="ok">おぼえた</button></div>' +
-      (canSpeak ? '<button class="speak" id="speak" hidden>🔊 もういちど きく</button>' : '') +
+      '<div class="card" id="card"><span class="kana" id="kana">' + esc(w[1]) + '</span><span class="word">' + chars + '</span></div>' +
+      '<form class="answer" id="form" autocomplete="off"><label class="q" for="yomi">よみを ひらがなで かこう</label>' +
+      '<div class="answer-row"><input id="yomi" lang="ja" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">' +
+      '<button class="btn-ok" id="ok" type="submit">こたえる</button></div></form>' +
+      '<p class="rmsg" id="rmsg" aria-live="polite"></p>' +
+      '<div class="after" id="after"><button class="btn-mada" id="idk" type="button">わからない</button></div>' +
       '</main>';
     on('#back', backToMenu);
-    on('#undo', undo);
-    var flipped = false;
-    on('#card', function () {
-      if (flipped) return;
-      flipped = true;
-      $('#card').classList.add('flipped');
-      $('#judge').classList.add('show');
-      var sp = $('#speak'); if (sp) sp.hidden = false;
-      speak(w[1]);
+    var input = $('#yomi'), msg = $('#rmsg'), composing = false, tries = 0, done = false;
+    function say(t, cls) { msg.textContent = t; msg.className = 'rmsg' + (cls ? ' ' + cls : ''); }
+    // 入力をひらがなだけに保つ（変換中は触らない）
+    function tidy() {
+      if (composing) return;
+      var r = Kana.normalize(input.value, false), v = r.text + r.rest;
+      if (v !== input.value) input.value = v;
+      if (r.dropped) say('ひらがなで 入れてね'); else if (msg.textContent === 'ひらがなで 入れてね') say('');
+    }
+    input.addEventListener('compositionstart', function () { composing = true; });
+    input.addEventListener('compositionend', function () { composing = false; tidy(); });
+    input.addEventListener('input', tidy);
+    input.focus();
+    $('#form').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      if (done || composing) return;
+      var v = Kana.normalize(input.value, true).text;
+      input.value = v;
+      if (!v) { say('ひらがなで 入れてね'); return; }
+      if (answers.indexOf(v) >= 0) return finish(tries === 0, true);
+      tries++;
+      if (tries < 2) { say('× ちがうよ。もういちど', 'ng'); input.select(); return; }
+      finish(false, false);
     });
-    on('#speak', function () { speak(w[1]); });
-    function answer(ok) {
+    on('#idk', function () { if (!done) finish(false, false); });
+    function finish(ok, correct) {
+      done = true;
       S.lastRec = Sched.answerRead(S.p, c, ok, today(), nowMs());
-      S.lastRec.index = S.session.i;
       S.session.i++; S.session.n++;
       commit();
-      nextItem();
+      input.readOnly = true;
+      $('#card').classList.add('flipped');
+      speak(w[1]);
+      say(correct ? (ok ? '✓ せいかい！' : '✓ せいかい（2かいめ）') : 'こたえは「' + w[1] + '」', correct ? 'good' : 'ans');
+      $('#after').innerHTML = (canSpeak ? '<button class="speak" id="speak" type="button">🔊 きく</button>' : '') +
+        '<button class="big primary" id="next" type="button">つぎへ</button>';
+      on('#speak', function () { speak(w[1]); });
+      var next = $('#next'), moved = false;
+      function go() { if (moved) return; moved = true; nextItem(); }
+      next.addEventListener('click', go);
+      next.focus();
+      setTimeout(function () { if (document.body.contains(next)) go(); }, ok ? 1100 : 2600); // 自動で次へ（まちがいは答えを読む時間を長めに）
     }
-    on('#mada', function () { answer(false); });
-    on('#ok', function () { answer(true); });
-  }
-
-  function undo() {
-    if (!S.lastRec) return;
-    Sched.undo(S.p, S.lastRec);
-    S.session.i = S.lastRec.index; S.session.n--;
-    S.lastRec = null;
-    Platform.save(S.p);
-    nextItem();
   }
 
   var STAGES = { trace: '① なぞる', hint: '② ヒント', free: '③ じぶんで' };
@@ -172,14 +225,16 @@
         '<button class="big primary" id="next">つぎへ</button>';
       $('.wl').appendChild(box);
       $('.tools').hidden = true;
-      on('#next', nextItem);
+      var moved = false, go = function () { if (!moved) { moved = true; nextItem(); } };
+      on('#next', go);
       $('#next').focus();
+      setTimeout(function () { if (!moved && document.body.contains(box)) go(); }, ok ? 1300 : 2200); // 自動で次へ
     }
   }
 
   function reviewDone() {
     flush();
-    app.innerHTML = '<main class="done"><p class="done-big">ふくしゅう おわり！</p><p>' + S.session.n + 'まい やったよ</p>' +
+    app.innerHTML = '<main class="done"><p class="done-big">おわり！</p><p>' + S.session.n + 'まい やったよ</p>' +
       '<button class="big primary" id="menu">メニューへ</button></main>';
     on('#menu', menu);
   }
@@ -237,7 +292,7 @@
   function teacher(klass) {
     klass = klass || S.klass || (S.info.classes || [])[0] || '';
     S.klass = klass;
-    app.innerHTML = '<header class="top t"><h1>ヤルッキー 先生用</h1><p class="sub">' + esc(klass) + (S.info.demo ? '（架空のデータ）' : '') + '</p>' +
+    app.innerHTML = '<header class="top t"><h1>かんじドリル 先生用</h1><p class="sub">' + esc(klass) + (S.info.demo ? '（架空のデータ）' : '') + '</p>' +
       '<button class="try" id="try">児童画面を ためす</button></header><main class="teacher"><p>よみこみ中…</p></main>';
     on('#try', function () { startTrial(klass); });
     Promise.all([Platform.stats(klass), Platform.pointerOf(klass)]).then(function (r) {
@@ -285,7 +340,18 @@
       document.body.insertBefore(bar, app);
     }
     bar.innerHTML = '<span class="tb-label">先生のおためし中（記録は この端末だけ）' + (S.dayOffset ? '・' + S.dayOffset + '日後' : '') + '</span>' +
-      '<button id="tb-day">1日すすめる</button><button id="tb-reset">はじめから</button><button id="tb-back">先生画面にもどる</button>';
+      '<button id="tb-write">かく問題を 出す</button><button id="tb-day">1日すすめる</button><button id="tb-reset">はじめから</button><button id="tb-back">先生画面にもどる</button>';
+    // 読みの条件（よむ箱3）を待たずに、書き問題を今日のふくしゅうに出す。まだ何もなければ最初の5字をよしゅう済みにする
+    bar.querySelector('#tb-write').addEventListener('click', function () {
+      var p = S.p, t = today();
+      if (!Object.keys(p.read).length) Sched.previewQueue(p, S.order, S.pointer).slice(0, Sched.PREVIEW_CHUNK).forEach(function (c) { Sched.preview(p, c, t, nowMs()); });
+      Object.keys(p.read).forEach(function (c) {
+        if (p.read[c][0] < Sched.WRITE_UNLOCK_BOX) p.read[c][0] = Sched.WRITE_UNLOCK_BOX;
+        if (!p.write[c]) p.write[c] = [0, t, 0, 0]; else p.write[c][1] = Math.min(p.write[c][1], t);
+      });
+      Platform.save(p);
+      menu();
+    });
     bar.querySelector('#tb-day').addEventListener('click', function () { S.dayOffset = (S.dayOffset || 0) + 1; trialBar(); menu(); });
     bar.querySelector('#tb-reset').addEventListener('click', function () {
       Platform.resetTrial(); S.p = Sched.newProgress(); S.dayOffset = 0;
