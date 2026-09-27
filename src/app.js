@@ -365,13 +365,20 @@
 
   function kanjiSvg(c, cls) {
     // 十字の点線（字全体のバランスの目安）。線は <line> にして、書き順アニメ（path が対象）に巻き込まない
-    return '<svg viewBox="0 0 109 109" class="' + cls + '"><line class="cross" x1="54.5" y1="1" x2="54.5" y2="108"/><line class="cross" x1="1" y1="54.5" x2="108" y2="54.5"/>' + ST[c].map(function (d) { return '<path d="' + d + '"/>'; }).join('') + '</svg>';
+    return '<svg viewBox="0 0 109 109" class="' + cls + '"><rect class="frame" x="0.8" y="0.8" width="107.4" height="107.4"/><line class="cross" x1="54.5" y1="1" x2="54.5" y2="108"/><line class="cross" x1="1" y1="54.5" x2="108" y2="54.5"/>' + ST[c].map(function (d) { return '<path d="' + d + '"/>'; }).join('') + '</svg>';
+  }
+  // 読みがなの大きさ: 基本は 14vh（以前の倍）。長い読み・複数の読みが左右の余白に収まらない時だけ縮める
+  function readSize(list) {
+    var len = Math.max.apply(null, list.map(function (r) { return r.replace('.', '').length; }).concat([1]));
+    var side = Math.max(120, (window.innerWidth - Math.min(window.innerHeight, window.innerWidth * 0.78)) / 2);
+    var px = Math.min(window.innerHeight * 0.14, window.innerHeight * 0.88 / (len * 1.15), side * 0.9 / (list.length * 1.25 || 1));
+    return Math.floor(px) + 'px';
   }
   function readingHtml(list, kun) {
     return list.map(function (r) {
       if (!kun) return '<span class="rd">' + esc(r) + '</span>';
       var p = r.split('.');
-      return '<span class="rd">' + esc(p[0]) + (p[1] ? '<small>' + esc(p[1]) + '</small>' : '') + '</span>';
+      return '<span class="rd">' + esc(p[0]) + (p[1] ? '<span class="okuri">' + esc(p[1]) + '</span>' : '') + '</span>';
     }).join('');
   }
 
@@ -386,9 +393,9 @@
       stopLoop();
       var c = list[idx], k = D.kanji[c];
       stage.className = 'single';
-      stage.innerHTML = '<div class="kun" aria-label="訓読み">' + readingHtml(k.kun, true) + '</div>' +
+      stage.innerHTML = '<div class="kun" aria-label="訓読み" style="font-size:' + readSize(k.kun) + '">' + readingHtml(k.kun, true) + '</div>' +
         '<div class="big-kanji">' + kanjiSvg(c, 'show-svg') + '</div>' +
-        '<div class="on" aria-label="音読み">' + readingHtml(k.on, false) + '</div>' +
+        '<div class="on" aria-label="音読み" style="font-size:' + readSize(k.on) + '">' + readingHtml(k.on, false) + '</div>' +
         '<div class="stage-pos">' + (idx + 1) + ' / ' + list.length + '</div>';
       Ink.animate(Array.from(stage.querySelectorAll('.show-svg path')), 0.9);
     }

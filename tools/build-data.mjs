@@ -76,7 +76,15 @@ for (const line of lines('words-g3.txt')) {
     if (!m) { err(`${ch}: よみ「${r}」が辞書の音訓に一致しない`); continue; }
     const t = m.t;
     const list = t === 'on' ? on : kun;
-    if (!list.includes(m.base)) list.push(m.base); // 提示用: 辞書の元の形（連濁前、送り仮名は「.」で区切る）
+    // 提示用の読み: 音は辞書の元の形（連濁前）。訓は辞書の語幹＋例語の実際の送り仮名（温かい→あたた.かい）
+    let base = m.base;
+    if (t === 'kun') {
+      const stem = m.base.split('.')[0];
+      const okuri = (w.slice(w.indexOf(ch) + 1).match(/^[\u3041-\u3096]+/) || [''])[0];
+      base = m.base.includes('.') && okuri ? stem + '.' + okuri : stem;
+    }
+    // 同じ語幹は最初の1つだけ（持つ／持ち物 → も.つ のみ）
+    if (!list.some((x) => x.split('.')[0] === base.split('.')[0])) list.push(base);
     out.push(alts.length ? [w, k, r, t, alts] : [w, k, r, t]);
   }
   entries.set(ch, out);
