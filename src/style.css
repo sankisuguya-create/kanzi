@@ -329,3 +329,10 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .title .mori .tree2 path { stroke: #1F6B3A; } /* 深緑 */
 .title .mori .tree3 path { stroke: #B5541B; } /* 紅葉 */
 .title .title-extra { margin-left: .4em; }
+
+/* 先生: 次の漢字テストの範囲 */
+.tcell { position: relative; min-height: 46px; font-size: 22px; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
+.tcell.tsel { background: var(--fill-b); border: 2px solid var(--cat-3); font-weight: 700; }
+.tcell.tsel::after { content: "✓"; position: absolute; top: 0; right: 3px; font-size: 12px; color: var(--cat-3); }
+.teacher input#test-label { font-size: 18px; min-height: 44px; padding: 0 10px; width: min(100%, 360px); }
+.picked .tlist { font-size: 26px; letter-spacing: .15em; font-family: var(--font-kanji); }

@@ -23,7 +23,7 @@
 
   // ---- デモの設定（先生画面で変える）: { grades: { 組: [学年...] }, pointers: { '組:学年': n }, orders: { 学年: 並び } }
   var SKEY = 'kanzi.settings';
-  function demoSettings() { var s = store.get(SKEY) || {}; s.grades = s.grades || {}; s.pointers = s.pointers || {}; s.orders = s.orders || {}; return s; }
+  function demoSettings() { var s = store.get(SKEY) || {}; s.grades = s.grades || {}; s.pointers = s.pointers || {}; s.orders = s.orders || {}; s.tests = s.tests || {}; return s; }
   function saveDemo(s) { store.set(SKEY, s); }
   function demoGrades(klass) { return demoSettings().grades[klass] || [1, 2, 3]; }
   function demoPointers(klass) {
@@ -50,7 +50,7 @@
     if (!isGas) {
       var role = /teacher/.test(location.search) ? 'teacher' : 'student', s = demoSettings(), klass = '3-1';
       return Promise.resolve({ role: role, demo: true, email: 'demo', klass: klass, progress: Sched.norm(store.get(key)),
-        grades: demoGrades(klass), pointers: demoPointers(klass), orders: s.orders, classes: [klass] });
+        grades: demoGrades(klass), pointers: demoPointers(klass), orders: s.orders, test: s.tests[klass] || null, classes: [klass] });
     }
     return gas('api_init').then(function (info) {
       key = 'kanzi.progress.' + info.email;
@@ -104,6 +104,12 @@
     }
     return Promise.resolve(out);
   }
+  // 次の漢字テストの範囲 { label, chars }（学級ごと。先生が決める）
+  function testOf(klass) { return isGas ? gas('api_test', klass) : Promise.resolve(demoSettings().tests[klass] || null); }
+  function setTest(klass, t) {
+    if (isGas) return gas('api_setTest', klass, JSON.stringify(t));
+    var s = demoSettings(); s.tests[klass] = t && t.chars ? t : null; saveDemo(s); return Promise.resolve(s.tests[klass]);
+  }
   function pointersOf(klass) { return isGas ? gas('api_pointers', klass) : Promise.resolve(demoPointers(klass)); }
   function setPointer(klass, grade, n) {
     if (isGas) return gas('api_setPointer', klass, grade, n);
@@ -120,5 +126,5 @@
   }
 
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
-    stats: stats, students: students, pointersOf: pointersOf, setPointer: setPointer, gradesOf: gradesOf, setGrades: setGrades, setOrder: setOrder, store: store };
+    stats: stats, students: students, testOf: testOf, setTest: setTest, pointersOf: pointersOf, setPointer: setPointer, gradesOf: gradesOf, setGrades: setGrades, setOrder: setOrder, store: store };
 })(this);

@@ -41,6 +41,8 @@
     var g = maxGrade();
     return String(str).replace(/\[([^|\]]+)\|([^\]]+)\]/g, function (_, k, r) { var i = D.kanji[k]; return i && i.g <= g ? k : r; });
   }
+  // 次の漢字テストの範囲（先生が指定した字。学年をまたいでよい）
+  function testChars() { return S.test && S.test.chars ? Array.from(S.test.chars).filter(function (c) { return D.kanji[c]; }) : []; }
   function allowedChars() { return S.grades.map(orderOf).join('').split(''); }
 
   // 例語は答えた回数ごとに入れ替える（音・訓を交互に：D7）
@@ -98,6 +100,7 @@
       K('<button class="big primary" id="go-write">[書|か]く<span class="meta">[読|よ]み → [漢|かん][字|じ]を [書|か]く</span></button></div>') +
       K('<div class="two"><button class="big" id="go-fk">カード<span class="meta">[漢|かん][字|じ] → [読|よ]み</span></button>') +
       K('<button class="big" id="go-fy">カード<span class="meta">[読|よ]み → [漢|かん][字|じ]</span></button></div>') +
+      (testChars().length ? '<button class="big test" id="go-test">' + K('[次|つぎ]の[漢|かん][字|じ]テストの はんいを [見|み]る') + '<span class="meta">' + (S.test.label ? esc(S.test.label) + '・' : '') + testChars().length + K('[字|じ]') + '</span></button>' : '') +
       '<button class="big" id="go-seen"' + (nSel ? '' : ' disabled') + '>' + K('[選|えら]んだ[漢|かん][字|じ]を[見|み]る') + '<span class="meta">' + (nSel ? nSel + K('[字|じ]') : K('まだ [選|えら]んでいないよ')) + '</span></button>' +
       '</section></main>' + (S.info.demo && !S.trial ? '<p class="demo-note">デモ（この端末にだけ保存）</p>' : '');
     bindTabs(function (ng) { S.grade = ng; menu(); });
@@ -106,6 +109,7 @@
     on('#go-write', function () { chooser('write'); });
     on('#go-fk', function () { chooser('fk'); });
     on('#go-fy', function () { chooser('fy'); });
+    on('#go-test', function () { viewChars(testChars(), 0, menu); });
     on('#go-seen', function () { var l = Sched.selected(S.p, orderOf(S.grade)); if (l.length) viewChars(l, 0, menu); });
   }
 
@@ -230,12 +234,13 @@
   function sources(kind) {
     var g = S.grade, order = orderOf(g), n = SIZE[kind], tbl = kind === 'write' ? 'write' : 'read';
     var due = Sched.dueList(S.p, today(), order)[tbl];
-    return [
+    var test = testChars();
+    return (test.length ? [{ id: 'test', label: '[次|つぎ]の[漢|かん][字|じ]テストの はんい', sub: S.test.label ? esc(S.test.label) : '', list: shuffle(test.slice()).slice(0, SEL_MAX) }] : []).concat([
       { id: 'due', label: 'おすすめ', sub: '[忘|わす]れそうな[字|じ]', list: due.slice(0, n) },
       { id: 'sel', label: '[選|えら]んだ[漢|かん][字|じ]', sub: '[自|じ][分|ぶん]で [選|えら]んだ[字|じ]', list: Sched.selected(S.p, order).slice(0, SEL_MAX) },
       { id: 'rnd', label: '[習|なら]った[漢|かん][字|じ]から ランダム', sub: '', list: shuffle(learnedChars(g).slice()).slice(0, n) },
       { id: 'miss', label: 'まちがいの [多|おお]い[漢|かん][字|じ]', sub: '', list: Sched.missList(S.p, tbl, order).slice(0, n) }
-    ];
+    ]);
   }
   function chooser(kind) {
     clearScreen();
@@ -453,8 +458,8 @@
       $('.teacher').innerHTML = '<section><h2>担当の学級がありません</h2><p>スプレッドシートの「教師」シートに、あなたのメールアドレスと 学年・組 を入れてください（1人で何行でも。組を空けると その学年の全学級）。「書き順を 大きく見せる」は使えます。</p></section>';
       return;
     }
-    Promise.all([Platform.gradesOf(klass), Platform.pointersOf(klass), Platform.students(klass)]).then(function (r) {
-      var kids = r[2] || [];
+    Promise.all([Platform.gradesOf(klass), Platform.pointersOf(klass), Platform.students(klass), Platform.testOf(klass)]).then(function (r) {
+      var kids = r[2] || [], test = r[3] || { label: '', chars: '' };
       var grades = r[0], pointers = r[1] || {};
       tgrade = tgrade && grades.indexOf(tgrade) >= 0 ? tgrade : Math.max.apply(null, grades);
       return Platform.stats(klass, tgrade).then(function (st) {
@@ -480,11 +485,36 @@
             : tgrade + '年は下の学年なので、全部の字が「習った漢字」です。') + '</p>' +
           (isTop ? '<div class="grid">' + Array.from(order).map(function (c, i) { return '<button class="cell' + (i < pointer ? ' taught' : '') + '" data-i="' + i + '" aria-pressed="' + (i < pointer) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
             '<p><button id="unset">進度を 未設定にもどす</button></p>' : '') +
+          '<h3>次の漢字テストの範囲</h3><p class="hint">字を押すと範囲に入る／外れる（押すたびに自動で保存）。学年タブを切り替えると、ほかの学年の字も足せます。児童の「読む・書く・カード」の はじめかたに「次の漢字テストの はんい」として出ます。</p>' +
+          '<p><label>テストの名前 <input id="test-label" maxlength="40" value="' + esc(test.label || '') + '" placeholder="例: 9月の50問テスト"></label></p>' +
+          '<p class="picked" id="test-picked"></p>' +
+          '<div class="grid">' + Array.from(order).map(function (c) { return '<button class="tcell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
+          '<p><button id="test-clear">範囲を ぜんぶ はずす</button> <span id="test-msg" aria-live="polite"></span></p>' +
           '<h3>学級でつまずいている字</h3><p class="hint">よむで答えたことのある児童のうち、最後の答えがまちがいだった児童の割合が高い字（' + st.students + '人中。児童名は出しません）。</p>' +
           (hard.length ? '<ol class="hard">' + hard.map(function (x) { return '<li><span class="hc">' + esc(x.c) + '</span>' + x.s + '人中 ' + x.b + '人（' + Math.round(x.r * 100) + '%）</li>'; }).join('') + '</ol>' : '<p>まだ データが ありません。</p>') +
           '<details><summary>' + tgrade + '年の出題順を変える（教科書の新出順を貼り付け）</summary><p class="hint">' + tgrade + '年の' + D.grades[tgrade].order.length + '字を順番どおりに貼り付けます（区切りの空白・改行はあってもよい）。いまは「' + (S.orders[tgrade] ? '設定済みの順' : '配当表の順（仮）') + '」。</p>' +
           '<textarea id="order" rows="5">' + esc(order) + '</textarea><p><button id="save-order">この順番にする</button> <span id="order-msg" aria-live="polite"></span></p></details></section>';
         var sel = $('#klass'); if (sel) sel.addEventListener('change', function () { teacher(sel.value); });
+        // 次の漢字テストの範囲: 押すたびに保存（自動保存）
+        var tchars = Array.from(test.chars || '');
+        function paintTest() {
+          $('#test-picked').innerHTML = tchars.length ? '<b>' + tchars.length + '字</b> <span class="tlist">' + tchars.map(esc).join(' ') + '</span>' : '<span class="hint">まだ ありません</span>';
+          app.querySelectorAll('.tcell').forEach(function (b) { var on = tchars.indexOf(b.dataset.c) >= 0; b.classList.toggle('tsel', on); b.setAttribute('aria-pressed', on); });
+        }
+        function saveTest() {
+          var t = { label: $('#test-label').value.trim(), chars: tchars.join('') };
+          Platform.setTest(klass, t).then(function () { $('#test-msg').textContent = '✓ 保存しました'; }).catch(function () { $('#test-msg').textContent = '× 保存できませんでした'; });
+        }
+        app.querySelectorAll('.tcell').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var i = tchars.indexOf(b.dataset.c);
+            if (i >= 0) tchars.splice(i, 1); else tchars.push(b.dataset.c);
+            paintTest(); saveTest();
+          });
+        });
+        $('#test-label').addEventListener('change', saveTest);
+        on('#test-clear', function () { tchars = []; paintTest(); saveTest(); });
+        paintTest();
         app.querySelectorAll('.gchecks input').forEach(function (cb) {
           cb.addEventListener('change', function () {
             var list = Array.from(app.querySelectorAll('.gchecks input')).filter(function (x) { return x.checked; }).map(function (x) { return +x.dataset.g; });
@@ -644,8 +674,9 @@
   }
   function startTrial(klass) {
     // 見せる学年・進度は選んでいる組のものを使う
-    Promise.all([Platform.gradesOf(klass), Platform.pointersOf(klass)]).then(function (r) {
+    Promise.all([Platform.gradesOf(klass), Platform.pointersOf(klass), Platform.testOf(klass)]).then(function (r) {
       S.trial = true;
+      S.test = r[2] || null;
       S.grades = r[0]; S.grade = maxGrade(); S.pointers = r[1] || {};
       S.p = Platform.startTrial(S.info.email);
       S.dayOffset = 0;
@@ -665,6 +696,7 @@
     S.info = info;
     S.orders = info.orders || {};
     S.pointers = info.pointers || {};
+    S.test = info.test || null;
     S.grades = (info.grades && info.grades.length ? info.grades : [3]).map(Number).sort();
     S.grade = maxGrade();
     if (info.role === 'teacher') return teacher();

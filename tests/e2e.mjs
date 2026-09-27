@@ -220,6 +220,14 @@ check((await page.textContent('.teacher')).includes('下の学年なので'), '�
 await shot('10-teacher');
 await checkFonts('先生画面');
 
+// ---- 次の漢字テストの範囲（先生が指定）
+await page.fill('#test-label', '9月の漢字テスト'); await page.press('#test-label', 'Tab');
+await page.click('.tcell[data-c="引"]'); await page.click('.tcell[data-c="羽"]');
+await page.click('.ttab[data-g="3"]');
+await page.click('.tcell[data-c="悪"]'); await page.click('.tcell[data-c="安"]');
+check((await page.textContent('#test-picked')).includes('4字') && (await page.textContent('#test-msg')).includes('保存'), '先生: テストの範囲を 学年をまたいで4字（押すたびに保存）');
+await shot('14-teacher-test');
+
 // ---- 書き順を大きく見せる（学年タブ・全画面）
 await page.click('#show');
 await page.click('.ptab[data-g="5"]');
@@ -242,6 +250,16 @@ await page.waitForSelector('#trial-bar');
 check((await page.$$('.tabs .tab')).length === 4 && (await page.getAttribute('.tab[data-g="4"]', 'aria-selected')) === 'true', 'おためし: 先生が許可した1〜4年のタブ、4年で開く');
 await page.click('#go-read');
 check((await page.textContent('.chooser [data-id="rnd"]')).includes('10問'), 'おためし: 4年の進度（10字）から ランダム10問');
+check((await page.textContent('.chooser [data-id="test"]')).includes('4問') && (await page.textContent('.chooser [data-id="test"]')).includes('9月の漢字テスト'), 'おためし: はじめかたの いちばん上に「次の漢字テストの はんい」4問');
+await page.click('.chooser [data-id="test"]');
+await page.waitForSelector('#yomi');
+check(await page.evaluate(() => KanziState.session.items.slice().sort().join('') === '安引悪羽'.split('').sort().join('')), 'おためし: テストの範囲の字だけが出る');
+await page.click('#back');
+check((await page.textContent('#go-test')).includes('4字'), 'おためし: メニューに「次の漢字テストの はんいを 見る」');
+await page.click('#go-test'); await page.waitForSelector('.monitor');
+check((await page.textContent('.bar .prog')) === '1 / 4', 'おためし: テストの範囲を1字ずつ見る');
+await page.click('#back');
+await page.click('#go-read');
 await page.click('#back');
 await shot('11-trial');
 await page.click('#tb-back');
@@ -255,6 +273,9 @@ const cover = await page.evaluate(async () => {
   el.textContent = Object.keys(KANZI_DATA.kanji).join('') + 'あいうえおアイウエオ漢字の森'; document.body.appendChild(el);
   return faces;
 });
+// 描画が終わるのを待ってから調べる（足した直後はまだ描かれていないことがある）
+await page.waitForFunction(() => { const e = document.getElementById('fonttest'); return e && e.offsetHeight > 0; });
+await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 const { root: r2 } = await cdp.send('DOM.getDocument', { depth: -1 });
 const { nodeId: fid } = await cdp.send('DOM.querySelector', { nodeId: r2.nodeId, selector: '#fonttest' });
 const ff = (await cdp.send('CSS.getPlatformFontsForNode', { nodeId: fid })).fonts;
