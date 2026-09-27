@@ -156,7 +156,7 @@
   function showOpts() { var o = Platform.store.get(SHOW_OPTS_KEY) || {}; return { base: o.base !== false, color: !!o.color }; }
   function setShowOpt(k, v) { var o = showOpts(); o[k] = v; Platform.store.set(SHOW_OPTS_KEY, o); }
   // 一〜四画目の色分け（先生の提示）。色だけに頼らないよう、各画の書きはじめに画の番号（1〜4）を同じ色で置く。
-  // 色は線用の4色（青・橙・茶・灰）。黒（5画目から）・うすい下地・白地と、どの色覚の型でも見分けられることを検査済み（docs/design.md §17）
+  // 色は線用の4色（青・橙・茶・緑）。黒（5画目から）・うすい下地・白地と、どの色覚の型でも見分けられることを検査済み（docs/design.md §17）
   var COLOR_STROKES = 4;
   // 番号の置き場所は描いた後に決める（placeNums）。ここでは番号だけ出す
   function strokeNums(c) {
@@ -621,7 +621,7 @@
       '<main class="teacher"><p class="picked" id="picked"></p>' +
       '<p><label class="opt"><input type="checkbox" id="opt-base"' + (showOpts().base ? ' checked' : '') + '> 完成した字を うすく表示して、その上に書き順を黒で重ねる</label></p>' +
       '<p><label class="opt"><input type="checkbox" id="opt-color"' + (showOpts().color ? ' checked' : '') + '> 一〜四画目に色をつける（' +
-        ['青', '橙', '茶', '灰'].map(function (n, i) { return '<span class="cswatch s' + (i + 1) + '">' + (i + 1) + n + '</span>'; }).join('') + '。書きはじめに画の番号）</label></p>' +
+        ['青', '橙', '茶', '緑'].map(function (n, i) { return '<span class="cswatch s' + (i + 1) + '">' + (i + 1) + n + '</span>'; }).join('') + '。書きはじめに画の番号）</label></p>' +
       '<p><button class="big primary" id="go" disabled>はじめる</button></p>' +
       '<nav class="tabs t" role="tablist">' + ALL_GRADES.map(function (g) { return '<button role="tab" class="ptab" data-g="' + g + '" aria-selected="' + (g === pg) + '">' + g + '年</button>'; }).join('') + '</nav>' +
       '<div class="grid">' + Array.from(orderOf(pg)).map(function (c) { return '<button class="cell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +

@@ -224,7 +224,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 #stage .show-svg .cross { stroke: #9AA0A6; stroke-width: .7; stroke-dasharray: 2.2 2.2; }
 #stage .show-svg .base path { stroke: #D3D7DC; } /* うすい完成形（下地） */
 /* 一〜四画目の色分け（線用の4色。黒・下地・白地と見分けられることを検査済み。色だけに頼らず番号を併記） */
-:root { --stroke-1: #0F5EA8; --stroke-2: #C86A00; --stroke-3: #6E4310; --stroke-4: #7A7F86; }
+:root { --stroke-1: #0F5EA8; --stroke-2: #C86A00; --stroke-3: #6E4310; --stroke-4: #00806B; }
 #stage .show-svg .ink path.s1 { stroke: var(--stroke-1); }
 #stage .show-svg .ink path.s2 { stroke: var(--stroke-2); }
 #stage .show-svg .ink path.s3 { stroke: var(--stroke-3); }
@@ -233,10 +233,9 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 #stage .show-svg .nums .n1, .cswatch.s1 { fill: var(--stroke-1); color: var(--stroke-1); }
 #stage .show-svg .nums .n2, .cswatch.s2 { fill: var(--stroke-2); color: #A85800; }
 #stage .show-svg .nums .n3, .cswatch.s3 { fill: var(--stroke-3); color: var(--stroke-3); }
-#stage .show-svg .nums .n4, .cswatch.s4 { fill: var(--stroke-4); color: var(--ink-sub); }
+#stage .show-svg .nums .n4, .cswatch.s4 { fill: var(--stroke-4); color: var(--stroke-4); }
 .cswatch { font-weight: 700; margin: 0 .25em; border-bottom: 4px solid currentColor; }
 .cswatch.s2 { border-bottom-color: var(--stroke-2); }
-.cswatch.s4 { border-bottom-color: var(--stroke-4); }
 .opt { font-size: 20px; display: inline-flex; gap: 10px; align-items: center; }
 .opt input { width: 26px; height: 26px; }
 #stage .show-svg path { fill: none; stroke: #111; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }
@@ -1229,7 +1228,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   function showOpts() { var o = Platform.store.get(SHOW_OPTS_KEY) || {}; return { base: o.base !== false, color: !!o.color }; }
   function setShowOpt(k, v) { var o = showOpts(); o[k] = v; Platform.store.set(SHOW_OPTS_KEY, o); }
   // 一〜四画目の色分け（先生の提示）。色だけに頼らないよう、各画の書きはじめに画の番号（1〜4）を同じ色で置く。
-  // 色は線用の4色（青・橙・茶・灰）。黒（5画目から）・うすい下地・白地と、どの色覚の型でも見分けられることを検査済み（docs/design.md §17）
+  // 色は線用の4色（青・橙・茶・緑）。黒（5画目から）・うすい下地・白地と、どの色覚の型でも見分けられることを検査済み（docs/design.md §17）
   var COLOR_STROKES = 4;
   // 番号の置き場所は描いた後に決める（placeNums）。ここでは番号だけ出す
   function strokeNums(c) {
@@ -1694,7 +1693,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       '<main class="teacher"><p class="picked" id="picked"></p>' +
       '<p><label class="opt"><input type="checkbox" id="opt-base"' + (showOpts().base ? ' checked' : '') + '> 完成した字を うすく表示して、その上に書き順を黒で重ねる</label></p>' +
       '<p><label class="opt"><input type="checkbox" id="opt-color"' + (showOpts().color ? ' checked' : '') + '> 一〜四画目に色をつける（' +
-        ['青', '橙', '茶', '灰'].map(function (n, i) { return '<span class="cswatch s' + (i + 1) + '">' + (i + 1) + n + '</span>'; }).join('') + '。書きはじめに画の番号）</label></p>' +
+        ['青', '橙', '茶', '緑'].map(function (n, i) { return '<span class="cswatch s' + (i + 1) + '">' + (i + 1) + n + '</span>'; }).join('') + '。書きはじめに画の番号）</label></p>' +
       '<p><button class="big primary" id="go" disabled>はじめる</button></p>' +
       '<nav class="tabs t" role="tablist">' + ALL_GRADES.map(function (g) { return '<button role="tab" class="ptab" data-g="' + g + '" aria-selected="' + (g === pg) + '">' + g + '年</button>'; }).join('') + '</nav>' +
       '<div class="grid">' + Array.from(orderOf(pg)).map(function (c) { return '<button class="cell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
