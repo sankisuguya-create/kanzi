@@ -1,3 +1,8 @@
+/* @mori-font-start 同梱の日本語フォント（最後の受け皿）。端末の日本語フォントで足りる時は読み込まれない。
+   font-display: block … 読み込み中に別のフォント（中国語フォントの可能性）で仮表示しない。GAS 版では tools/build-gas.mjs が Google Fonts に差し替える */
+@font-face { font-family: "MoriJP"; font-weight: 400; font-display: block; src: url("fonts/mori-jp-400.woff2") format("woff2"); }
+@font-face { font-family: "MoriJP"; font-weight: 700; font-display: block; src: url("fonts/mori-jp-700.woff2") format("woff2"); }
+/* @mori-font-end */
 /* 色は color-coding スキルの既定トークン。識別に使う色は2重符号化（語・記号・形）と組にする */
 :root {
   --ink: #1A1A1A;
@@ -15,18 +20,22 @@
   --line: #C9CDD2;
   /* 木の色は装飾（識別に使わない） */
   --leaf-0: #4E8A3E; --leaf-1: #6BA34F; --leaf-2: #3F7535;
+  /* フォントは1か所で決める。一般的な日本語フォントを並べ、中国語フォントに落ちないように最後は日本語ゴシックにする */
+  --font-sans: "BIZ UDPGothic", "Noto Sans JP", "Noto Sans CJK JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", "Meiryo", "IPAexGothic", "IPAPGothic", "IPAGothic", "MoriJP", "Noto Sans JP", sans-serif;
+  --font-kanji: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", "Noto Serif CJK JP", "Hiragino Mincho ProN", "Yu Mincho", "IPAexMincho", "IPAMincho", var(--font-sans); /* 漢字を大きく見せる所: 教科書体 → 明朝 → ゴシック */
   --tap: 64px; /* 児童のタップ対象の下限より大きく（評価軸 §2） */
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
   background: var(--paper); color: var(--ink);
-  font-family: "BIZ UDPGothic", "Noto Sans JP", "Noto Sans CJK JP", "Hiragino Sans", sans-serif;
+  font-family: var(--font-sans);
   font-size: 20px; line-height: 1.5;
   -webkit-tap-highlight-color: transparent;
 }
 #app { max-width: 1100px; margin: 0 auto; padding: 12px 16px 24px; min-height: 100%; }
 button { font: inherit; color: inherit; cursor: pointer; }
+input, select, textarea { font-family: inherit; } /* フォーム部品も同じ日本語フォントを引き継ぐ */
 button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 
 /* ---- 見出し */
@@ -88,7 +97,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   background: var(--card); border: 3px solid var(--ink); border-radius: 22px; padding: 18px;
 }
-.card .word { font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", "Noto Serif CJK JP", serif; line-height: 1.1; }
+.card .word { font-family: var(--font-kanji); line-height: 1.1; }
 .card .tg { font-size: clamp(96px, 22vmin, 190px); }
 .card .ot { font-size: clamp(56px, 12vmin, 110px); }
 .card .kana { font-size: 40px; letter-spacing: .15em; visibility: hidden; min-height: 1.3em; }
@@ -134,9 +143,9 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 /* ---- かく */
 .write { display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: start; }
 .wl { display: grid; gap: 10px; align-content: start; }
-.prompt { margin: 0; font-size: 56px; font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", serif; }
+.prompt { margin: 0; font-size: 56px; font-family: var(--font-kanji); }
 .prompt .box { display: inline-block; width: 1em; height: 1em; border: 3px solid var(--ink); vertical-align: -0.1em; background: var(--fill-b); }
-.prompt rt { font-size: 24px; font-family: sans-serif; letter-spacing: .1em; }
+.prompt rt { font-size: 24px; font-family: var(--font-sans); letter-spacing: .1em; }
 .prompt-kana { margin: 0; color: var(--ink-sub); font-size: 22px; letter-spacing: .1em; }
 .stages { display: flex; gap: 8px; list-style: none; padding: 0; margin: 4px 0; flex-wrap: wrap; }
 .stages li { padding: 4px 12px; border: 2px solid var(--line); border-radius: 999px; color: var(--ink-sub); font-size: 18px; }
@@ -158,7 +167,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .pv-info { display: grid; gap: 14px; align-content: start; }
 .words { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .words li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px 14px; }
-.pw { font-size: 44px; font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", serif; }
+.pw { font-size: 44px; font-family: var(--font-kanji); }
 .pw b { font-weight: 400; text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
 .pk { font-size: 24px; letter-spacing: .1em; }
 .say { min-width: var(--tap); min-height: var(--tap); font-size: 26px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; }
@@ -224,3 +233,99 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .stage-full { position: fixed; top: 8px; right: 66px; z-index: 51; height: 48px; padding: 0 16px; font-size: 18px; border: 1px solid var(--line); background: #fff; border-radius: 24px; color: var(--ink-sub); opacity: .75; }
 .stage-full[hidden] { display: none; }
 .stage-exit { position: fixed; top: 8px; right: 10px; z-index: 51; width: 48px; height: 48px; font-size: 26px; border: 1px solid var(--line); background: #fff; border-radius: 50%; color: var(--ink-sub); opacity: .6; }
+
+/* ================= 学年タブ・一覧・見る・問題の始め方・カード・おわり（全学年版） */
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.tabs .tab, .tabs .ttab, .tabs .ptab { min-height: 52px; min-width: 76px; padding: 0 14px; font-size: 22px; font-weight: 700; background: var(--card); border: 2px solid var(--line); border-radius: 12px 12px 0 0; color: var(--ink-sub); }
+.tabs [aria-selected="true"] { border-color: var(--ink); color: var(--ink); background: var(--fill-a); box-shadow: inset 0 -4px 0 var(--cat-1); }
+.tabs.t { margin: 6px 0 10px; }
+.big[disabled] { opacity: .45; cursor: default; }
+.menu .actions .big { min-height: 88px; font-size: 26px; }
+
+.browse-tools { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 4px 0 6px; }
+.seg { display: inline-flex; border: 2px solid var(--ink); border-radius: 14px; overflow: hidden; }
+.seg button { min-height: 60px; min-width: 130px; font-size: 24px; font-weight: 700; background: var(--card); border: 0; }
+.seg button + button { border-left: 2px solid var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--solid-on); color: #fff; }
+.sel-count { font-size: 20px; font-weight: 700; }
+.browse-tools .clear { min-height: 48px; padding: 0 14px; font-size: 16px; background: var(--card); border: 2px solid var(--line); border-radius: 10px; }
+.browse-hint { margin: 0 0 8px; color: var(--ink-sub); font-size: 18px; }
+.kgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+.kc { position: relative; min-height: 64px; font-size: 34px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; font-family: var(--font-kanji); }
+.kc.sel { background: var(--fill-b); border: 3px solid var(--cat-3); }
+.kc.sel::after { content: "✓"; position: absolute; top: 1px; right: 5px; font-size: 16px; font-family: var(--font-sans); font-weight: 700; color: var(--cat-3); }
+
+.bar .nav { display: flex; gap: 8px; }
+.view { display: grid; grid-template-columns: minmax(260px, 1fr) auto; gap: 18px; align-items: start; }
+.vwords h2 { font-size: 22px; margin: 0 0 8px; }
+.vwords ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.vwords li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px 14px; }
+.vw { font-size: 42px; font-family: var(--font-kanji); }
+.vw .tg { text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
+.vk { font-size: 24px; letter-spacing: .1em; }
+.vmeta { color: var(--ink-sub); }
+.pick-one { min-height: 60px; padding: 0 20px; font-size: 20px; font-weight: 700; background: var(--card); border: 2px solid var(--ink); border-radius: 14px; }
+.pick-one[aria-pressed="true"] { background: var(--fill-b); border-color: var(--cat-3); }
+.monitor { display: flex; align-items: center; gap: 1vw; background: #fff; border-radius: 14px; padding: 6px; }
+.monitor .mon-kanji .show-svg, #stage .show-svg { width: 100%; height: 100%; display: block; }
+.monitor .show-svg .frame, #stage .show-svg .frame { fill: none; stroke: #9AA0A6; stroke-width: .9; }
+.monitor .show-svg .cross, #stage .show-svg .cross { stroke: #9AA0A6; stroke-width: .7; stroke-dasharray: 2.2 2.2; }
+.monitor .show-svg path { fill: none; stroke: #111; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }
+.monitor .show-svg .base path { stroke: #D3D7DC; }
+.monitor .kun, .monitor .on { display: flex; flex-direction: row-reverse; gap: .35em; align-items: center; justify-content: center; }
+.monitor .rd { display: flex; flex-direction: column; align-items: center; font-weight: 700; }
+.monitor .rd .ch { display: block; line-height: 1.12; }
+.monitor .rd .ch.small { transform: translate(.16em, -.16em) scale(.9); }
+.monitor .rd .ch.long { transform: rotate(90deg); }
+.monitor .rd .ch.okuri { color: var(--ink-link); }
+.monitor .rd .sep { display: block; width: .12em; height: .45em; margin: .12em 0; background: var(--ink-link); border-radius: .06em; }
+
+.chooser { display: grid; gap: 14px; max-width: 720px; margin: 0 auto; }
+.chooser h2 { margin: 4px 0; font-size: 26px; text-align: center; }
+
+.okuri-after { align-self: center; font-size: 40px; font-weight: 700; color: var(--ink-link); padding: 0 4px; }
+.answer-row { grid-template-columns: 1fr auto auto; }
+
+.flash { height: calc(100vh - 100px); display: flex; cursor: pointer; user-select: none; }
+.fcard { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2vh; background: var(--card); border: 3px solid var(--ink); border-radius: 22px; }
+.fcard .word { font-family: var(--font-kanji); line-height: 1.05; }
+.fcard .tg { font-size: clamp(120px, 34vmin, 320px); }
+.fcard .ot { font-size: clamp(70px, 18vmin, 180px); }
+.fcard .fy { font-size: clamp(60px, 14vmin, 150px); letter-spacing: .12em; font-weight: 700; }
+.fcard .fback { border-top: 3px dashed var(--line); padding-top: 1.5vh; text-align: center; }
+.fcard .fback[hidden] { display: none; }
+.ftap { margin: 0; color: var(--ink-sub); font-size: 20px; }
+
+.done.wide { max-width: 900px; padding-top: 4vh; }
+.endlist { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; width: 100%; }
+.endlist label { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 6px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+.endlist input { width: 28px; height: 28px; }
+.endlist .ec { font-size: 40px; font-family: var(--font-kanji); }
+.endlist .er { font-size: 18px; font-weight: 700; }
+.endlist .er.good { color: var(--cat-1); }
+.endlist .er.again { color: var(--ink-alert); }
+.gchecks { display: flex; gap: 18px; flex-wrap: wrap; }
+.teacher h3 { font-size: 20px; margin: 14px 0 6px; }
+
+@media (max-aspect-ratio: 1/1), (max-width: 760px) {
+  .view { grid-template-columns: 1fr; }
+  .monitor { order: -1; justify-content: center; }
+}
+.tools[hidden] { display: none; }
+
+/* 先生: 子どもごとの記録 */
+.kids-wrap { overflow-x: auto; }
+.kids { border-collapse: collapse; width: 100%; font-size: 17px; background: var(--card); }
+.kids th, .kids td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; white-space: nowrap; }
+.kids th { background: var(--fill-a); font-weight: 700; }
+.kids tr.idle td { background: var(--fill-b); }
+.kids .kmiss { font-size: 22px; letter-spacing: .2em; font-family: var(--font-kanji); }
+
+/* タイトル「漢字の森」: 森の3つの木を別の色に（飾り。識別には使わない） */
+.title { display: inline-flex; align-items: center; gap: .05em; }
+.title .mori { width: 1.12em; height: 1.16em; margin: 0 .04em; overflow: visible; position: relative; top: -.07em; }
+.title .mori path { fill: none; stroke-width: 8.5; stroke-linecap: round; stroke-linejoin: round; }
+.title .mori .tree1 path { stroke: #5A9E1E; } /* 若葉 */
+.title .mori .tree2 path { stroke: #1F6B3A; } /* 深緑 */
+.title .mori .tree3 path { stroke: #B5541B; } /* 紅葉 */
+.title .title-extra { margin-left: .4em; }

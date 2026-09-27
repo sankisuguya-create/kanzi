@@ -1,4 +1,4 @@
-// data-src/ の正本と KanjiVG から src/data-g3.js・src/strokes-g3.js を生成し、同時に検査する。
+// data-src/ の正本（学年ごとの words-gN.txt・order-gN.txt）と KanjiVG から src/data.js・src/strokes.js を生成し、同時に検査する。
 // 検査に落ちたら書き出さずに終了コード1。警告（読みの自動照合の不一致）は目視確認用に表示するだけ。
 import fs from 'node:fs';
 import path from 'node:path';
@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const GRADE = 3;
+const GRADES = [1, 2, 3, 4, 5, 6].filter((g) => fs.existsSync(path.join(ROOT, 'data-src', `words-g${g}.txt`)));
 const EXPECT_COUNT = { 1: 80, 2: 160, 3: 200, 4: 202, 5: 193, 6: 191 }; // 学年別漢字配当表（S2）
 const KVG_CACHE = path.join(ROOT, '.cache', 'kanjivg');
 
@@ -23,13 +23,9 @@ for (const g of [1, 2, 3, 4, 5, 6]) {
   const n = dic.filter((k) => k.grade === g).length;
   if (n !== EXPECT_COUNT[g]) err(`辞書の${g}年の字数が${n}（期待${EXPECT_COUNT[g]}）`);
 }
-const gradeChars = dic.filter((k) => k.grade === GRADE).map((k) => k.literal);
 
 // ---- 正本の読み込み
 const lines = (f) => fs.readFileSync(path.join(ROOT, 'data-src', f), 'utf8').split('\n').filter((l) => l.trim() && !l.startsWith('#'));
-const order = [...lines('order-g3.txt').join('').replace(/\s/g, '')];
-if (order.length !== gradeChars.length || new Set(order).size !== order.length || !order.every((c) => gradeOf(c) === GRADE))
-  err(`order-g3.txt が${GRADE}年の${gradeChars.length}字の並べ替えになっていない（${order.length}字）`);
 
 const kata2hira = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const soften = { か: 'が', き: 'ぎ', く: 'ぐ', け: 'げ', こ: 'ご', さ: 'ざ', し: 'じ', す: 'ず', せ: 'ぜ', そ: 'ぞ', た: 'だ', ち: 'ぢ', つ: 'づ', て: 'で', と: 'ど', は: 'ば', ひ: 'び', ふ: 'ぶ', へ: 'べ', ほ: 'ぼ' };
@@ -60,7 +56,16 @@ function readingType(ch, r) {
 
 const entries = new Map();
 const readings = new Map();
-for (const line of lines('words-g3.txt')) {
+const orders = {};
+for (const GRADE of GRADES) {
+const gradeChars = dic.filter((k) => k.grade === GRADE).map((k) => k.literal); // 辞書の並び（JIS順）＝配当表の音順にほぼ同じ
+const of = `order-g${GRADE}.txt`;
+const order = fs.existsSync(path.join(ROOT, 'data-src', of)) ? [...lines(of).join('').replace(/\s/g, '')] : gradeChars.slice();
+if (order.length !== gradeChars.length || new Set(order).size !== order.length || !order.every((c) => gradeOf(c) === GRADE))
+  err(`${of} が${GRADE}年の${gradeChars.length}字の並べ替えになっていない（${order.length}字）`);
+orders[GRADE] = order;
+const seen = new Set();
+for (const line of lines(`words-g${GRADE}.txt`)) {
   const [ch, rest] = line.split('|');
   if (entries.has(ch)) err(`${ch}: 重複`);
   const words = rest.split(',').map((s) => s.split(':'));
@@ -89,9 +94,11 @@ for (const line of lines('words-g3.txt')) {
   }
   entries.set(ch, out);
   readings.set(ch, { on, kun });
+  seen.add(ch);
+  if (gradeOf(ch) !== GRADE) err(`${ch}: ${GRADE}年の字ではない`);
 }
-for (const c of gradeChars) if (!entries.has(c)) err(`${c}: 例語がない`);
-for (const c of entries.keys()) if (gradeOf(c) !== GRADE) err(`${c}: ${GRADE}年の字ではない`);
+for (const c of gradeChars) if (!seen.has(c)) err(`${c}: 例語がない（${GRADE}年）`);
+}
 
 // ---- 例語全体のよみを形態素解析で照合（警告のみ）
 const kuromoji = require('kuromoji');
@@ -105,7 +112,8 @@ for (const [ch, ws] of entries) for (const [w, k, , , alts] of ws) {
 // ---- KanjiVG（筆順）
 fs.mkdirSync(KVG_CACHE, { recursive: true });
 const strokes = {};
-for (const c of order) {
+const allChars = GRADES.flatMap((g) => orders[g]);
+for (const c of allChars) {
   const fn = c.codePointAt(0).toString(16).padStart(5, '0') + '.svg';
   const fp = path.join(KVG_CACHE, fn);
   if (!fs.existsSync(fp)) {
@@ -128,12 +136,13 @@ if (errors.length) { console.error(`--- エラー ${errors.length}件\n` + error
 
 // ---- 書き出し
 const kanji = {};
-for (const c of order) kanji[c] = { n: strokes[c].length, w: entries.get(c), on: readings.get(c).on, kun: readings.get(c).kun };
+for (const g of GRADES) for (const c of orders[g]) kanji[c] = { g, n: strokes[c].length, w: entries.get(c), on: readings.get(c).on, kun: readings.get(c).kun };
+const grades = {};
+for (const g of GRADES) grades[g] = { order: orders[g].join('') };
 const head = '// 自動生成（tools/build-data.mjs）。直接編集しない。正本は data-src/。\n';
-fs.writeFileSync(path.join(ROOT, 'src', 'data-g3.js'),
-  head + `var KANZI_DATA = ${JSON.stringify({ grade: GRADE, order: order.join(''), kanji })};\n`);
-fs.writeFileSync(path.join(ROOT, 'src', 'strokes-g3.js'),
+fs.writeFileSync(path.join(ROOT, 'src', 'data.js'), head + `var KANZI_DATA = ${JSON.stringify({ grades, kanji })};\n`);
+fs.writeFileSync(path.join(ROOT, 'src', 'strokes.js'),
   head + '// 筆順データ: KanjiVG (c) Ulrich Apel ほか, CC BY-SA 3.0 https://kanjivg.tagaini.net/\n' +
   '// 各画の SVG path（109x109 座標、書く順）。\n' +
   `var KANZI_STROKES = ${JSON.stringify(strokes)};\n`);
-console.log(`OK: ${order.length}字、例語${[...entries.values()].reduce((a, w) => a + w.length, 0)}語`);
+console.log(`OK: ${GRADES.map((g) => g + '年' + orders[g].length + '字').join('・')}、例語${[...entries.values()].reduce((a, w) => a + w.length, 0)}語`);

@@ -5,9 +5,8 @@
 
   // 箱ごとの次回までの日数。かくの箱0（未習）は翌日。設計書 D6（仮の値）
   var INTERVALS = [1, 1, 2, 4, 7, 15];
-  var LIMIT = { read: 20, write: 5 }; // 1日の復習上限（I5）
-  var PREVIEW_CHUNK = 5; // よしゅう1回の字数
-  var WRITE_UNLOCK_BOX = 3; // よむがこの箱に達したら かく を開く（D4）
+  var LIMIT = { read: 20, write: 5 }; // 1日の「おすすめ」上限（I5）
+  var WRITE_UNLOCK_BOX = 3; // よむがこの箱に達したら かく の「おすすめ」に入れる（D4）
   var MAX_BOX = 5;
   var BASE = Date.UTC(2020, 0, 1);
 
@@ -17,41 +16,41 @@
     return Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - BASE) / 86400000);
   }
 
-  // 進捗1件 = [box, due, reps, last]（last = 最後に答えた時刻 ms。端末間の統合に使う）
+  // 進捗1件 = [box, due, reps, last, miss]（last = 最後に答えた時刻 ms。端末間の統合に使う。miss = まちがえた回数）
+  // sel: 児童が選んだ漢字 { 字: [1=選んでいる|0=外した, 時刻] }（時刻の新しい方で統合）
+  // done: 最後まで終えた回 { 開始時刻: 問題数 }（木の成長。途中でやめた回は入らない）
   function newProgress() {
-    return { v: 1, read: {}, write: {} };
+    return { v: 2, read: {}, write: {}, sel: {}, done: {} };
+  }
+  function norm(p) {
+    p = p || newProgress();
+    p.read = p.read || {}; p.write = p.write || {}; p.sel = p.sel || {}; p.done = p.done || {};
+    return p;
   }
 
   function clone(e) { return e ? e.slice() : e; }
 
-  // よしゅう（提示）した字を よむ 箱1 に入れる。翌日から ふくしゅう に出る
-  function preview(p, c, today, now) {
-    if (p.read[c]) return null;
-    p.read[c] = [1, today + INTERVALS[1], 0, now || 0];
-    return { kind: 'read', c: c, before: null };
-  }
-
-  // よむの自己採点。戻り値は取り消し用の記録
+  // よむの採点。戻り値は取り消し用の記録
   function answerRead(p, c, ok, today, now) {
     var before = clone(p.read[c]);
     var beforeW = p.write[c] ? p.write[c].slice() : null;
-    var e = p.read[c] || [1, today, 0, 0];
+    var e = p.read[c] || [1, today, 0, 0, 0];
     var box = ok ? Math.min(e[0] + 1, MAX_BOX) : 1;
-    p.read[c] = [box, today + INTERVALS[box], e[2] + 1, now || 0];
-    if (box >= WRITE_UNLOCK_BOX && !p.write[c]) p.write[c] = [0, today + INTERVALS[0], 0, now || 0];
+    p.read[c] = [box, today + INTERVALS[box], e[2] + 1, now || 0, (e[4] || 0) + (ok ? 0 : 1)];
+    if (box >= WRITE_UNLOCK_BOX && !p.write[c]) p.write[c] = [0, today + INTERVALS[0], 0, now || 0, 0];
     return { kind: 'read', c: c, before: before, beforeW: beforeW };
   }
 
   // かくの結果。箱0（未習）は成功で箱1、失敗なら箱0のまま。箱1以上は失敗で箱1
   function answerWrite(p, c, ok, today, now) {
     var before = clone(p.write[c]);
-    var e = p.write[c] || [0, today, 0, 0];
+    var e = p.write[c] || [0, today, 0, 0, 0];
     var box = ok ? Math.min(e[0] + 1, MAX_BOX) : (e[0] === 0 ? 0 : 1);
-    p.write[c] = [box, today + INTERVALS[box], e[2] + 1, now || 0];
+    p.write[c] = [box, today + INTERVALS[box], e[2] + 1, now || 0, (e[4] || 0) + (ok ? 0 : 1)];
     return { kind: 'write', c: c, before: before };
   }
 
-  // 直前の1回を取り消す（押し間違いを1操作で戻す）
+  // 直前の1回を取り消す
   function undo(p, rec) {
     if (!rec) return;
     var tbl = rec.kind === 'read' ? p.read : p.write;
@@ -67,7 +66,7 @@
     return n;
   }
 
-  // 期限が来たカード。期限切れが古い順、同じ日なら教科書順。上限で切る（I5）
+  // 「おすすめ」: 期限が来たカード。期限切れが古い順、同じ日なら教科書順。上限で切る（I5）
   function dueList(p, today, order) {
     var idx = {};
     for (var i = 0; i < order.length; i++) idx[order.charAt(i)] = i;
@@ -83,62 +82,73 @@
     return { read: r.list, write: w.list, readTotal: r.total, writeTotal: w.total };
   }
 
-  // まだ よしゅうしていない字。先生の進度（pointer＝習った字数）より前の字を先に出す（D8）
-  function previewQueue(p, order, pointer) {
-    var before = [], after = [];
-    for (var i = 0; i < order.length; i++) {
-      var c = order.charAt(i);
-      if (p.read[c]) continue;
-      (i < (pointer || 0) ? before : after).push(c);
-    }
-    return before.concat(after);
+  // ---- 選んだ漢字
+  function isSel(p, c) { return !!(p.sel[c] && p.sel[c][0]); }
+  function setSel(p, c, on, now) { p.sel[c] = [on ? 1 : 0, now || 0]; }
+  function selected(p, order) {
+    var out = [];
+    for (var i = 0; i < order.length; i++) if (isSel(p, order.charAt(i))) out.push(order.charAt(i));
+    return out;
   }
 
-  // 取り組んだ数 = よしゅうした字数 + 答えた回数（成否を問わない。成長表示の元）
+  // まちがいの多い字: 答えたことがあり、まちがいが1回以上ある字を、まちがいの割合が高い順に
+  function missList(p, kind, order) {
+    var tbl = kind === 'write' ? p.write : p.read, out = [];
+    for (var i = 0; i < order.length; i++) {
+      var c = order.charAt(i), e = tbl[c];
+      if (e && e[2] > 0 && (e[4] || 0) > 0) out.push({ c: c, r: e[4] / e[2], m: e[4] });
+    }
+    out.sort(function (a, b) { return (b.r - a.r) || (b.m - a.m); });
+    return out.map(function (x) { return x.c; });
+  }
+
+  // 木の成長 = 最後まで終えた回の問題数の合計
   function activity(p) {
-    var n = 0, c;
-    for (c in p.read) n += 1 + p.read[c][2];
-    for (c in p.write) n += p.write[c][2];
+    var n = 0;
+    for (var k in p.done) n += p.done[k];
     return n;
   }
+  function finishSession(p, startedAt, count) { if (count > 0) p.done[String(startedAt)] = count; }
 
-  // おぼえた字 = よむが箱3以上
-  function learned(p) {
+  // おぼえた字 = よむが箱3以上（chars を渡すとその中だけ数える）
+  function learned(p, chars) {
     var n = 0;
+    if (chars) { for (var i = 0; i < chars.length; i++) if (p.read[chars[i]] && p.read[chars[i]][0] >= WRITE_UNLOCK_BOX) n++; return n; }
     for (var c in p.read) if (p.read[c][0] >= WRITE_UNLOCK_BOX) n++;
     return n;
   }
 
-  // 2つの進捗を字ごとに統合（最後に答えた方を採る。同時刻なら回数の多い方）
+  // 2つの進捗を統合（字ごとに最後に答えた方。選択は時刻の新しい方。終えた回は和集合）
   function merge(a, b) {
+    a = norm(a); b = norm(b);
     var out = newProgress();
-    ['read', 'write'].forEach(function (k) {
-      var ta = (a && a[k]) || {}, tb = (b && b[k]) || {};
-      var c;
+    ['read', 'write', 'sel'].forEach(function (k) {
+      var ta = a[k], tb = b[k], c, t = k === 'sel' ? 1 : 3;
       for (c in ta) out[k][c] = ta[c].slice();
       for (c in tb) {
         var x = out[k][c], y = tb[c];
-        if (!x || y[3] > x[3] || (y[3] === x[3] && y[2] > x[2])) out[k][c] = y.slice();
+        if (!x || y[t] > x[t] || (k !== 'sel' && y[t] === x[t] && y[2] > x[2])) out[k][c] = y.slice();
       }
     });
+    var d;
+    for (d in a.done) out.done[d] = a.done[d];
+    for (d in b.done) out.done[d] = b.done[d];
     return out;
   }
 
-  // 不変条件の検査（I3・I4）。違反の説明の配列を返す
+  // 不変条件の検査（I3）。違反の説明の配列を返す
   function check(p) {
     var bad = [], c;
     for (c in p.read) if (!(p.read[c][0] >= 1 && p.read[c][0] <= MAX_BOX)) bad.push('read box ' + c);
-    for (c in p.write) {
-      if (!(p.write[c][0] >= 0 && p.write[c][0] <= MAX_BOX)) bad.push('write box ' + c);
-      if (!p.read[c]) bad.push('write without read ' + c);
-    }
+    for (c in p.write) if (!(p.write[c][0] >= 0 && p.write[c][0] <= MAX_BOX)) bad.push('write box ' + c);
     return bad;
   }
 
   var api = {
-    INTERVALS: INTERVALS, LIMIT: LIMIT, PREVIEW_CHUNK: PREVIEW_CHUNK, WRITE_UNLOCK_BOX: WRITE_UNLOCK_BOX, MAX_BOX: MAX_BOX,
-    day: day, newProgress: newProgress, preview: preview, answerRead: answerRead, answerWrite: answerWrite, undo: undo,
-    dueList: dueList, previewQueue: previewQueue, activity: activity, learned: learned, merge: merge, check: check
+    INTERVALS: INTERVALS, LIMIT: LIMIT, WRITE_UNLOCK_BOX: WRITE_UNLOCK_BOX, MAX_BOX: MAX_BOX,
+    day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite, undo: undo,
+    dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList,
+    activity: activity, finishSession: finishSession, learned: learned, merge: merge, check: check
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sched = api;
