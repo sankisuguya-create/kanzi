@@ -7,7 +7,7 @@
   var app = document.getElementById('app');
   // 日本語の字形を使わせる（中国語フォント・中国語の字形を出さない）。GAS の埋め込みでも確実にするため JS でも付ける
   document.documentElement.lang = 'ja'; document.body.lang = 'ja';
-  var S = { info: null, p: null, grades: [3], grade: 3, pointers: {}, orders: {}, sinceFlush: 0, session: null, open: {} };
+  var S = { info: null, p: null, grades: [3], kana: [], grade: 3, pointers: {}, orders: {}, sinceFlush: 0, session: null, open: {} };
   var FLUSH_EVERY = 10;
   var SIZE = { read: 10, write: 5, fk: 10, fy: 10 }; // 1回の問題数（えらんだ漢字は全部。上限 SEL_MAX）
   var SEL_MAX = 30;
@@ -30,8 +30,25 @@
   // 学年ごとの出題順（先生が貼り付けた順があればそれ、なければ配当表の順）
   function orderOf(g) { return S.orders[g] || D.grades[g].order; }
   function maxGrade() { return Math.max.apply(null, S.grades); }
+  // ひらがな・カタカナ（1年。先生が見せると決めた時だけタブに出る）。学年と同じ「タブ」として扱い、キーは h・k。
+  // 漢字ではないので、できるのは「見る」と「書く」だけ。字の情報は D.kana にある（D.kanji と同じ形: n 画数・w 例語）
+  var KANA_NAME = { h: 'ひらがな', k: 'カタカナ' };
+  function isKana(g) { return g === 'h' || g === 'k'; }
+  function gName(g) { return isKana(g) ? KANA_NAME[g] : g + '年'; }
+  function info(c) { return D.kanji[c] || D.kana[c]; }
+  function hira(str) { return String(str).replace(/[ァ-ヶ]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0x60); }); }
+  // 見せる学年の設定（[1,2,'h','k'] のように かなも入る）を、漢字の学年と かなに分ける
+  function applyGrades(list) {
+    list = list || [];
+    S.kana = ['h', 'k'].filter(function (x) { return list.indexOf(x) >= 0; });
+    S.grades = list.map(Number).filter(function (g) { return g >= 1 && g <= 6; }).sort(function (a, b) { return a - b; });
+    if (!S.grades.length) S.grades = [3];
+    S.grade = maxGrade();
+  }
+  function tabKey(v) { return isKana(v) ? v : +v; }
   // 習った漢字: 下の学年は全部。いちばん上の学年は先生の進度まで（進度を設定していなければ全部）
   function learnedChars(g) {
+    if (isKana(g)) return orderOf(g).split('');
     var o = orderOf(g), ptr = S.pointers[g];
     return (g < maxGrade() || !ptr) ? o.split('') : o.slice(0, ptr).split('');
   }
@@ -46,7 +63,8 @@
   function allowedChars() { return S.grades.map(orderOf).join('').split(''); }
 
   // 例語は答えた回数ごとに入れ替える（音・訓を交互に：D7）
-  function wordFor(c, n) { var w = D.kanji[c].w; return w[(n || 0) % w.length]; }
+  // 例語がない字（カタカナのヲ）は、その字だけを例語にする
+  function wordFor(c, n) { var w = info(c).w; return w.length ? w[(n || 0) % w.length] : [c, hira(c), hira(c), 'kana']; }
   function wordHtml(w, c) { return Array.from(w[0]).map(function (ch) { return '<span class="' + (ch === c ? 'tg' : 'ot') + '">' + esc(ch) + '</span>'; }).join(''); }
 
   function commit() {
@@ -78,12 +96,13 @@
 
   // ================= 児童: メニュー
   function tabs(cur, cls) {
-    if (S.grades.length < 2) return '';
-    return '<nav class="tabs ' + (cls || '') + '" role="tablist">' + S.grades.map(function (g) {
-      return '<button role="tab" class="tab" data-g="' + g + '" aria-selected="' + (g === cur) + '">' + g + '年</button>';
+    var list = S.kana.concat(S.grades);
+    if (list.length < 2) return '';
+    return '<nav class="tabs ' + (cls || '') + '" role="tablist">' + list.map(function (g) {
+      return '<button role="tab" class="tab' + (isKana(g) ? ' kana' : '') + '" data-g="' + g + '" aria-selected="' + (g === cur) + '">' + gName(g) + '</button>';
     }).join('') + '</nav>';
   }
-  function bindTabs(fn) { app.querySelectorAll('.tab').forEach(function (b) { b.addEventListener('click', function () { fn(+b.dataset.g); }); }); }
+  function bindTabs(fn) { app.querySelectorAll('.tab').forEach(function (b) { b.addEventListener('click', function () { fn(tabKey(b.dataset.g)); }); }); }
 
   function menu() {
     clearScreen();
@@ -92,18 +111,22 @@
     var pk = 'kanzi.prevAct.' + (S.trial ? 'trial.' : '') + S.info.email, prev = Platform.store.get(pk);
     Platform.store.set(pk, act);
     var nSel = Sched.selected(p, orderOf(g)).length;
+    var kana = isKana(g), noun = kana ? KANA_NAME[g] : K('[漢|かん][字|じ]');
     app.innerHTML =
       '<header class="top">' + titleHtml() + tabs(g) + '</header>' +
       '<main class="menu">' +
       '<section class="tree-box">' + Tree.render(act, learned, chars.length, prev) + '</section>' +
       '<section class="actions">' +
-      '<button class="big" id="go-browse">' + g + K('年の[漢|かん][字|じ]を ぜんぶ[見|み]る<span class="meta">') + orderOf(g).length + K('[字|じ]・[見|み]る／[選|えら]ぶ</span></button>') +
-      K('<div class="two"><button class="big primary" id="go-read">[読|よ]む<span class="meta">[漢|かん][字|じ] → [読|よ]みを [書|か]く</span></button>') +
-      K('<button class="big primary" id="go-write">[書|か]く<span class="meta">[読|よ]み → [漢|かん][字|じ]を [書|か]く</span></button></div>') +
-      K('<div class="two"><button class="big" id="go-fk">カード<span class="meta">[漢|かん][字|じ] → [読|よ]み</span></button>') +
-      K('<button class="big" id="go-fy">カード<span class="meta">[読|よ]み → [漢|かん][字|じ]</span></button></div>') +
-      (testChars().length ? '<button class="big test" id="go-test">' + K('[次|つぎ]の[漢|かん][字|じ]テストの はんいを [見|み]る') + '<span class="meta">' + (S.test.label ? esc(S.test.label) + '・' : '') + testChars().length + K('[字|じ]') + '</span></button>' : '') +
-      '<button class="big" id="go-seen"' + (nSel ? '' : ' disabled') + '>' + K('[選|えら]んだ[漢|かん][字|じ]を[見|み]る') + '<span class="meta">' + (nSel ? nSel + K('[字|じ]') : K('まだ [選|えら]んでいないよ')) + '</span></button>' +
+      (kana
+        ? '<button class="big" id="go-browse">' + noun + K('を ぜんぶ[見|み]る<span class="meta">') + orderOf(g).length + K('[字|じ]・[見|み]る／[選|えら]ぶ</span></button>') +
+          '<button class="big primary" id="go-write">' + K('[書|か]く<span class="meta">') + (g === 'h' ? K('[聞|き]いて ひらがなを [書|か]く') : K('ひらがな → カタカナを [書|か]く')) + '</span></button>'
+        : '<button class="big" id="go-browse">' + g + K('年の[漢|かん][字|じ]を ぜんぶ[見|み]る<span class="meta">') + orderOf(g).length + K('[字|じ]・[見|み]る／[選|えら]ぶ</span></button>') +
+          K('<div class="two"><button class="big primary" id="go-read">[読|よ]む<span class="meta">[漢|かん][字|じ] → [読|よ]みを [書|か]く</span></button>') +
+          K('<button class="big primary" id="go-write">[書|か]く<span class="meta">[読|よ]み → [漢|かん][字|じ]を [書|か]く</span></button></div>') +
+          K('<div class="two"><button class="big" id="go-fk">カード<span class="meta">[漢|かん][字|じ] → [読|よ]み</span></button>') +
+          K('<button class="big" id="go-fy">カード<span class="meta">[読|よ]み → [漢|かん][字|じ]</span></button></div>') +
+          (testChars().length ? '<button class="big test" id="go-test">' + K('[次|つぎ]の[漢|かん][字|じ]テストの はんいを [見|み]る') + '<span class="meta">' + (S.test.label ? esc(S.test.label) + '・' : '') + testChars().length + K('[字|じ]') + '</span></button>' : '')) +
+      '<button class="big" id="go-seen"' + (nSel ? '' : ' disabled') + '>' + K('[選|えら]んだ') + noun + K('を[見|み]る') + '<span class="meta">' + (nSel ? nSel + K('[字|じ]') : K('まだ [選|えら]んでいないよ')) + '</span></button>' +
       '</section></main>' + (S.info.demo && !S.trial ? '<p class="demo-note">デモ（この端末にだけ保存）</p>' : '');
     bindTabs(function (ng) { S.grade = ng; menu(); });
     on('#go-browse', function () { browse('look'); });
@@ -120,7 +143,7 @@
     clearScreen();
     var g = S.grade, order = orderOf(g).split('');
     app.innerHTML =
-      '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + g + K('年の[漢|かん][字|じ]（') + order.length + K('[字|じ]）') + '</span><span></span></header>' +
+      '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + (isKana(g) ? KANA_NAME[g] + '（' : g + K('年の[漢|かん][字|じ]（')) + order.length + K('[字|じ]）') + '</span><span></span></header>' +
       '<div class="browse-tools"><div class="seg" role="group" aria-label="おしたときの うごき">' +
       '<button id="m-look" aria-pressed="' + (mode === 'look') + '">👀 ' + K('[見|み]る') + '</button><button id="m-pick" aria-pressed="' + (mode === 'pick') + '">✓ ' + K('[選|えら]ぶ') + '</button></div>' +
       '<span class="sel-count" id="selc"></span>' +
@@ -201,7 +224,7 @@
   }
   // 左右に読み、中央に字（H: 字の一辺 px、side: 左右それぞれの幅 px）
   function monitorHtml(c, H, side) {
-    var k = D.kanji[c];
+    var k = info(c);
     return '<div class="kun" aria-label="訓読み" style="font-size:' + readSize(k.kun, H, side) + '">' + readingHtml(k.kun, true) + '</div>' +
       '<div class="mon-kanji" style="width:' + H + 'px;height:' + H + 'px">' + kanjiSvg(c, 'show-svg', true) + '</div>' +
       '<div class="on" aria-label="音読み" style="font-size:' + readSize(k.on, H, side) + '">' + readingHtml(k.on, false) + '</div>';
@@ -210,7 +233,7 @@
   // 1字ずつ見る（右に字、左にその字を使ったことば）。←→ で前後、「えらぶ」で問題に出す字にできる
   function viewChars(list, idx, back) {
     clearScreen();
-    var c = list[idx], k = D.kanji[c];
+    var c = list[idx], k = info(c);
     var H = Math.floor(Math.min(window.innerHeight * 0.66, window.innerWidth * 0.36)), side = Math.floor(H * 0.3);
     var words = k.w.map(function (w, i) {
       return '<li><span class="vw">' + wordHtml(w, c) + '</span><span class="vk">' + esc(w[1]) + '</span>' +
@@ -220,7 +243,7 @@
       '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + (idx + 1) + ' / ' + list.length + '</span>' +
       '<span class="nav"><button id="prev"' + (idx ? '' : ' disabled') + '>← ' + K('[前|まえ]') + '</button><button id="next"' + (idx < list.length - 1 ? '' : ' disabled') + '>' + K('[次|つぎ]') + ' →</button></span></header>' +
       '<main class="view"><section class="vwords"><h2>' + esc(c) + K(' を [使|つか]う [言|こと][葉|ば]</h2>') + '<ul>' + words + '</ul>' +
-      '<p class="vmeta">' + k.n + K('[画|かく]・') + k.g + '年</p>' +
+      '<p class="vmeta">' + k.n + K('[画|かく]・') + (k.g ? k.g + '年' : KANA_NAME[k.s]) + '</p>' +
       '<button class="pick-one" id="pick" aria-pressed="' + Sched.isSel(S.p, c) + '"></button></section>' +
       '<section class="monitor">' + monitorHtml(c, H, side) + '</section></main>';
     function paintPick() { var s = Sched.isSel(S.p, c); var b = $('#pick'); b.setAttribute('aria-pressed', s); b.textContent = s ? K('✓ [選|えら]んでいる（おすと はずす）') : K('☆ この[字|じ]を [選|えら]ぶ'); }
@@ -242,19 +265,20 @@
   function sources(kind) {
     var g = S.grade, order = orderOf(g), n = SIZE[kind], tbl = kind === 'write' ? 'write' : 'read';
     var due = Sched.dueList(S.p, today(), order)[tbl];
-    var test = testChars();
+    var kana = isKana(g), noun = kana ? KANA_NAME[g] : '[漢|かん][字|じ]';
+    var test = kana ? [] : testChars(); // テストの範囲は漢字。かなのタブでは出さない
     return (test.length ? [{ id: 'test', label: '[次|つぎ]の[漢|かん][字|じ]テストの はんい', sub: S.test.label ? esc(S.test.label) : '', list: shuffle(test.slice()).slice(0, SEL_MAX) }] : []).concat([
       { id: 'due', label: 'おすすめ', sub: '[忘|わす]れそうな[字|じ]', list: due.slice(0, n) },
-      { id: 'sel', label: '[選|えら]んだ[漢|かん][字|じ]', sub: '[自|じ][分|ぶん]で [選|えら]んだ[字|じ]', list: Sched.selected(S.p, order).slice(0, SEL_MAX) },
-      { id: 'rnd', label: '[習|なら]った[漢|かん][字|じ]から ランダム', sub: '', list: shuffle(learnedChars(g).slice()).slice(0, n) },
-      { id: 'miss', label: 'まちがいの [多|おお]い[漢|かん][字|じ]', sub: '', list: Sched.missList(S.p, tbl, order).slice(0, n) }
+      { id: 'sel', label: '[選|えら]んだ' + noun, sub: '[自|じ][分|ぶん]で [選|えら]んだ[字|じ]', list: Sched.selected(S.p, order).slice(0, SEL_MAX) },
+      { id: 'rnd', label: kana ? noun + 'から ランダム' : '[習|なら]った[漢|かん][字|じ]から ランダム', sub: '', list: shuffle(learnedChars(g).slice()).slice(0, n) },
+      { id: 'miss', label: 'まちがいの [多|おお]い' + noun, sub: '', list: Sched.missList(S.p, tbl, order).slice(0, n) }
     ]);
   }
   function chooser(kind) {
     clearScreen();
     var src = sources(kind);
     app.innerHTML =
-      '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + K(KIND_NAME[kind]) + '・' + S.grade + '年</span><span></span></header>' +
+      '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + K(KIND_NAME[kind]) + '・' + gName(S.grade) + '</span><span></span></header>' +
       K('<main class="chooser"><h2>どの[字|じ]で やる？</h2>') + src.map(function (s) {
         return '<button class="big' + (s.list.length ? '' : ' empty') + '" data-id="' + s.id + '"' + (s.list.length ? '' : ' disabled') + '>' + K(s.label) +
           '<span class="meta">' + (s.list.length ? s.list.length + K('[問|もん]') + (s.sub ? '・' + K(s.sub) : '') : K('[今|いま]は ないよ')) + '</span></button>';
@@ -353,18 +377,22 @@
   }
 
   // かく: 読みを見て、見本なしで書く。1画ずつ判定。同じ線を2回続けてまちがえたら正しい書き順を見せて「まちがい」で次へ
+  // ひらがな: ことばの その字を□にして、ことばを読み上げる（□の上に読みは出さない。読み＝答えになるため）。
+  // カタカナ: □の上に その字の ひらがなを出す（例: □イス の□の上に「あ」）
   function writeCard(c) {
-    var e = S.p.write[c], w = wordFor(c, e && e[2]);
+    var e = S.p.write[c], w = wordFor(c, e && e[2]), hiraQ = !!(D.kana[c] && D.kana[c].s === 'h'), listen = hiraQ && canSpeak;
     var prompt = Array.from(w[0]).map(function (ch) {
-      return ch === c ? '<span class="blank"><ruby><span class="box">　</span><rt>' + esc(w[2]) + '</rt></ruby></span>' : '<span class="ot">' + esc(ch) + '</span>';
+      return ch === c ? '<span class="blank"><ruby><span class="box">　</span><rt>' + (listen ? '' : esc(w[2])) + '</rt></ruby></span>' : '<span class="ot">' + esc(ch) + '</span>';
     }).join('');
     app.innerHTML = bar() +
       '<main class="write">' +
-      '<div class="wl"><p class="prompt">' + prompt + '</p><p class="prompt-kana">' + esc(w[1]) + '</p>' +
+      '<div class="wl"><p class="prompt">' + prompt + '</p>' +
+      (listen ? '<p class="prompt-kana"><button class="speak" id="say" type="button">🔊 ' + K('[聞|き]く') + '</button></p>' : '<p class="prompt-kana">' + esc(w[1]) + '</p>') +
       K('<p class="msg" id="msg" aria-live="polite">□の [字|じ]を [書|か]こう</p>') +
       K('<div class="tools"><button id="redo">[書|か]きなおす</button></div></div>') +
       '<div class="padbox" id="pad"></div></main>';
     on('#back', quit);
+    if (listen) { speak(w[1]); on('#say', function () { speak(w[1]); }); }
     var msg = $('#msg'), finished = false;
     function say(t) { msg.textContent = t; }
     function record(ok, note) {
@@ -448,6 +476,7 @@
 
   // ================= 先生用（設計書 §5・§13。担当学級だけ。子どもごとの記録は先生画面にだけ出す）
   var ALL_GRADES = [1, 2, 3, 4, 5, 6];
+  var ALL_TABS = ['h', 'k', 1, 2, 3, 4, 5, 6]; // 見せる学年の選択肢（ひらがな・カタカナ・1〜6年）
   // 学級キー「学年-組」を「3年1組」の形に
   function klassLabel(k) { var m = String(k).match(/^([1-6])-(.+)$/); return m ? m[1] + '年' + m[2] + (/組$/.test(m[2]) ? '' : '組') : String(k); }
   function dateLabel(ms) {
@@ -474,7 +503,8 @@
     (cached ? Promise.resolve(S.view) : Platform.teacherView(klass)).then(function (view) {
       view.klass = klass; view.pointers = view.pointers || {}; S.view = view;
       var kids = view.students || [], test = view.test || { label: '', chars: '' }, st = view.stats || { students: 0, perChar: {} };
-      var grades = view.grades, pointers = view.pointers;
+      // view.grades は見せるタブ全部（かなを含む）。学年タブ・進度・出題順は漢字の学年だけ
+      var shown = view.grades, grades = shown.filter(function (g) { return !isKana(g); }).map(Number), pointers = view.pointers;
       tgrade = tgrade && grades.indexOf(tgrade) >= 0 ? tgrade : Math.max.apply(null, grades);
       (function () {
         var order = orderOf(tgrade), pointer = pointers[tgrade] || 0, isTop = tgrade === Math.max.apply(null, grades);
@@ -494,12 +524,16 @@
         function fold(id, title, now, body) {
           return '<details class="tset" id="' + id + '"' + (S.open[id] ? ' open' : '') + '><summary><span class="ts-title">' + title + '</span><span class="ts-now" id="' + id + '-now">' + now + '</span></summary><div class="ts-body">' + body + '</div></details>';
         }
-        function gradesNow(list) { return list.length > 1 && list[list.length - 1] - list[0] === list.length - 1 ? list[0] + '〜' + list[list.length - 1] + '年' : list.map(function (g) { return g + '年'; }).join('・'); }
+        function gradesNow(list) {
+          var gs = list.filter(function (g) { return !isKana(g); }).map(Number), ks = list.filter(isKana).map(function (g) { return KANA_NAME[g]; });
+          var gl = gs.length > 1 && gs[gs.length - 1] - gs[0] === gs.length - 1 ? gs[0] + '〜' + gs[gs.length - 1] + '年' : gs.map(function (g) { return g + '年'; }).join('・');
+          return ks.concat([gl]).join('・');
+        }
         $('.teacher').innerHTML = classes +
           '<section class="tsets"><h2>設定</h2>' +
-          fold('d-grades', '児童に見せる学年', esc(gradesNow(grades)),
-            '<p class="hint">児童のメニューは、いちばん上の学年のタブで開きます。</p>' +
-            '<div class="gchecks">' + ALL_GRADES.map(function (g) { return '<label class="opt"><input type="checkbox" data-g="' + g + '"' + (grades.indexOf(g) >= 0 ? ' checked' : '') + '> ' + g + '年</label>'; }).join('') + '</div>' +
+          fold('d-grades', '児童に見せる学年', esc(gradesNow(shown)),
+            '<p class="hint">児童のメニューは、いちばん上の学年のタブで開きます。ひらがな・カタカナは「見る」と「書く」だけです（1年向け）。</p>' +
+            '<div class="gchecks">' + ALL_TABS.map(function (g) { return '<label class="opt"><input type="checkbox" data-g="' + g + '"' + (shown.map(String).indexOf(String(g)) >= 0 ? ' checked' : '') + '> ' + gName(g) + '</label>'; }).join('') + '</div>' +
             '<p class="hint" id="gmsg" aria-live="polite"></p>') +
           '</section><section class="tsets"><h2>' + tgrade + '年</h2>' + gradeTabs +
           fold('d-test', '次の漢字テストの範囲', '',
@@ -546,8 +580,8 @@
         paintTest();
         app.querySelectorAll('.gchecks input').forEach(function (cb) {
           cb.addEventListener('change', function () {
-            var list = Array.from(app.querySelectorAll('.gchecks input')).filter(function (x) { return x.checked; }).map(function (x) { return +x.dataset.g; });
-            if (!list.length) { cb.checked = true; $('#gmsg').textContent = '× 1つ以上の学年を えらんでください'; return; }
+            var list = Array.from(app.querySelectorAll('.gchecks input')).filter(function (x) { return x.checked; }).map(function (x) { return tabKey(x.dataset.g); });
+            if (!list.some(function (g) { return !isKana(g); })) { cb.checked = true; $('#gmsg').textContent = '× 1年〜6年から1つ以上 えらんでください'; return; }
             $('#gmsg').textContent = '保存中…';
             // 学年を変えたら、いちばん上の学年を開く
             Platform.setGrades(klass, list).then(function () { view.grades = list; teacher(klass, 0, true); }, function () { cb.checked = !cb.checked; $('#gmsg').textContent = '× 保存できませんでした'; });
@@ -590,7 +624,7 @@
       '<p><label class="opt"><input type="checkbox" id="opt-color"' + (showOpts().color ? ' checked' : '') + '> 一〜四画目に色をつける（' +
         ['青', '橙', '茶', '緑'].map(function (n, i) { return '<span class="cswatch s' + (i + 1) + '">' + (i + 1) + n + '</span>'; }).join('') + '）</label></p>' +
       '<p><button class="big primary" id="go" disabled>はじめる</button></p>' +
-      '<nav class="tabs t" role="tablist">' + ALL_GRADES.map(function (g) { return '<button role="tab" class="ptab" data-g="' + g + '" aria-selected="' + (g === pg) + '">' + g + '年</button>'; }).join('') + '</nav>' +
+      '<nav class="tabs t" role="tablist">' + ALL_TABS.map(function (g) { return '<button role="tab" class="ptab" data-g="' + g + '" aria-selected="' + (g === pg) + '">' + gName(g) + '</button>'; }).join('') + '</nav>' +
       '<div class="grid">' + Array.from(orderOf(pg)).map(function (c) { return '<button class="cell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
       '<p><button id="cancel">先生画面にもどる</button></p></main>';
     function paint() {
@@ -610,7 +644,7 @@
         paint();
       });
     });
-    app.querySelectorAll('.ptab').forEach(function (b) { b.addEventListener('click', function () { showPick(picked, +b.dataset.g); }); });
+    app.querySelectorAll('.ptab').forEach(function (b) { b.addEventListener('click', function () { showPick(picked, tabKey(b.dataset.g)); }); });
     $('#opt-base').addEventListener('change', function () { setShowOpt('base', this.checked); });
     $('#opt-color').addEventListener('change', function () { setShowOpt('color', this.checked); });
     on('#go', function () { showStart(picked.slice(), function () { showPick(picked, pg); }); });
@@ -632,7 +666,7 @@
     function stopLoop() { if (stopAnim) { stopAnim(); stopAnim = null; } }
     function single() {
       stopLoop();
-      var c = list[idx], k = D.kanji[c], H = window.innerHeight, side = Math.max(120, (window.innerWidth - Math.min(H, window.innerWidth * 0.78)) / 2);
+      var c = list[idx], k = info(c), H = window.innerHeight, side = Math.max(120, (window.innerWidth - Math.min(H, window.innerWidth * 0.78)) / 2);
       stage.className = 'single';
       stage.innerHTML = '<div class="kun" aria-label="訓読み" style="font-size:' + readSize(k.kun, H, side) + '">' + readingHtml(k.kun, true) + '</div>' +
         '<div class="big-kanji">' + kanjiSvg(c, 'show-svg', base, color) + '</div>' +
@@ -714,7 +748,7 @@
     v.then(function (view) {
       S.trial = true;
       S.test = view.test || null;
-      S.grades = view.grades.map(Number).sort(function (a, b) { return a - b; }); S.grade = maxGrade(); S.pointers = view.pointers || {};
+      applyGrades(view.grades); S.pointers = view.pointers || {};
       S.p = Platform.startTrial(S.info.email);
       S.dayOffset = 0;
       trialBar();
@@ -734,8 +768,7 @@
     S.orders = info.orders || {};
     S.pointers = info.pointers || {};
     S.test = info.test || null;
-    S.grades = (info.grades && info.grades.length ? info.grades : [3]).map(Number).sort();
-    S.grade = maxGrade();
+    applyGrades(info.grades);
     if (info.role === 'teacher') return teacher();
     if (info.role !== 'student') {
       app.innerHTML = '<main class="done"><p>このアカウントでは つかえません。学校のアカウントで ひらいてね。</p></main>';

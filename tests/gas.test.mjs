@@ -138,3 +138,11 @@ test('終えた回のまとめ: 保存を何度しても木の大きさが変わ
   const kid = makeEnv(env.book, T).api_teacherView('3-1').students[0];
   assert.equal(kid.items, 34);
 });
+
+test('見せる学年に ひらがな・カタカナを入れられる（1〜6年が1つ以上 必要）', () => {
+  const env = makeEnv(base(), T);
+  assert.deepEqual(Array.from(env.api_setGrades('3-1', ['h', 'k', 1, 'x', 9, 1])), ['h', 'k', 1]);
+  assert.deepEqual(Array.from(env.api_teacherView('3-1').grades), ['h', 'k', 1]);
+  assert.deepEqual(Array.from(makeEnv(env.book, K1).api_init().grades), ['h', 'k', 1]);
+  assert.throws(() => env.api_setGrades('3-1', ['h']), /1年〜6年から/);
+});
