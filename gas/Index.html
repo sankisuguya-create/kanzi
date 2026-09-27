@@ -157,6 +157,11 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .done-big { font-size: 40px; font-weight: 700; margin: 0; }
 
 /* ---- 先生用 */
+.top.t { flex-wrap: wrap; }
+.try { margin-left: auto; min-height: 52px; padding: 0 18px; font-size: 18px; background: var(--card); border: 2px solid var(--cat-1); color: var(--ink-link); border-radius: 12px; }
+#trial-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 16px; background: var(--fill-b); border-bottom: 2px solid var(--cat-3); font-size: 16px; }
+#trial-bar .tb-label { font-weight: 700; margin-right: auto; }
+#trial-bar button { min-height: 44px; padding: 0 14px; font-size: 16px; background: var(--card); border: 2px solid var(--ink); border-radius: 10px; }
 .top.t h1 { font-size: 26px; }
 .teacher section { margin: 14px 0 22px; }
 .teacher h2 { font-size: 22px; margin: 0 0 6px; }
@@ -360,6 +365,20 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
 
   var key = 'kanzi.g3.demo';
   var pending = false;
+  var trial = null; // 先生のおためし中: { key, saved }。記録はこの端末だけに置き、サーバーへ送らない
+
+  // 先生が児童画面を試す。戻り値は試用用の進捗（前回の続き）
+  function startTrial(email) {
+    trial = { key: 'kanzi.g3.trial.' + email, saved: { key: key, pending: pending } };
+    key = trial.key;
+    pending = false;
+    return store.get(key) || Sched.newProgress();
+  }
+  function endTrial() {
+    if (!trial) return;
+    key = trial.saved.key; pending = trial.saved.pending; trial = null;
+  }
+  function resetTrial() { if (trial) store.set(trial.key, Sched.newProgress()); }
 
   // 起動時の情報: { role, email, klass, progress, order, pointer, demo }
   function init() {
@@ -388,7 +407,7 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
 
   // 区切りごとに呼ぶ。サーバーの記録と統合した結果を返す（他の端末での学習も反映される）
   function flush(p) {
-    if (!isGas || !pending) return Promise.resolve(p);
+    if (!isGas || !pending || trial) return Promise.resolve(p);
     return gas('api_save', JSON.stringify({ read: p.read, write: p.write })).then(function (merged) {
       var m = Sched.merge(JSON.parse(merged), p);
       store.set(key, m);
@@ -422,7 +441,7 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
     return Promise.resolve((store.get('kanzi.g3.settings') || {}).pointer || 0);
   }
 
-  root.Platform = { isGas: !!isGas, init: init, save: save, flush: flush, stats: stats, setPointer: setPointer, setOrder: setOrder, pointerOf: pointerOf, store: store };
+  root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush, stats: stats, setPointer: setPointer, setOrder: setOrder, pointerOf: pointerOf, store: store };
 })(this);
 </script>
 <script>
@@ -724,7 +743,9 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function $(sel) { return app.querySelector(sel); }
   function on(sel, fn) { var e = $(sel); if (e) e.addEventListener('click', fn); }
-  function today() { return Sched.day(); }
+  // 先生のおためしでは「1日すすめる」で日付をずらせる（S.dayOffset）。本番の児童は常に0
+  function nowMs() { return Date.now() + (S.dayOffset || 0) * 86400000; }
+  function today() { return Sched.day(new Date(nowMs())); }
 
   var canSpeak = 'speechSynthesis' in window;
   function speak(t) {
@@ -741,6 +762,7 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
   }
   function flush() {
     S.sinceFlush = 0;
+    if (!S.p) return Promise.resolve();
     return Platform.flush(S.p).then(function (m) { S.p = m; });
   }
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden' && S.p) flush(); });
@@ -752,7 +774,7 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
     var due = Sched.dueList(p, t, S.order), nDue = due.read.length + due.write.length;
     var queue = Sched.previewQueue(p, S.order, S.pointer);
     var act = Sched.activity(p), learned = Sched.learned(p), total = S.order.length;
-    var pk = 'kanzi.g3.prevAct.' + S.info.email, prev = Platform.store.get(pk);
+    var pk = 'kanzi.g3.prevAct.' + (S.trial ? 'trial.' : '') + S.info.email, prev = Platform.store.get(pk);
     Platform.store.set(pk, act);
     app.innerHTML =
       '<header class="top"><h1>ヤルッキー</h1><p class="sub">3年生 かんじドリル</p></header>' +
@@ -813,7 +835,7 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
     });
     on('#speak', function () { speak(w[1]); });
     function answer(ok) {
-      S.lastRec = Sched.answerRead(S.p, c, ok, today(), Date.now());
+      S.lastRec = Sched.answerRead(S.p, c, ok, today(), nowMs());
       S.lastRec.index = S.session.i;
       S.session.i++; S.session.n++;
       commit();
@@ -861,7 +883,7 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
       onDone: function (res) {
         if (si < stages.length - 1) { si++; setTimeout(function () { pad.setMode(stages[si]); markStage(); }, 350); return; }
         var ok = !res.assisted && !demoUsed;
-        S.lastRec = Sched.answerWrite(S.p, c, ok, today(), Date.now());
+        S.lastRec = Sched.answerWrite(S.p, c, ok, today(), nowMs());
         S.session.i++; S.session.n++;
         commit();
         var after = res.orderMiss > 0 ? (say('字は できたよ。かきじゅんを 見てみよう'), pad.demo(0.8)) : Promise.resolve();
@@ -928,7 +950,7 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
     on('#replay', show);
     app.querySelectorAll('.say').forEach(function (b) { b.addEventListener('click', function () { speak(k.w[+b.dataset.i][1]); }); });
     on('#next', function () {
-      Sched.preview(S.p, c, today(), Date.now());
+      Sched.preview(S.p, c, today(), nowMs());
       s.i++; s.n++;
       commit();
       previewCard();
@@ -946,8 +968,11 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
 
   // ---------------- 先生用（設計書 §5。児童ごとの記録は出さない）
   function teacher(klass) {
-    klass = klass || (S.info.classes || [])[0] || '';
-    app.innerHTML = '<header class="top t"><h1>ヤルッキー 先生用</h1><p class="sub">' + esc(klass) + (S.info.demo ? '（架空のデータ）' : '') + '</p></header><main class="teacher"><p>よみこみ中…</p></main>';
+    klass = klass || S.klass || (S.info.classes || [])[0] || '';
+    S.klass = klass;
+    app.innerHTML = '<header class="top t"><h1>ヤルッキー 先生用</h1><p class="sub">' + esc(klass) + (S.info.demo ? '（架空のデータ）' : '') + '</p>' +
+      '<button class="try" id="try">児童画面を ためす</button></header><main class="teacher"><p>よみこみ中…</p></main>';
+    on('#try', function () { startTrial(klass); });
     Promise.all([Platform.stats(klass), Platform.pointerOf(klass)]).then(function (r) {
       var st = r[0], pointer = r[1] || 0, order = S.order;
       var classes = (S.info.classes || []).length > 1 ? '<p><label>組 <select id="klass">' + S.info.classes.map(function (k) { return '<option' + (k === klass ? ' selected' : '') + '>' + esc(k) + '</option>'; }).join('') + '</select></label></p>' : '';
@@ -981,6 +1006,43 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
         Platform.setOrder(v).then(function () { S.order = v; m.textContent = '✓ 保存しました'; });
       });
     }).catch(function (e) { $('.teacher').innerHTML = '<p>よみこめませんでした: ' + esc(e && e.message || e) + '</p>'; });
+  }
+
+  // ---------------- 先生のおためし（児童画面を試す。記録はこの端末だけ、サーバーへは送らない）
+  function trialBar() {
+    var bar = document.getElementById('trial-bar');
+    if (!S.trial) { if (bar) bar.remove(); return; }
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'trial-bar';
+      document.body.insertBefore(bar, app);
+    }
+    bar.innerHTML = '<span class="tb-label">先生のおためし中（記録は この端末だけ）' + (S.dayOffset ? '・' + S.dayOffset + '日後' : '') + '</span>' +
+      '<button id="tb-day">1日すすめる</button><button id="tb-reset">はじめから</button><button id="tb-back">先生画面にもどる</button>';
+    bar.querySelector('#tb-day').addEventListener('click', function () { S.dayOffset = (S.dayOffset || 0) + 1; trialBar(); menu(); });
+    bar.querySelector('#tb-reset').addEventListener('click', function () {
+      Platform.resetTrial(); S.p = Sched.newProgress(); S.dayOffset = 0;
+      Platform.store.set('kanzi.g3.prevAct.trial.' + S.info.email, 0);
+      trialBar(); menu();
+    });
+    bar.querySelector('#tb-back').addEventListener('click', endTrial);
+  }
+  function startTrial(klass) {
+    // 進度は選んでいる組のものを使う（授業の進度に合わせた よしゅう の順も確かめられる）
+    Platform.pointerOf(klass).then(function (ptr) {
+      S.trial = true;
+      S.pointer = ptr || 0;
+      S.p = Platform.startTrial(S.info.email);
+      S.dayOffset = 0;
+      trialBar();
+      menu();
+    });
+  }
+  function endTrial() {
+    S.trial = false; S.p = null; S.dayOffset = 0;
+    Platform.endTrial();
+    trialBar();
+    teacher(S.klass);
   }
 
   // ---------------- 起動

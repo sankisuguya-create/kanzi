@@ -149,6 +149,11 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .done-big { font-size: 40px; font-weight: 700; margin: 0; }
 
 /* ---- 先生用 */
+.top.t { flex-wrap: wrap; }
+.try { margin-left: auto; min-height: 52px; padding: 0 18px; font-size: 18px; background: var(--card); border: 2px solid var(--cat-1); color: var(--ink-link); border-radius: 12px; }
+#trial-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 16px; background: var(--fill-b); border-bottom: 2px solid var(--cat-3); font-size: 16px; }
+#trial-bar .tb-label { font-weight: 700; margin-right: auto; }
+#trial-bar button { min-height: 44px; padding: 0 14px; font-size: 16px; background: var(--card); border: 2px solid var(--ink); border-radius: 10px; }
 .top.t h1 { font-size: 26px; }
 .teacher section { margin: 14px 0 22px; }
 .teacher h2 { font-size: 22px; margin: 0 0 6px; }

@@ -156,6 +156,30 @@ await page.click('.cell[data-i="9"]');
 check((await page.textContent('#ptr')) === '10', '先生: 進度を押すと10字目までになる');
 await page.screenshot({ path: path.join(SHOTS, '11-teacher.png'), fullPage: true });
 
+// ---- 先生のおためし: 先生画面から児童画面を開き、1日すすめて ふくしゅう まで試す
+const demoBefore = await page.evaluate(() => localStorage.getItem('kanzi.g3.demo'));
+await page.click('#try');
+await page.waitForSelector('#trial-bar');
+await page.waitForSelector('#go-preview');
+check(!(await page.$('#go-review')), 'おためし: 新しい記録で始まる');
+await page.click('#go-preview');
+for (let i = 0; i < 5; i++) {
+  await page.waitForFunction(() => /なぞって/.test(document.querySelector('#guide')?.textContent || ''), null, { timeout: 30000 });
+  await page.click('#next');
+}
+await page.click('#menu');
+await page.click('#tb-day');
+await page.waitForSelector('#go-review');
+check((await page.textContent('#go-review')).includes('5まい'), 'おためし: 1日すすめると よしゅうした5字が ふくしゅうに出る');
+await page.screenshot({ path: path.join(SHOTS, '12-trial-menu.png') });
+await page.click('#go-review');
+await page.click('#card'); await page.click('#ok');
+check((await page.evaluate(() => localStorage.getItem('kanzi.g3.demo'))) === demoBefore, 'おためしで児童の記録（kanzi.g3.demo）は変わらない');
+check(await page.evaluate(() => !!localStorage.getItem('kanzi.g3.trial.demo')), 'おためしの記録は kanzi.g3.trial.* に保存');
+await page.click('#tb-back');
+await page.waitForSelector('.grid');
+check(!(await page.$('#trial-bar')), 'おためし: 先生画面にもどると帯が消える');
+
 check(errors.length === 0, 'コンソールエラーなし' + (errors.length ? ': ' + errors.join(' / ') : ''));
 await browser.close();
 server.close();
