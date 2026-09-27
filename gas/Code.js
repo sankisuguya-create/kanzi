@@ -110,6 +110,10 @@ function pointers_(klass) {
   for (var g = 1; g <= 6; g++) { var v = Number(setting_('pointer:' + klass + ':' + g)) || 0; if (v) out[g] = v; }
   return out;
 }
+// 次の漢字テストの範囲 { label, chars }（設定のキー test:<学級>）
+function test_(klass) {
+  try { var t = JSON.parse(setting_('test:' + klass) || 'null'); return t && t.chars ? t : null; } catch (e) { return null; }
+}
 function orders_() {
   var out = {};
   for (var g = 1; g <= 6; g++) { var v = validOrder_(g, setting_('order:' + g)); if (v) out[g] = v; }
@@ -137,7 +141,7 @@ function api_init() {
   var me = me_(), orders = orders_();
   if (me.role === 'student') {
     var klass = classOf_(me.email);
-    return { role: 'student', email: me.email, klass: klass, progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders };
+    return { role: 'student', email: me.email, klass: klass, progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders, test: test_(klass) };
   }
   if (me.role === 'teacher') return { role: 'teacher', email: me.email, classes: teacherClasses_(me.email), orders: orders };
   return { role: 'unknown', email: me.email };
@@ -197,6 +201,15 @@ function api_setGrades(klass, list) {
   if (!list.length) throw new Error('1つ以上の学年をえらんでください');
   setSetting_('grades:' + klass, list.join(','));
   return list;
+}
+function api_test(klass) { requireClass_(klass); return test_(klass); }
+function api_setTest(klass, json) {
+  requireClass_(klass);
+  var t = JSON.parse(json || 'null') || {};
+  var seen = {}, chars = Array.from(String(t.chars || '')).filter(function (c) { return /[\u4e00-\u9fff]/.test(c) && !seen[c] && (seen[c] = true); }).slice(0, 300).join('');
+  var v = chars ? { label: String(t.label || '').slice(0, 40), chars: chars } : null;
+  setSetting_('test:' + klass, v ? JSON.stringify(v) : '');
+  return v;
 }
 function api_pointers(klass) { requireClass_(klass); return pointers_(klass); }
 function api_setPointer(klass, grade, n) {

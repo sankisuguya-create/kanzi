@@ -87,3 +87,16 @@ test('保存: 本人の行だけを更新し、meta に えらんだ漢字・終
   assert.deepEqual(JSON.parse(row[3]), { sel: { 暗: [1, 5] }, done: { 9: 5 } });
   assert.throws(() => makeEnv(base(), T).api_save('{}'), /児童のアカウントではありません/);
 });
+
+test('次の漢字テストの範囲: 担当の先生が決め、その学級の児童に届く', () => {
+  const env = makeEnv(base(), T);
+  const t = env.api_setTest('3-1', JSON.stringify({ label: '9月テスト', chars: '悪安悪abc暗' }));
+  assert.equal(t.chars, '悪安暗'); // 漢字以外と重複は捨てる
+  assert.equal(env.api_test('3-1').label, '9月テスト');
+  assert.throws(() => env.api_setTest('3-2', JSON.stringify({ chars: '悪' })), /担当学級ではありません/);
+  const kid = makeEnv(env.book, K1).api_init();
+  assert.equal(kid.test.chars, '悪安暗');
+  assert.equal(makeEnv(env.book, K3).api_init().test, null); // 3年2組には届かない
+  assert.equal(env.api_setTest('3-1', JSON.stringify({ chars: '' })), null);
+});
+
