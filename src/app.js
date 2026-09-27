@@ -293,8 +293,9 @@
     klass = klass || S.klass || (S.info.classes || [])[0] || '';
     S.klass = klass;
     app.innerHTML = '<header class="top t"><h1>かんじドリル 先生用</h1><p class="sub">' + esc(klass) + (S.info.demo ? '（架空のデータ）' : '') + '</p>' +
-      '<button class="try" id="try">児童画面を ためす</button></header><main class="teacher"><p>よみこみ中…</p></main>';
+      '<button class="try" id="show">書き順を 大きく見せる</button><button class="try" id="try">児童画面を ためす</button></header><main class="teacher"><p>よみこみ中…</p></main>';
     on('#try', function () { startTrial(klass); });
+    on('#show', showPick);
     Promise.all([Platform.stats(klass), Platform.pointerOf(klass)]).then(function (r) {
       var st = r[0], pointer = r[1] || 0, order = S.order;
       var classes = (S.info.classes || []).length > 1 ? '<p><label>組 <select id="klass">' + S.info.classes.map(function (k) { return '<option' + (k === klass ? ' selected' : '') + '>' + esc(k) + '</option>'; }).join('') + '</select></label></p>' : '';
@@ -328,6 +329,117 @@
         Platform.setOrder(v).then(function () { S.order = v; m.textContent = '✓ 保存しました'; });
       });
     }).catch(function (e) { $('.teacher').innerHTML = '<p>よみこめませんでした: ' + esc(e && e.message || e) + '</p>'; });
+  }
+
+  // ---------------- 書き順の提示（先生がモニターに映す）
+  // 1〜5字を選ぶ → 1字ずつ画面いっぱいに（右に音読み・左に訓読み）→ 最後にならべて書き順をくり返し再生
+  var SHOW_MAX = 5;
+  function showPick() {
+    var picked = [];
+    app.innerHTML = '<header class="top t"><h1>書き順を 大きく見せる</h1><p class="sub">見せる字を 順に押す（1〜' + SHOW_MAX + '字）</p></header>' +
+      '<main class="teacher"><p class="picked" id="picked"></p>' +
+      '<p><button class="big primary" id="go" disabled>はじめる</button></p>' +
+      '<div class="grid">' + Array.from(S.order).map(function (c) { return '<button class="cell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
+      '<p><button id="cancel">先生画面にもどる</button></p></main>';
+    function paint() {
+      $('#picked').innerHTML = picked.length ? picked.map(function (c, i) { return '<span class="pk-item">' + (i + 1) + ' <b>' + esc(c) + '</b></span>'; }).join('') : '<span class="hint">まだ えらんでいません</span>';
+      app.querySelectorAll('.cell').forEach(function (b) {
+        var i = picked.indexOf(b.dataset.c);
+        b.classList.toggle('taught', i >= 0);
+        b.setAttribute('aria-pressed', i >= 0);
+        b.disabled = i < 0 && picked.length >= SHOW_MAX;
+      });
+      $('#go').disabled = !picked.length;
+    }
+    app.querySelectorAll('.cell').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var i = picked.indexOf(b.dataset.c);
+        if (i >= 0) picked.splice(i, 1); else if (picked.length < SHOW_MAX) picked.push(b.dataset.c);
+        paint();
+      });
+    });
+    on('#go', function () { showStart(picked.slice()); });
+    on('#cancel', function () { teacher(S.klass); });
+    paint();
+  }
+
+  function kanjiSvg(c, cls) {
+    return '<svg viewBox="0 0 109 109" class="' + cls + '">' + ST[c].map(function (d) { return '<path d="' + d + '"/>'; }).join('') + '</svg>';
+  }
+  function readingHtml(list, kun) {
+    return list.map(function (r) {
+      if (!kun) return '<span class="rd">' + esc(r) + '</span>';
+      var p = r.split('.');
+      return '<span class="rd">' + esc(p[0]) + (p[1] ? '<small>' + esc(p[1]) + '</small>' : '') + '</span>';
+    }).join('');
+  }
+
+  function showStart(list) {
+    var stage = document.createElement('div');
+    stage.id = 'stage';
+    document.body.appendChild(stage);
+    try { if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function () {}); } catch (e) {}
+    var idx = 0, loop = null;
+    function stopLoop() { if (loop) { loop.stop = true; loop = null; } }
+    function single() {
+      stopLoop();
+      var c = list[idx], k = D.kanji[c];
+      stage.className = 'single';
+      stage.innerHTML = '<div class="kun" aria-label="訓読み">' + readingHtml(k.kun, true) + '</div>' +
+        '<div class="big-kanji">' + kanjiSvg(c, 'show-svg') + '</div>' +
+        '<div class="on" aria-label="音読み">' + readingHtml(k.on, false) + '</div>' +
+        '<div class="stage-pos">' + (idx + 1) + ' / ' + list.length + '</div>';
+      Ink.animate(Array.from(stage.querySelectorAll('.show-svg path')), 0.9);
+    }
+    // ならべて表示: 字がいちばん大きくなる行数を選ぶ
+    function all() {
+      stopLoop();
+      var W = stage.clientWidth, H = stage.clientHeight, n = list.length, best = { size: 0 };
+      for (var rows = 1; rows <= n; rows++) {
+        var cols = Math.ceil(n / rows), size = Math.min(W / cols, H / rows);
+        if (size > best.size) best = { size: size, rows: rows, cols: cols };
+      }
+      stage.className = 'all';
+      stage.innerHTML = '<div class="all-grid" style="grid-template-columns:repeat(' + best.cols + ',' + Math.floor(best.size) + 'px);grid-auto-rows:' + Math.floor(best.size) + 'px">' +
+        list.map(function (c) { return kanjiSvg(c, 'show-svg'); }).join('') + '</div>';
+      var me = loop = { stop: false };
+      var svgs = Array.from(stage.querySelectorAll('.show-svg'));
+      (function play() {
+        if (me.stop) return;
+        Promise.all(svgs.map(function (svg) { return Ink.animate(Array.from(svg.querySelectorAll('path')), 0.9); }))
+          .then(function () { setTimeout(function () {
+            if (me.stop) return;
+            svgs.forEach(function (svg) { svg.querySelectorAll('path').forEach(function (p) { p.getAnimations().forEach(function (a) { a.cancel(); }); }); });
+            play();
+          }, 1500); });
+      })();
+    }
+    function next() { if (idx < list.length - 1) { idx++; single(); } else if (idx === list.length - 1) { idx++; all(); } }
+    function prev() { if (idx > 0) { idx = Math.min(idx, list.length) - 1; single(); } }
+    function exit() {
+      stopLoop();
+      document.removeEventListener('keydown', key);
+      stage.remove();
+      try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+      showPick();
+    }
+    function key(ev) {
+      if (ev.key === 'ArrowLeft') { ev.preventDefault(); prev(); }
+      else if (ev.key === 'ArrowRight' || ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); next(); }
+      else if (ev.key === 'Escape') exit();
+    }
+    stage.addEventListener('click', function (ev) {
+      if (ev.target.closest && ev.target.closest('.stage-exit')) return exit();
+      next();
+    });
+    document.addEventListener('keydown', key);
+    var x = document.createElement('button');
+    single();
+    x.className = 'stage-exit'; x.textContent = '×'; x.setAttribute('aria-label', 'おわる');
+    document.body.appendChild(x);
+    x.addEventListener('click', function () { x.remove(); exit(); });
+    var obs = new MutationObserver(function () { if (!document.body.contains(stage)) { x.remove(); obs.disconnect(); } });
+    obs.observe(document.body, { childList: true });
   }
 
   // ---------------- 先生のおためし（児童画面を試す。記録はこの端末だけ、サーバーへは送らない）

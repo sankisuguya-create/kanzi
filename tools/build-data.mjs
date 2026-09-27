@@ -49,28 +49,38 @@ function readingType(ch, r) {
     if (f === 'じ') v.add('ぢ' + base.slice(1));
     return v;
   };
-  if (on.some((b) => variants(b).has(r))) return 'on';
-  if (kun.some((b) => variants(b).has(r))) return 'kun';
+  const onRaw = k.readings.ja_on || [];
+  const kunRaw = (k.readings.ja_kun || []).flatMap((s) => { const b = s.replace(/^-|-$/g, ''); return [b, b]; });
+  let i = on.findIndex((b) => variants(b).has(r));
+  if (i >= 0) return { t: 'on', base: onRaw[i] };
+  i = kun.findIndex((b) => variants(b).has(r));
+  if (i >= 0) return { t: 'kun', base: kunRaw[i] };
   return null;
 }
 
 const entries = new Map();
+const readings = new Map();
 for (const line of lines('words-g3.txt')) {
   const [ch, rest] = line.split('|');
   if (entries.has(ch)) err(`${ch}: 重複`);
   const words = rest.split(',').map((s) => s.split(':'));
   const out = [];
+  const on = [], kun = [];
   for (const [w, kk, r] of words) {
     if (!w || !kk || !r) { err(`${ch}: 書式エラー「${line}」`); continue; }
     const [k, ...alts] = kk.split('/');
     if (!w.includes(ch)) err(`${ch}: 例語「${w}」に字が含まれない`);
     for (const c of w) if (/\p{Script=Han}/u.test(c) && gradeOf(c) > GRADE) err(`${ch}: 例語「${w}」に${GRADE}年より上の字「${c}」`);
     if (!k.includes(r)) err(`${ch}: 例語「${w}」のよみ「${k}」に字のよみ「${r}」が含まれない`);
-    const t = readingType(ch, r);
-    if (!t) err(`${ch}: よみ「${r}」が辞書の音訓に一致しない`);
+    const m = readingType(ch, r);
+    if (!m) { err(`${ch}: よみ「${r}」が辞書の音訓に一致しない`); continue; }
+    const t = m.t;
+    const list = t === 'on' ? on : kun;
+    if (!list.includes(m.base)) list.push(m.base); // 提示用: 辞書の元の形（連濁前、送り仮名は「.」で区切る）
     out.push(alts.length ? [w, k, r, t, alts] : [w, k, r, t]);
   }
   entries.set(ch, out);
+  readings.set(ch, { on, kun });
 }
 for (const c of gradeChars) if (!entries.has(c)) err(`${c}: 例語がない`);
 for (const c of entries.keys()) if (gradeOf(c) !== GRADE) err(`${c}: ${GRADE}年の字ではない`);
@@ -110,7 +120,7 @@ if (errors.length) { console.error(`--- エラー ${errors.length}件\n` + error
 
 // ---- 書き出し
 const kanji = {};
-for (const c of order) kanji[c] = { n: strokes[c].length, w: entries.get(c) };
+for (const c of order) kanji[c] = { n: strokes[c].length, w: entries.get(c), on: readings.get(c).on, kun: readings.get(c).kun };
 const head = '// 自動生成（tools/build-data.mjs）。直接編集しない。正本は data-src/。\n';
 fs.writeFileSync(path.join(ROOT, 'src', 'data-g3.js'),
   head + `var KANZI_DATA = ${JSON.stringify({ grade: GRADE, order: order.join(''), kanji })};\n`);

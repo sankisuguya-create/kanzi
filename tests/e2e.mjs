@@ -195,6 +195,30 @@ check((await page.textContent('#card .fy')).length > 0, 'フラッシュ: よみ
 await page.click('#back');
 await page.goto(URL0 + '?teacher=1'); await page.waitForSelector('.grid');
 
+// ---- 書き順を大きく見せる（先生）
+await page.click('#show');
+for (const c of ['悪', '皿', '発']) await page.click(`.cell[data-c="${c}"]`);
+await page.click('#go');
+await page.waitForSelector('#stage.single');
+await page.waitForTimeout(6000);
+await page.screenshot({ path: path.join(SHOTS, '15-show-single.png') });
+check((await page.textContent('#stage .on')).includes('アク') && (await page.textContent('#stage .kun')).includes('わる'), '提示: 右に音読み・左に訓読み');
+await page.mouse.click(683, 384);
+check((await page.textContent('.stage-pos')).startsWith('2'), '提示: クリックで次の字');
+await page.keyboard.press('ArrowLeft');
+check((await page.textContent('.stage-pos')).startsWith('1'), '提示: ← でもどる');
+await page.mouse.click(683, 384); await page.mouse.click(683, 384); await page.mouse.click(683, 384);
+await page.waitForSelector('#stage.all');
+check((await page.$$('#stage .all-grid svg')).length === 3 && !(await page.$('#stage .on')), '提示: 最後の次は3字をならべ、読みは出さない');
+const sz = await page.evaluate(() => document.querySelector('#stage .all-grid svg').getBoundingClientRect().width);
+check(sz >= 440, `提示: ならべた字の大きさ ${Math.round(sz)}px（1366×768で3字）`);
+await page.waitForTimeout(4000);
+await page.screenshot({ path: path.join(SHOTS, '16-show-all.png') });
+await page.keyboard.press('Escape');
+check(!(await page.$('#stage')) && !(await page.$('.stage-exit')), '提示: Esc で終わる');
+await page.click('#cancel');
+await page.waitForSelector('.grid');
+
 // ---- 先生のおためし: 先生画面から児童画面を開き、1日すすめて ふくしゅう まで試す
 const demoBefore = await page.evaluate(() => localStorage.getItem('kanzi.g3.demo'));
 await page.click('#try');
