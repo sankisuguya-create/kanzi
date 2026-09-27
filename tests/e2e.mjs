@@ -269,17 +269,16 @@ await page.waitForSelector('#stage.single');
 for (let i = 0; i < 6; i++) await page.mouse.click(683, 384);
 await page.waitForSelector('#stage.all');
 check((await page.$$('#stage .all-grid svg')).length === 6, '提示: 6字をならべて表示');
-// 一〜四画目の色分け: 1〜4画目が4色、5画目からは黒。書きはじめに番号 1〜4
+// 一〜四画目の色分け: 1〜4画目が4色、5画目からは黒（番号は出さない）
 const col = await page.evaluate(() => [...document.querySelectorAll('#stage .all-grid svg')].map((svg) => ({
   ink: [...svg.querySelectorAll('.ink path')].map((p) => getComputedStyle(p).stroke),
-  nums: [...svg.querySelectorAll('.nums text')].map((t) => t.textContent + ':' + t.getAttribute('x') + ',' + t.getAttribute('y'))
+  texts: svg.querySelectorAll('text').length
 })));
 const ONE = 'rgb(15, 94, 168)', TWO = 'rgb(200, 106, 0)', THREE = 'rgb(110, 67, 16)', FOUR = 'rgb(0, 128, 107)', BLACK = 'rgb(17, 17, 17)';
 const 音 = col[5]; // 音は9画
 check(音.ink.slice(0, 5).join('|') === [ONE, TWO, THREE, FOUR, BLACK].join('|') && 音.ink.slice(5).every((c) => c === BLACK), '提示: 一〜四画目に色、五画目からは黒（音）');
-check(col[0].ink.length === 1 && col[0].ink[0] === ONE && col[0].nums.length === 1, '提示: 一画の字（一）は1色・番号1つ');
-check(col.every((x) => x.nums.length === Math.min(4, x.ink.length) && x.nums.every((n, i) => n.startsWith(i + 1 + ':'))), '提示: 書きはじめに画の番号（1〜4）');
-check(col.every((x) => x.nums.every((n) => { const [a, b] = n.split(':')[1].split(',').map(Number); return a >= 5 && a <= 104 && b >= 5 && b <= 104; })), '提示: 番号は枠の中');
+check(col[0].ink.length === 1 && col[0].ink[0] === ONE, '提示: 一画の字（一）は1色');
+check(col.every((x) => x.texts === 0), '提示: 画の番号は出さない');
 await checkFonts('提示（色分け）');
 await shot('13-show-6');
 await page.keyboard.press('Escape');
