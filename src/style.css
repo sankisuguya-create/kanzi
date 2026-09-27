@@ -18,8 +18,6 @@
   --paper: #FBF9F4;
   --card: #FFFFFF;
   --line: #C9CDD2;
-  /* 木の色は装飾（識別に使わない） */
-  --leaf-0: #4E8A3E; --leaf-1: #6BA34F; --leaf-2: #3F7535;
   /* フォントは1か所で決める。一般的な日本語フォントを並べ、中国語フォントに落ちないように最後は日本語ゴシックにする */
   --font-sans: "BIZ UDPGothic", "Noto Sans JP", "Noto Sans CJK JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", "Meiryo", "IPAexGothic", "IPAPGothic", "IPAGothic", "MoriJP", "Noto Sans JP", sans-serif;
   --font-kanji: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", "Noto Serif CJK JP", "Hiragino Mincho ProN", "Yu Mincho", "IPAexMincho", "IPAMincho", var(--font-sans); /* 漢字を大きく見せる所: 教科書体 → 明朝 → ゴシック */
@@ -61,25 +59,10 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .menu { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; align-items: center; }
 .tree-box { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 8px 8px 4px; }
 .tree { width: 100%; height: auto; display: block; }
-.tree-cap { margin: 2px 0 6px; text-align: center; font-size: 18px; }
-.tree-cap b { font-size: 24px; }
-.tree-cap .sep { display: inline-block; width: 18px; }
-.ico-leaf, .ico-fruit { display: inline-block; vertical-align: -2px; margin-right: 4px; }
-.ico-leaf { width: 18px; height: 10px; border-radius: 50%; background: var(--leaf-1); transform: rotate(-25deg); }
-.ico-fruit { width: 14px; height: 14px; border-radius: 50%; background: var(--cat-2); border: 1.5px solid var(--cat-3); }
 .actions { display: grid; gap: 18px; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .two .big { font-size: 26px; min-height: 96px; }
 .big[disabled] { opacity: .45; cursor: default; }
-.t-ground { fill: #E6DDC8; }
-.t-trunk { fill: var(--cat-3); }
-.t-branch { fill: none; stroke: var(--cat-3); stroke-linecap: round; }
-.t-leaf.l0 { fill: var(--leaf-0); } .t-leaf.l1 { fill: var(--leaf-1); } .t-leaf.l2 { fill: var(--leaf-2); }
-.t-sprout { fill: var(--leaf-1); }
-.t-fruit { fill: var(--cat-2); stroke: var(--cat-3); stroke-width: 1; }
-.t-new { transform-box: fill-box; transform-origin: center; animation: pop .5s ease-out both; }
-@keyframes pop { from { transform: scale(0); } 60% { transform: scale(1.5); } to { transform: scale(1); } }
-@media (prefers-reduced-motion: reduce) { .t-new { animation: none; } }
 
 /* ---- 上のバー */
 .bar { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; margin-bottom: 10px; }
