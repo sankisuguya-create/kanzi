@@ -49,27 +49,46 @@ function readingType(ch, r) {
     if (f === 'じ') v.add('ぢ' + base.slice(1));
     return v;
   };
-  if (on.some((b) => variants(b).has(r))) return 'on';
-  if (kun.some((b) => variants(b).has(r))) return 'kun';
+  const onRaw = k.readings.ja_on || [];
+  const kunRaw = (k.readings.ja_kun || []).flatMap((s) => { const b = s.replace(/^-|-$/g, ''); return [b, b]; });
+  let i = on.findIndex((b) => variants(b).has(r));
+  if (i >= 0) return { t: 'on', base: onRaw[i] };
+  i = kun.findIndex((b) => variants(b).has(r));
+  if (i >= 0) return { t: 'kun', base: kunRaw[i] };
   return null;
 }
 
 const entries = new Map();
+const readings = new Map();
 for (const line of lines('words-g3.txt')) {
   const [ch, rest] = line.split('|');
   if (entries.has(ch)) err(`${ch}: 重複`);
   const words = rest.split(',').map((s) => s.split(':'));
   const out = [];
-  for (const [w, k, r] of words) {
-    if (!w || !k || !r) { err(`${ch}: 書式エラー「${line}」`); continue; }
+  const on = [], kun = [];
+  for (const [w, kk, r] of words) {
+    if (!w || !kk || !r) { err(`${ch}: 書式エラー「${line}」`); continue; }
+    const [k, ...alts] = kk.split('/');
     if (!w.includes(ch)) err(`${ch}: 例語「${w}」に字が含まれない`);
     for (const c of w) if (/\p{Script=Han}/u.test(c) && gradeOf(c) > GRADE) err(`${ch}: 例語「${w}」に${GRADE}年より上の字「${c}」`);
     if (!k.includes(r)) err(`${ch}: 例語「${w}」のよみ「${k}」に字のよみ「${r}」が含まれない`);
-    const t = readingType(ch, r);
-    if (!t) err(`${ch}: よみ「${r}」が辞書の音訓に一致しない`);
-    out.push([w, k, r, t]);
+    const m = readingType(ch, r);
+    if (!m) { err(`${ch}: よみ「${r}」が辞書の音訓に一致しない`); continue; }
+    const t = m.t;
+    const list = t === 'on' ? on : kun;
+    // 提示用の読み: 音は辞書の元の形（連濁前）。訓は辞書の語幹＋例語の実際の送り仮名（温かい→あたた.かい）
+    let base = m.base;
+    if (t === 'kun') {
+      const stem = m.base.split('.')[0];
+      const okuri = (w.slice(w.indexOf(ch) + 1).match(/^[\u3041-\u3096]+/) || [''])[0];
+      base = m.base.includes('.') && okuri ? stem + '.' + okuri : stem;
+    }
+    // 同じ語幹は最初の1つだけ（持つ／持ち物 → も.つ のみ）
+    if (!list.some((x) => x.split('.')[0] === base.split('.')[0])) list.push(base);
+    out.push(alts.length ? [w, k, r, t, alts] : [w, k, r, t]);
   }
   entries.set(ch, out);
+  readings.set(ch, { on, kun });
 }
 for (const c of gradeChars) if (!entries.has(c)) err(`${c}: 例語がない`);
 for (const c of entries.keys()) if (gradeOf(c) !== GRADE) err(`${c}: ${GRADE}年の字ではない`);
@@ -78,9 +97,9 @@ for (const c of entries.keys()) if (gradeOf(c) !== GRADE) err(`${c}: ${GRADE}年
 const kuromoji = require('kuromoji');
 const tokenizer = await new Promise((res, rej) =>
   kuromoji.builder({ dicPath: path.join(path.dirname(require.resolve('kuromoji')), '..', 'dict') }).build((e, t) => (e ? rej(e) : res(t))));
-for (const [ch, ws] of entries) for (const [w, k] of ws) {
+for (const [ch, ws] of entries) for (const [w, k, , , alts] of ws) {
   const guess = kata2hira(tokenizer.tokenize(w).map((t) => t.reading || t.surface_form).join(''));
-  if (guess !== k) warns.push(`${ch}: 「${w}」 正本=${k} 解析=${guess}`);
+  if (guess !== k && !(alts || []).includes(guess)) warns.push(`${ch}: 「${w}」 正本=${k} 解析=${guess}`);
 }
 
 // ---- KanjiVG（筆順）
@@ -109,7 +128,7 @@ if (errors.length) { console.error(`--- エラー ${errors.length}件\n` + error
 
 // ---- 書き出し
 const kanji = {};
-for (const c of order) kanji[c] = { n: strokes[c].length, w: entries.get(c) };
+for (const c of order) kanji[c] = { n: strokes[c].length, w: entries.get(c), on: readings.get(c).on, kun: readings.get(c).kun };
 const head = '// 自動生成（tools/build-data.mjs）。直接編集しない。正本は data-src/。\n';
 fs.writeFileSync(path.join(ROOT, 'src', 'data-g3.js'),
   head + `var KANZI_DATA = ${JSON.stringify({ grade: GRADE, order: order.join(''), kanji })};\n`);

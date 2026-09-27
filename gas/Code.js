@@ -1,4 +1,4 @@
-// ヤルッキー GASサーバー（設計書 §7）。スプレッドシートにバインドして使う。
+// かんじドリル GASサーバー（設計書 §7）。スプレッドシートにバインドして使う。
 // シート: 名簿[メール, 組] ／ 進捗[メール, read, write, 更新] ／ 設定[キー, 値]
 // 児童への応答には本人の進捗以外を含めない（不変条件 I7）。
 var STUDENT_RE = /@kyoiku\.edu\.nishi\.or\.jp$/;
@@ -7,7 +7,7 @@ var ORDER_DEFAULT_LEN = 200;
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('ヤルッキー 3年生かんじドリル')
+    .setTitle('3年生 かんじドリル')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 

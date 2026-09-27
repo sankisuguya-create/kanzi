@@ -59,6 +59,13 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .ico-leaf { width: 18px; height: 10px; border-radius: 50%; background: var(--leaf-1); transform: rotate(-25deg); }
 .ico-fruit { width: 14px; height: 14px; border-radius: 50%; background: var(--cat-2); border: 1.5px solid var(--cat-3); }
 .actions { display: grid; gap: 18px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.two .big { font-size: 26px; min-height: 96px; }
+.big[disabled] { opacity: .45; cursor: default; }
+.card.flash { cursor: pointer; font: inherit; color: inherit; }
+.card .fy { font-size: clamp(48px, 10vmin, 96px); letter-spacing: .12em; }
+.card .fback { margin-top: 14px; display: block; border-top: 2px dashed var(--line); padding-top: 10px; }
+.card .fback[hidden] { display: none; }
 .t-ground { fill: #E6DDC8; }
 .t-trunk { fill: var(--cat-3); }
 .t-branch { fill: none; stroke: var(--cat-3); stroke-linecap: round; }
@@ -88,6 +95,19 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .card.flipped .kana { visibility: visible; }
 .card .tap-hint { position: absolute; bottom: 12px; color: var(--ink-sub); font-size: 18px; }
 .card.flipped .tap-hint { visibility: hidden; }
+.answer { display: grid; gap: 8px; width: min(100%, 720px); }
+.answer .q { font-size: 20px; font-weight: 700; }
+.answer-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; }
+#yomi { min-height: 76px; font-size: 40px; padding: 0 16px; letter-spacing: .1em; border: 3px solid var(--ink); border-radius: 14px; background: var(--card); font-family: inherit; min-width: 0; }
+#yomi:focus { outline: 4px solid var(--cat-1); outline-offset: 2px; }
+#yomi[readonly] { background: var(--paper); }
+.answer .btn-ok { min-width: 160px; font-size: 26px; font-weight: 700; border-radius: 14px; }
+.rmsg { min-height: 1.5em; margin: 0; font-size: 26px; font-weight: 700; }
+.rmsg.good { color: var(--cat-1); }
+.rmsg.ng, .rmsg.ans { color: var(--ink-alert); }
+.after { display: flex; gap: 14px; align-items: center; width: min(100%, 720px); justify-content: flex-end; }
+.after .big { width: auto; min-width: 240px; min-height: 76px; }
+.after .btn-mada { min-height: 60px; padding: 0 22px; font-size: 20px; border-radius: 12px; }
 .judge { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; width: min(100%, 720px); visibility: hidden; }
 .judge.show { visibility: visible; }
 .judge button { min-height: 92px; font-size: 30px; font-weight: 700; border-radius: 18px; letter-spacing: .1em; }
@@ -174,3 +194,28 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
   .card { min-height: 38vh; }
   .tree { max-height: 42vh; }
 }
+
+/* ---- 書き順の提示（モニター用） */
+.picked { font-size: 24px; min-height: 1.6em; display: flex; gap: 14px; flex-wrap: wrap; }
+.pk-item b { font-size: 34px; }
+.teacher .grid .cell[disabled] { opacity: .35; }
+#stage { position: fixed; inset: 0; background: #fff; z-index: 50; cursor: pointer; user-select: none; }
+#stage.single { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+#stage .big-kanji { height: 100vh; aspect-ratio: 1; max-width: 78vw; display: flex; align-items: center; justify-content: center; }
+#stage .show-svg { width: 100%; height: 100%; display: block; }
+#stage .show-svg .frame { fill: none; stroke: #9AA0A6; stroke-width: .9; }
+#stage .show-svg .cross { stroke: #9AA0A6; stroke-width: .7; stroke-dasharray: 2.2 2.2; }
+#stage .show-svg path { fill: none; stroke: #111; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }
+/* 読み: 1文字ずつ縦に積み、読みが複数なら右から左へ列をならべる（教科書の縦書きと同じ並び） */
+#stage .kun, #stage .on { display: flex; flex-direction: row-reverse; gap: .35em; align-items: center; justify-content: center; height: 94vh; }
+#stage .rd { display: flex; flex-direction: column; align-items: center; font-weight: 700; }
+#stage .rd .ch { display: block; line-height: 1.12; }
+#stage .rd .ch.small { transform: translate(.16em, -.16em) scale(.9); } /* 縦書きの小書き仮名は右上に寄せる */
+#stage .rd .ch.long { transform: rotate(90deg); }
+#stage .rd .ch.okuri { color: var(--ink-link); } /* 送り仮名: 大きさはそのまま、青、太字 */
+/* 語幹と送り仮名の区切り: 短い縦棒（色だけに頼らない） */
+#stage .rd .sep { display: block; width: .12em; height: .45em; margin: .12em 0; background: var(--ink-link); border-radius: .06em; }
+#stage .stage-pos { position: absolute; bottom: 8px; left: 12px; color: var(--ink-sub); font-size: 18px; }
+#stage.all { display: flex; align-items: center; justify-content: center; }
+#stage .all-grid { display: grid; justify-content: center; align-content: center; }
+.stage-exit { position: fixed; top: 8px; right: 10px; z-index: 51; width: 48px; height: 48px; font-size: 26px; border: 1px solid var(--line); background: #fff; border-radius: 50%; color: var(--ink-sub); opacity: .6; }
