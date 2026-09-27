@@ -153,12 +153,51 @@
 
   // ================= 字の表示（先生のモニター表示と同じ形: 外枠・十字・うす文字の上を黒で書き順、左右に読み）
   var SHOW_OPTS_KEY = 'kanzi.showOpts';
-  function showOpts() { var o = Platform.store.get(SHOW_OPTS_KEY) || {}; return { base: o.base !== false }; }
-  function kanjiSvg(c, cls, base) {
+  function showOpts() { var o = Platform.store.get(SHOW_OPTS_KEY) || {}; return { base: o.base !== false, color: !!o.color }; }
+  function setShowOpt(k, v) { var o = showOpts(); o[k] = v; Platform.store.set(SHOW_OPTS_KEY, o); }
+  // 一〜四画目の色分け（先生の提示）。色だけに頼らないよう、各画の書きはじめに画の番号（1〜4）を同じ色で置く。
+  // 色は線用の4色（青・橙・茶・灰）。黒（5画目から）・うすい下地・白地と、どの色覚の型でも見分けられることを検査済み（docs/design.md §17）
+  var COLOR_STROKES = 4;
+  // 番号の置き場所は描いた後に決める（placeNums）。ここでは番号だけ出す
+  function strokeNums(c) {
+    return '<g class="nums" aria-hidden="true">' + ST[c].slice(0, COLOR_STROKES).map(function (d, i) {
+      return '<text class="n' + (i + 1) + '" x="-20" y="-20">' + (i + 1) + '</text>';
+    }).join('') + '</g>';
+  }
+  // 番号を、その画の書きはじめのまわり（半径7・9.5・12の24方向）のうち、どの画の線からも・先に置いた番号からも
+  // いちばん離れた所に置く。同じ点から始まる画（円の1と2など）や、ほかの画の上に番号が重ならないように。
+  // 同じくらいなら、書きはじめの手前（書く向きの反対側）を選ぶ
+  function placeNums(root) {
+    Array.from(root.querySelectorAll('svg.colored')).forEach(function (svg) {
+      var paths = Array.from(svg.querySelectorAll('.ink path')), texts = Array.from(svg.querySelectorAll('.nums text')), pts = [], placed = [];
+      paths.forEach(function (p) { var L = p.getTotalLength(); for (var t = 0; t <= L; t += 2) { var q = p.getPointAtLength(t); pts.push([q.x, q.y]); } });
+      function near(x, y, list) { var m = 99; for (var i = 0; i < list.length; i++) { var dx = list[i][0] - x, dy = list[i][1] - y, d = Math.sqrt(dx * dx + dy * dy); if (d < m) m = d; } return m; }
+      texts.forEach(function (tx, i) {
+        var p = paths[i], a = p.getPointAtLength(0), b = p.getPointAtLength(Math.min(4, p.getTotalLength())), best = null;
+        var bx = a.x - b.x, by = a.y - b.y, bn = Math.sqrt(bx * bx + by * by) || 1;
+        [7, 9.5, 12].forEach(function (r) {
+          for (var k = 0; k < 24; k++) {
+            var ang = k * Math.PI / 12, ux = Math.cos(ang), uy = Math.sin(ang), x = a.x + ux * r, y = a.y + uy * r;
+            if (x < 5 || x > 104 || y < 5 || y > 104) continue;
+            // 線から 6.5 以上（字の半分＋線の太さの半分）離れていれば十分。それより近いほど大きく減点
+            var dl = near(x, y, pts), dp = near(x, y, placed);
+            var score = Math.min(dl, 9) + (dl < 6.5 ? (dl - 6.5) * 2 : 0) + Math.min(dp, 9) * 0.6 + 1.2 * (ux * bx + uy * by) / bn - (r - 7) * 0.35;
+            if (!best || score > best.s) best = { s: score, x: x, y: y };
+          }
+        });
+        if (!best) best = { x: Math.max(5, Math.min(104, a.x)), y: Math.max(5, Math.min(104, a.y)) };
+        tx.setAttribute('x', best.x.toFixed(1)); tx.setAttribute('y', best.y.toFixed(1));
+        placed.push([best.x, best.y]);
+      });
+    });
+  }
+  // color: 一〜四画目を色分けし、書きはじめに番号を置く（先生の提示だけ）
+  function kanjiSvg(c, cls, base, color) {
     // 十字の点線（字全体のバランスの目安）。線は <line> にして、書き順アニメ（path が対象）に巻き込まない
-    return '<svg viewBox="0 0 109 109" class="' + cls + '"><rect class="frame" x="0.8" y="0.8" width="107.4" height="107.4"/><line class="cross" x1="54.5" y1="1" x2="54.5" y2="108"/><line class="cross" x1="1" y1="54.5" x2="108" y2="54.5"/>' +
+    return '<svg viewBox="0 0 109 109" class="' + cls + (color ? ' colored' : '') + '"><rect class="frame" x="0.8" y="0.8" width="107.4" height="107.4"/><line class="cross" x1="54.5" y1="1" x2="54.5" y2="108"/><line class="cross" x1="1" y1="54.5" x2="108" y2="54.5"/>' +
       (base ? '<g class="base">' + ST[c].map(function (d) { return '<path d="' + d + '"/>'; }).join('') + '</g>' : '') +
-      '<g class="ink">' + ST[c].map(function (d) { return '<path d="' + d + '"/>'; }).join('') + '</g></svg>';
+      '<g class="ink">' + ST[c].map(function (d, i) { return '<path' + (color && i < COLOR_STROKES ? ' class="s' + (i + 1) + '"' : '') + ' d="' + d + '"/>'; }).join('') + '</g>' +
+      (color ? strokeNums(c) : '') + '</svg>';
   }
   // 読みがなの大きさ: 字の高さ H の14%を基本とし、長い読み・複数の読みが左右の幅 side に収まらない時だけ縮める
   function readSize(list, H, side) {
@@ -581,6 +620,8 @@
     app.innerHTML = '<header class="top t"><h1>書き順を 大きく見せる</h1><p class="sub">見せる字を 順に押す（1〜' + SHOW_MAX + '字）</p></header>' +
       '<main class="teacher"><p class="picked" id="picked"></p>' +
       '<p><label class="opt"><input type="checkbox" id="opt-base"' + (showOpts().base ? ' checked' : '') + '> 完成した字を うすく表示して、その上に書き順を黒で重ねる</label></p>' +
+      '<p><label class="opt"><input type="checkbox" id="opt-color"' + (showOpts().color ? ' checked' : '') + '> 一〜四画目に色をつける（' +
+        ['青', '橙', '茶', '灰'].map(function (n, i) { return '<span class="cswatch s' + (i + 1) + '">' + (i + 1) + n + '</span>'; }).join('') + '。書きはじめに画の番号）</label></p>' +
       '<p><button class="big primary" id="go" disabled>はじめる</button></p>' +
       '<nav class="tabs t" role="tablist">' + ALL_GRADES.map(function (g) { return '<button role="tab" class="ptab" data-g="' + g + '" aria-selected="' + (g === pg) + '">' + g + '年</button>'; }).join('') + '</nav>' +
       '<div class="grid">' + Array.from(orderOf(pg)).map(function (c) { return '<button class="cell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
@@ -603,7 +644,8 @@
       });
     });
     app.querySelectorAll('.ptab').forEach(function (b) { b.addEventListener('click', function () { showPick(picked, +b.dataset.g); }); });
-    $('#opt-base').addEventListener('change', function () { Platform.store.set(SHOW_OPTS_KEY, { base: this.checked }); });
+    $('#opt-base').addEventListener('change', function () { setShowOpt('base', this.checked); });
+    $('#opt-color').addEventListener('change', function () { setShowOpt('color', this.checked); });
     on('#go', function () { showStart(picked.slice(), function () { showPick(picked, pg); }); });
     on('#cancel', function () { teacher(S.klass); });
     paint();
@@ -619,16 +661,17 @@
       try { document.documentElement.requestFullscreen().catch(function () {}); } catch (e) {}
     }
     goFull();
-    var idx = 0, stopAnim = null, base = showOpts().base;
+    var idx = 0, stopAnim = null, opts = showOpts(), base = opts.base, color = opts.color;
     function stopLoop() { if (stopAnim) { stopAnim(); stopAnim = null; } }
     function single() {
       stopLoop();
       var c = list[idx], k = D.kanji[c], H = window.innerHeight, side = Math.max(120, (window.innerWidth - Math.min(H, window.innerWidth * 0.78)) / 2);
       stage.className = 'single';
       stage.innerHTML = '<div class="kun" aria-label="訓読み" style="font-size:' + readSize(k.kun, H, side) + '">' + readingHtml(k.kun, true) + '</div>' +
-        '<div class="big-kanji">' + kanjiSvg(c, 'show-svg', base) + '</div>' +
+        '<div class="big-kanji">' + kanjiSvg(c, 'show-svg', base, color) + '</div>' +
         '<div class="on" aria-label="音読み" style="font-size:' + readSize(k.on, H, side) + '">' + readingHtml(k.on, false) + '</div>' +
         '<div class="stage-pos">' + (idx + 1) + ' / ' + list.length + '</div>';
+      placeNums(stage);
       stopAnim = playLoop(Array.from(stage.querySelectorAll('.show-svg')));
     }
     // ならべて表示: 字がいちばん大きくなる行数を選ぶ
@@ -642,7 +685,8 @@
       }
       stage.className = 'all';
       stage.innerHTML = '<div class="all-grid" style="gap:' + gap + 'px;grid-template-columns:repeat(' + best.cols + ',' + Math.floor(best.size) + 'px);grid-auto-rows:' + Math.floor(best.size) + 'px">' +
-        list.map(function (c) { return kanjiSvg(c, 'show-svg', base); }).join('') + '</div>';
+        list.map(function (c) { return kanjiSvg(c, 'show-svg', base, color); }).join('') + '</div>';
+      placeNums(stage);
       stopAnim = playLoop(Array.from(stage.querySelectorAll('.show-svg')));
     }
     function next() { if (idx < list.length - 1) { idx++; single(); } else if (idx === list.length - 1) { idx++; all(); } }

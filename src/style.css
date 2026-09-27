@@ -219,6 +219,20 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 #stage .show-svg .frame { fill: none; stroke: #9AA0A6; stroke-width: .9; }
 #stage .show-svg .cross { stroke: #9AA0A6; stroke-width: .7; stroke-dasharray: 2.2 2.2; }
 #stage .show-svg .base path { stroke: #D3D7DC; } /* うすい完成形（下地） */
+/* 一〜四画目の色分け（線用の4色。黒・下地・白地と見分けられることを検査済み。色だけに頼らず番号を併記） */
+:root { --stroke-1: #0F5EA8; --stroke-2: #C86A00; --stroke-3: #6E4310; --stroke-4: #7A7F86; }
+#stage .show-svg .ink path.s1 { stroke: var(--stroke-1); }
+#stage .show-svg .ink path.s2 { stroke: var(--stroke-2); }
+#stage .show-svg .ink path.s3 { stroke: var(--stroke-3); }
+#stage .show-svg .ink path.s4 { stroke: var(--stroke-4); }
+#stage .show-svg .nums text { font-family: var(--font-sans); font-size: 9px; font-weight: 700; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: #fff; stroke-width: 2.4px; stroke-linejoin: round; }
+#stage .show-svg .nums .n1, .cswatch.s1 { fill: var(--stroke-1); color: var(--stroke-1); }
+#stage .show-svg .nums .n2, .cswatch.s2 { fill: var(--stroke-2); color: #A85800; }
+#stage .show-svg .nums .n3, .cswatch.s3 { fill: var(--stroke-3); color: var(--stroke-3); }
+#stage .show-svg .nums .n4, .cswatch.s4 { fill: var(--stroke-4); color: var(--ink-sub); }
+.cswatch { font-weight: 700; margin: 0 .25em; border-bottom: 4px solid currentColor; }
+.cswatch.s2 { border-bottom-color: var(--stroke-2); }
+.cswatch.s4 { border-bottom-color: var(--stroke-4); }
 .opt { font-size: 20px; display: inline-flex; gap: 10px; align-items: center; }
 .opt input { width: 26px; height: 26px; }
 #stage .show-svg path { fill: none; stroke: #111; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }

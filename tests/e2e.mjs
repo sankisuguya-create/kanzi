@@ -263,11 +263,24 @@ await page.click('#show');
 await page.click('.ptab[data-g="1"]');
 for (const c of '一右雨円王音') await page.click(`.cell[data-c="${c}"]`);
 check(await page.isDisabled('.cell[data-c="下"]') && (await page.textContent('.sub')).includes('1〜6字'), '提示: 6字まで選べて、7字目は押せない');
+await page.check('#opt-color');
 await page.click('#go');
 await page.waitForSelector('#stage.single');
 for (let i = 0; i < 6; i++) await page.mouse.click(683, 384);
 await page.waitForSelector('#stage.all');
 check((await page.$$('#stage .all-grid svg')).length === 6, '提示: 6字をならべて表示');
+// 一〜四画目の色分け: 1〜4画目が4色、5画目からは黒。書きはじめに番号 1〜4
+const col = await page.evaluate(() => [...document.querySelectorAll('#stage .all-grid svg')].map((svg) => ({
+  ink: [...svg.querySelectorAll('.ink path')].map((p) => getComputedStyle(p).stroke),
+  nums: [...svg.querySelectorAll('.nums text')].map((t) => t.textContent + ':' + t.getAttribute('x') + ',' + t.getAttribute('y'))
+})));
+const ONE = 'rgb(15, 94, 168)', TWO = 'rgb(200, 106, 0)', THREE = 'rgb(110, 67, 16)', FOUR = 'rgb(122, 127, 134)', BLACK = 'rgb(17, 17, 17)';
+const 音 = col[5]; // 音は9画
+check(音.ink.slice(0, 5).join('|') === [ONE, TWO, THREE, FOUR, BLACK].join('|') && 音.ink.slice(5).every((c) => c === BLACK), '提示: 一〜四画目に色、五画目からは黒（音）');
+check(col[0].ink.length === 1 && col[0].ink[0] === ONE && col[0].nums.length === 1, '提示: 一画の字（一）は1色・番号1つ');
+check(col.every((x) => x.nums.length === Math.min(4, x.ink.length) && x.nums.every((n, i) => n.startsWith(i + 1 + ':'))), '提示: 書きはじめに画の番号（1〜4）');
+check(col.every((x) => x.nums.every((n) => { const [a, b] = n.split(':')[1].split(',').map(Number); return a >= 5 && a <= 104 && b >= 5 && b <= 104; })), '提示: 番号は枠の中');
+await checkFonts('提示（色分け）');
 await shot('13-show-6');
 await page.keyboard.press('Escape');
 await page.click('#cancel');
