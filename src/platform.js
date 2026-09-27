@@ -19,6 +19,20 @@
 
   var key = 'kanzi.g3.demo';
   var pending = false;
+  var trial = null; // 先生のおためし中: { key, saved }。記録はこの端末だけに置き、サーバーへ送らない
+
+  // 先生が児童画面を試す。戻り値は試用用の進捗（前回の続き）
+  function startTrial(email) {
+    trial = { key: 'kanzi.g3.trial.' + email, saved: { key: key, pending: pending } };
+    key = trial.key;
+    pending = false;
+    return store.get(key) || Sched.newProgress();
+  }
+  function endTrial() {
+    if (!trial) return;
+    key = trial.saved.key; pending = trial.saved.pending; trial = null;
+  }
+  function resetTrial() { if (trial) store.set(trial.key, Sched.newProgress()); }
 
   // 起動時の情報: { role, email, klass, progress, order, pointer, demo }
   function init() {
@@ -47,7 +61,7 @@
 
   // 区切りごとに呼ぶ。サーバーの記録と統合した結果を返す（他の端末での学習も反映される）
   function flush(p) {
-    if (!isGas || !pending) return Promise.resolve(p);
+    if (!isGas || !pending || trial) return Promise.resolve(p);
     return gas('api_save', JSON.stringify({ read: p.read, write: p.write })).then(function (merged) {
       var m = Sched.merge(JSON.parse(merged), p);
       store.set(key, m);
@@ -81,5 +95,5 @@
     return Promise.resolve((store.get('kanzi.g3.settings') || {}).pointer || 0);
   }
 
-  root.Platform = { isGas: !!isGas, init: init, save: save, flush: flush, stats: stats, setPointer: setPointer, setOrder: setOrder, pointerOf: pointerOf, store: store };
+  root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush, stats: stats, setPointer: setPointer, setOrder: setOrder, pointerOf: pointerOf, store: store };
 })(this);
