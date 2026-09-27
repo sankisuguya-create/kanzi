@@ -120,11 +120,13 @@
     var s = String(forestState(p).base || ''), n = p.old ? p.old[2] : 0;
     return s.slice(0, n) + 'p'.repeat(Math.max(0, n - s.length));
   }
+  function sessionKeys(p) { return Object.keys(p.done || {}).sort(function (a, b) { return Number(a) - Number(b); }); }
+  function knownForestMode(mode) { return /^[rwky]$/.test(mode); }
+  function forestRun(modes, key, count) { return (knownForestMode(modes[key]) ? modes[key] : 'p').repeat(count); }
   function forestLog(p) {
     var f = forestState(p), modes = f.modes || {}, parts = [forestBase(p)];
-    Object.keys(p.done || {}).sort(function (a, b) { return Number(a) - Number(b); }).forEach(function (d) {
-      var mode = /^[rwky]$/.test(modes[d]) ? modes[d] : 'p';
-      parts.push(mode.repeat(p.done[d]));
+    sessionKeys(p).forEach(function (d) {
+      parts.push(forestRun(modes, d, p.done[d]));
     });
     return parts.join('');
   }
@@ -133,15 +135,15 @@
     norm(p);
     if (!(before > p.old[0])) return p;
     var f = forestState(p), modes = Object.assign({}, f.modes), base = forestBase(p);
-    Object.keys(p.done).sort(function (a, b) { return Number(a) - Number(b); }).forEach(function (d) {
+    var o = [before, p.old[1], p.old[2]];
+    sessionKeys(p).forEach(function (d) {
       if (Number(d) < before) {
-        base += (/^[rwky]$/.test(modes[d]) ? modes[d] : 'p').repeat(p.done[d]);
-        delete modes[d];
+        base += forestRun(modes, d, p.done[d]);
+        o[1]++; o[2] += p.done[d];
+        delete modes[d]; delete p.done[d];
       }
     });
     p.forest = { base: base, modes: modes };
-    var o = [before, p.old[1], p.old[2]];
-    for (var d in p.done) if (Number(d) < before) { o[1]++; o[2] += p.done[d]; delete p.done[d]; }
     p.old = o;
     return p;
   }
@@ -181,20 +183,25 @@
     out.old = o.slice();
     for (d in a.done) if (Number(d) >= o[0]) out.done[d] = a.done[d];
     for (d in b.done) if (Number(d) >= o[0]) out.done[d] = b.done[d];
-    var fa = forestState(a), fb = forestState(b), modes = {};
+    out.forest = mergeForest(a, b, out, o === b.old ? b : a);
+    return out;
+  }
+
+  // 色だけの統合。完了回と集計境界の採用ルールは merge 側で決める。
+  function mergeForest(a, b, out, archiveSource) {
+    var fa = forestState(a), fb = forestState(b), modes = {}, d;
     for (d in out.done) {
       // 同じ回の再送は一度だけ。旧クライアントに色がなくても既存の色を残す。
       var ma = (fa.modes || {})[d], mb = (fb.modes || {})[d];
-      modes[d] = /^[rwky]$/.test(mb) ? mb : /^[rwky]$/.test(ma) ? ma : 'p';
+      modes[d] = knownForestMode(mb) ? mb : knownForestMode(ma) ? ma : 'p';
     }
-    var archived = o === b.old ? b : a;
+    var archived = archiveSource;
     if (a.old.every(function (v, i) { return v === b.old[i]; })) {
       // 旧クライアントが同じ集計値だけ返した場合、色のある控えを優先。
       var ba = forestBase(a), bb = forestBase(b);
       archived = bb.replace(/p/g, '').length > ba.replace(/p/g, '').length ? b : a;
     }
-    out.forest = { base: forestBase(archived), modes: modes };
-    return out;
+    return { base: forestBase(archived), modes: modes };
   }
 
   // 不変条件の検査（I3）。違反の説明の配列を返す

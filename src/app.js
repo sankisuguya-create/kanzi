@@ -107,7 +107,7 @@
   function menu() {
     clearScreen();
     var p = S.p, g = S.grade;
-    var act = Sched.activity(p), chars = allowedChars(), learned = Sched.learned(p, chars);
+    var act = Sched.activity(p);
     var pk = 'kanzi.prevAct.' + (S.trial ? 'trial.' : '') + S.info.email, prev = Platform.store.get(pk);
     Platform.store.set(pk, act);
     var nSel = Sched.selected(p, orderOf(g)).length;

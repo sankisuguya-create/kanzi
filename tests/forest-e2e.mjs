@@ -62,6 +62,12 @@ try {
   // 戻る先・ページ数が増えても描画上限とキャッシュ上限は一定。
   await seed(100000);let metrics=await page.evaluate(() => KanziState.treeView.metrics());
   assert.ok(metrics.visibleTrees<=36);assert.ok(metrics.cachePixels<=3*1024*1024);
+  for(let i=0;i<10;i++){
+    await page.locator('.forest-prev').click();await page.waitForTimeout(50);
+    const moved=await page.evaluate(()=>KanziState.treeView.metrics());
+    assert.ok(moved.cachedRecords<=36, '過去の森の補助情報がたまり続けない');
+    assert.ok(moved.cachePixels<=3*1024*1024);
+  }
   assert.equal(await page.locator('.forest-regions').isVisible(),true);
   await page.locator('.forest-prev').click();await page.waitForTimeout(100);
   const oldArea=await page.locator('.forest-region-name').textContent();

@@ -153,12 +153,30 @@ function loadProgress_(email) {
   var r = findRow_(sh, email);
   if (!r) return { row: 0, p: Sched.newProgress() };
   var v = sh.getRange(r, 2, 1, 3).getValues()[0];
-  var p = parseProgress_(v[0], v[1], v[2]), width = sh.getLastColumn();
-  if (width > 5) {
-    var raw = sh.getRange(r, 6, 1, width - 5).getValues()[0].join('');
-    if (raw) p.forest = JSON.parse(raw);
-  }
+  var p = parseProgress_(v[0], v[1], v[2]), forest = loadForest_(sh, r);
+  if (forest) p.forest = forest;
   return { row: r, p: p };
+}
+// 森の保存領域だけを扱う。A〜E列の形式は先生の集計も使っているため固定。
+var FOREST_COLUMN_ = 6;
+var FOREST_CHUNK_SIZE_ = 40000;
+function loadForest_(sh, row) {
+  var count = sh.getLastColumn() - FOREST_COLUMN_ + 1;
+  if (count <= 0) return null;
+  var raw = sh.getRange(row, FOREST_COLUMN_, 1, count).getValues()[0].join('');
+  return raw ? JSON.parse(raw) : null;
+}
+function writeProgress_(sh, rowNumber, row, forest) {
+  var json = JSON.stringify(forest), chunks = [];
+  for (var i = 0; i < json.length; i += FOREST_CHUNK_SIZE_) chunks.push(json.slice(i, i + FOREST_CHUNK_SIZE_));
+  var width = Math.max(FOREST_COLUMN_ - 1 + chunks.length, sh.getLastColumn());
+  var maxColumns = sh.getMaxColumns();
+  if (width > maxColumns) sh.insertColumnsAfter(maxColumns, width - maxColumns);
+  sh.getRange(1, FOREST_COLUMN_, 1, chunks.length).setValues([chunks.map(function (_, j) { return '森' + (j + 1); })]);
+  row = row.concat(chunks);
+  // 短くなった時も以前の末尾が残らないよう、使用済みの列まで空にする。
+  while (row.length < width) row.push('');
+  if (rowNumber) sh.getRange(rowNumber, 1, 1, width).setValues([row]); else sh.appendRow(row);
 }
 // 進捗の行（read, write, meta の文字列）を読む。壊れた欄は空として扱う（1欄の破損で全部を失わない）
 function parseProgress_(read, write, meta) {
@@ -194,17 +212,7 @@ function api_save(json) {
     var m = Sched.compact(Sched.merge(cur.p, incoming), Sched.compactBefore(new Date()));
     var row = [me.email, JSON.stringify(m.read), JSON.stringify(m.write), JSON.stringify({ sel: m.sel, done: m.done, old: m.old }), new Date()];
     if (row[1].length >= 50000 || row[2].length >= 50000 || row[3].length >= 50000) throw new Error('進捗が大きすぎます'); // I6
-    var sh = progressSheet_();
-    // F列以降は森だけ。既存のmeta・更新列と先生の集計を変えない。
-    // 1セル4万字で分割し、たくさん学習してもセルの文字数上限で止まらない。
-    var forest = JSON.stringify(m.forest), chunks = [];
-    for (var i = 0; i < forest.length; i += 40000) chunks.push(forest.slice(i, i + 40000));
-    var width = Math.max(5 + chunks.length, sh.getLastColumn());
-    if (width > sh.getMaxColumns()) sh.insertColumnsAfter(sh.getMaxColumns(), width - sh.getMaxColumns());
-    sh.getRange(1, 6, 1, chunks.length).setValues([chunks.map(function (_, j) { return '森' + (j + 1); })]);
-    row = row.concat(chunks);
-    while (row.length < width) row.push('');
-    if (cur.row) sh.getRange(cur.row, 1, 1, width).setValues([row]); else sh.appendRow(row);
+    writeProgress_(progressSheet_(), cur.row, row, m.forest);
     return JSON.stringify(m);
   } finally {
     lock.releaseLock();
