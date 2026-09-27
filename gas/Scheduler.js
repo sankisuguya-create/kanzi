@@ -111,10 +111,36 @@
     for (var k in p.done) n += p.done[k];
     return n;
   }
+  // 森の色は完了した回に結び付ける。旧記録（モード不明）は緑。
+  function forestMode(kind) { return ({ read: 'r', write: 'w', fk: 'k', fy: 'y' })[kind] || 'p'; }
+  function forestState(p) {
+    var f = p.forest;
+    return f && typeof f === 'object' ? f : { base: '', modes: {} };
+  }
+  function forestBase(p) {
+    var s = String(forestState(p).base || ''), n = p.old ? p.old[2] : 0;
+    return s.slice(0, n) + 'p'.repeat(Math.max(0, n - s.length));
+  }
+  function forestLog(p) {
+    var f = forestState(p), modes = f.modes || {}, parts = [forestBase(p)];
+    Object.keys(p.done || {}).sort(function (a, b) { return Number(a) - Number(b); }).forEach(function (d) {
+      var mode = /^[rwky]$/.test(modes[d]) ? modes[d] : 'p';
+      parts.push(mode.repeat(p.done[d]));
+    });
+    return parts.join('');
+  }
   // 境目より前の回を old にまとめる（何回呼んでも同じ結果。境目は前に進むだけ）
   function compact(p, before) {
     norm(p);
     if (!(before > p.old[0])) return p;
+    var f = forestState(p), modes = Object.assign({}, f.modes), base = forestBase(p);
+    Object.keys(p.done).sort(function (a, b) { return Number(a) - Number(b); }).forEach(function (d) {
+      if (Number(d) < before) {
+        base += (/^[rwky]$/.test(modes[d]) ? modes[d] : 'p').repeat(p.done[d]);
+        delete modes[d];
+      }
+    });
+    p.forest = { base: base, modes: modes };
     var o = [before, p.old[1], p.old[2]];
     for (var d in p.done) if (Number(d) < before) { o[1]++; o[2] += p.done[d]; delete p.done[d]; }
     p.old = o;
@@ -122,7 +148,14 @@
   }
   // まとめる境目: 3か月前の月の1日（その時点の現地時刻）
   function compactBefore(now) { return new Date(now.getFullYear(), now.getMonth() - 3, 1).getTime(); }
-  function finishSession(p, startedAt, count) { if (count > 0) p.done[String(startedAt)] = count; }
+  function finishSession(p, startedAt, count, kind) {
+    if (count > 0) {
+      p.done[String(startedAt)] = count;
+      var f = forestState(p);
+      p.forest = { base: f.base || '', modes: Object.assign({}, f.modes) };
+      p.forest.modes[String(startedAt)] = forestMode(kind);
+    }
+  }
 
   // おぼえた字 = よむが箱3以上（chars を渡すとその中だけ数える）
   function learned(p, chars) {
@@ -149,6 +182,19 @@
     out.old = o.slice();
     for (d in a.done) if (Number(d) >= o[0]) out.done[d] = a.done[d];
     for (d in b.done) if (Number(d) >= o[0]) out.done[d] = b.done[d];
+    var fa = forestState(a), fb = forestState(b), modes = {};
+    for (d in out.done) {
+      // 同じ回の再送は一度だけ。旧クライアントに色がなくても既存の色を残す。
+      var ma = (fa.modes || {})[d], mb = (fb.modes || {})[d];
+      modes[d] = /^[rwky]$/.test(mb) ? mb : /^[rwky]$/.test(ma) ? ma : 'p';
+    }
+    var archived = o === b.old ? b : a;
+    if (a.old.every(function (v, i) { return v === b.old[i]; })) {
+      // 旧クライアントが同じ集計値だけ返した場合、色のある控えを優先。
+      var ba = forestBase(a), bb = forestBase(b);
+      archived = bb.replace(/p/g, '').length > ba.replace(/p/g, '').length ? b : a;
+    }
+    out.forest = { base: forestBase(archived), modes: modes };
     return out;
   }
 
@@ -164,7 +210,7 @@
     INTERVALS: INTERVALS, LIMIT: LIMIT, WRITE_UNLOCK_BOX: WRITE_UNLOCK_BOX, MAX_BOX: MAX_BOX,
     day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite, undo: undo,
     dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList,
-    activity: activity, compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check
+    activity: activity, forestLog: forestLog, compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sched = api;

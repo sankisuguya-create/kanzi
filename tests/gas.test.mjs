@@ -20,6 +20,7 @@ function makeEnv(sheets, email) {
       createTextFinder: (t) => ({ matchEntireCell: () => ({ findNext: tick(() => { const i = data.findIndex((row) => String(row[0]) === t); return i >= 0 ? { getRow: () => i + 1 } : null; }) }) })
     });
     return {
+      getMaxColumns: () => Math.max(26, ...data.map((r) => r.length)), insertColumnsAfter: () => {},
       getLastRow: tick(() => data.length), getLastColumn: tick(() => Math.max(0, ...data.map((r) => r.length))),
       getRange: (a, c, nr, nc) => (typeof a === 'string' ? range(1, 1, data.length, 1) : range(a, c, nr, nc)),
       appendRow: tick((row) => data.push(row.slice())), setFrozenRows: () => {}
@@ -45,6 +46,21 @@ const base = () => ({
   教師: [['メール', '学年', '組'], [T, 3, 1], [T2, 3, '']],
   進捗: [['メール', 'read', 'write', 'meta', '更新'], [K1, JSON.stringify({ 悪: [3, 0, 4, 1790000000000, 1], 安: [1, 0, 2, 1790000000000, 2] }), '{}', JSON.stringify({ sel: {}, done: { 1790000000000: 10 } }), '']],
   設定: [['キー', '値']]
+});
+
+test('森: 10万問の色を分割保存し、旧5列・別児童・再送・先生の集計を保つ', () => {
+  const env = makeEnv(base(), K2), p = env.Sched.newProgress();
+  p.old = [1, 10000, 100000];
+  p.forest = { base: 'rwky'.repeat(25000), modes: {} };
+  const saved = JSON.parse(env.api_save(JSON.stringify(p)));
+  const row = env.book['進捗'].find(r => r[0] === K2);
+  assert.equal(row[5].length, 40000);
+  assert.equal(row[6].length, 40000);
+  assert.equal(env.Sched.forestLog(env.api_init().progress), p.forest.base);
+  assert.equal(env.Sched.forestLog(JSON.parse(env.api_save(JSON.stringify(saved)))), p.forest.base);
+  assert.equal(env.book['進捗'].find(r => r[0] === K1).length, 5);
+  assert.equal(JSON.parse(row[3]).old[2], 100000);
+  assert.equal(row[4] instanceof Date, true);
 });
 
 test('担当学級: 教師シートの 学年・組。組が空なら その学年の全学級', () => {

@@ -354,3 +354,22 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .tcell.tsel::after { content: "✓"; position: absolute; top: 0; right: 3px; font-size: 12px; color: var(--cat-3); }
 .teacher input#test-label { font-size: 18px; min-height: 44px; padding: 0 10px; width: min(100%, 360px); }
 .picked .tlist { font-size: 26px; letter-spacing: .15em; font-family: var(--font-kanji); }
+
+:root { --forest-preview:hsl(139 31% 53%); --forest-read:hsl(199 37% 61%); --forest-write:hsl(27 56% 65%); --forest-card-k:hsl(274 32% 65%); --forest-card-y:hsl(49 52% 60%); }
+.tree { height:340px; border-radius:12px; }
+.forest-tools { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 8px 4px; }
+.forest-status { flex: 1 1 150px; margin: 0; font-size: 17px; }
+.forest-tools button, .forest-regions button { min-height: 56px; padding: 8px 14px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; font-size: 18px; }
+.forest-regions { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; font-size: 17px; }
+.forest-regions[hidden] { display: none; }
+.forest-regions button:disabled { color: var(--ink-sub); border-color: transparent; }
+.forest-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 16px; padding: 4px; font-size: 16px; }
+.forest-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.forest-legend i { display: inline-block; width: 12px; height: 12px; }
+.forest-p { background: var(--forest-preview); border-radius: 75% 0 75% 0; }
+.forest-r { background: var(--forest-read); border-radius: 50%; }
+.forest-w { background: var(--forest-write); transform: rotate(45deg); }
+.forest-k { background: var(--forest-card-k); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.forest-y { background: var(--forest-card-y); }
+.forest-colors { margin: 0; padding: 0 4px; font-size: 16px; }
+.forest-colors summary { min-height: 56px; padding: 14px 6px; cursor: pointer; }

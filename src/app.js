@@ -115,7 +115,7 @@
     app.innerHTML =
       '<header class="top">' + titleHtml() + tabs(g) + '</header>' +
       '<main class="menu">' +
-      '<section class="tree-box">' + Tree.render(act, learned, chars.length, prev) + '</section>' +
+      '<section class="tree-box"><div id="forest"></div></section>' +
       '<section class="actions">' +
       (kana
         ? '<button class="big" id="go-browse">' + noun + K('を ぜんぶ[見|み]る<span class="meta">') + orderOf(g).length + K('[字|じ]・[見|み]る／[選|えら]ぶ</span></button>') +
@@ -128,6 +128,9 @@
           (testChars().length ? '<button class="big test" id="go-test">' + K('[次|つぎ]の[漢|かん][字|じ]テストの はんいを [見|み]る') + '<span class="meta">' + (S.test.label ? esc(S.test.label) + '・' : '') + testChars().length + K('[字|じ]') + '</span></button>' : '')) +
       '<button class="big" id="go-seen"' + (nSel ? '' : ' disabled') + '>' + K('[選|えら]んだ') + noun + K('を[見|み]る') + '<span class="meta">' + (nSel ? nSel + K('[字|じ]') : K('まだ [選|えら]んでいないよ')) + '</span></button>' +
       '</section></main>' + (S.info.demo && !S.trial ? '<p class="demo-note">デモ（この端末にだけ保存）</p>' : '');
+    var forestView = Tree.mount($('#forest'), { progress: p, prevActivity: prev });
+    S.treeView = forestView;
+    cleanup.push(function () { forestView.destroy(); });
     bindTabs(function (ng) { S.grade = ng; menu(); });
     on('#go-browse', function () { browse('look'); });
     on('#go-read', function () { chooser('read'); });
@@ -456,7 +459,7 @@
   // 最後まで終えた時: 木を育て、出た字の一覧（○×）と「えらぶ」のチェックを出す
   function sessionDone() {
     var s = S.session, graded = s.kind === 'read' || s.kind === 'write';
-    Sched.finishSession(S.p, s.startedAt, s.items.length);
+    Sched.finishSession(S.p, s.startedAt, s.items.length, s.kind);
     Platform.save(S.p);
     flush();
     app.innerHTML =
