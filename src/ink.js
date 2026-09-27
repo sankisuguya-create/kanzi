@@ -97,6 +97,7 @@
     this.result = { orderMiss: 0, misses: 0, assisted: false };
     this.streak = 0; // 同じ画で続けて外れた回数
     this.hintOn = false;
+    this.stuck = false;
     this.ink.innerHTML = '';
     this.renderGuide();
   };
@@ -139,7 +140,7 @@
       return { x: (ev.clientX - r.left) / r.width * 109, y: (ev.clientY - r.top) / r.height * 109 };
     }
     this.svg.addEventListener('pointerdown', function (ev) {
-      if (self.mode === 'show' || self.expected() < 0) return;
+      if (self.mode === 'show' || self.stuck || self.expected() < 0) return;
       if (ev.pointerType === 'pen') self.penSeen = true;
       if (self.penSeen && ev.pointerType === 'touch') return; // ペンを使っている間は手のひらの接触を無視
       if (pid !== null) return;
@@ -191,8 +192,10 @@
       this.result.misses++;
       this.streak++;
       if (this.mode === 'free' && this.streak >= 2 && !this.hintOn) {
-        this.hintOn = true;
         this.result.assisted = true;
+        // onStuck があれば、ヒントを出さずに知らせる（呼び出し側が正解の書き順を見せて次へ進む）
+        if (this.opts.onStuck) { this.stuck = true; this.opts.onStuck(this.result); return; }
+        this.hintOn = true;
         this.renderGuide();
       }
       if (this.opts.onMiss) this.opts.onMiss(reversed ? 'reverse' : 'shape');
