@@ -364,7 +364,8 @@
   }
 
   function kanjiSvg(c, cls) {
-    return '<svg viewBox="0 0 109 109" class="' + cls + '">' + ST[c].map(function (d) { return '<path d="' + d + '"/>'; }).join('') + '</svg>';
+    // 十字の点線（字全体のバランスの目安）。線は <line> にして、書き順アニメ（path が対象）に巻き込まない
+    return '<svg viewBox="0 0 109 109" class="' + cls + '"><line class="cross" x1="54.5" y1="1" x2="54.5" y2="108"/><line class="cross" x1="1" y1="54.5" x2="108" y2="54.5"/>' + ST[c].map(function (d) { return '<path d="' + d + '"/>'; }).join('') + '</svg>';
   }
   function readingHtml(list, kun) {
     return list.map(function (r) {
@@ -394,13 +395,14 @@
     // ならべて表示: 字がいちばん大きくなる行数を選ぶ
     function all() {
       stopLoop();
-      var W = stage.clientWidth, H = stage.clientHeight, n = list.length, best = { size: 0 };
+      // 字と字の間を少し空ける（十字の点線が隣の字とつながって見えないように）
+      var W = stage.clientWidth, H = stage.clientHeight, n = list.length, best = { size: 0 }, gap = Math.round(Math.min(W, H) * 0.04);
       for (var rows = 1; rows <= n; rows++) {
-        var cols = Math.ceil(n / rows), size = Math.min(W / cols, H / rows);
+        var cols = Math.ceil(n / rows), size = Math.min((W - gap * (cols - 1)) / cols, (H - gap * (rows - 1)) / rows);
         if (size > best.size) best = { size: size, rows: rows, cols: cols };
       }
       stage.className = 'all';
-      stage.innerHTML = '<div class="all-grid" style="grid-template-columns:repeat(' + best.cols + ',' + Math.floor(best.size) + 'px);grid-auto-rows:' + Math.floor(best.size) + 'px">' +
+      stage.innerHTML = '<div class="all-grid" style="gap:' + gap + 'px;grid-template-columns:repeat(' + best.cols + ',' + Math.floor(best.size) + 'px);grid-auto-rows:' + Math.floor(best.size) + 'px">' +
         list.map(function (c) { return kanjiSvg(c, 'show-svg'); }).join('') + '</div>';
       var me = loop = { stop: false };
       var svgs = Array.from(stage.querySelectorAll('.show-svg'));
