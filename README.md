@@ -60,3 +60,7 @@ npm run build:font # 同梱の日本語フォント src/fonts/ を作り直す�
 フォント: Noto Sans JP（© Google、SIL Open Font License 1.1。`src/fonts/LICENSE-NotoSansJP.txt`）を切り出して同梱。
 
 筆順データ: [KanjiVG](https://kanjivg.tagaini.net/)（© Ulrich Apel ほか、CC BY-SA 3.0）。`src/strokes.js` と `gas/Index.html` はこれを改変・同梱しているため、この2ファイルは CC BY-SA 3.0 で提供する。
+
+## 成長する森への更新
+
+5種類の木・学習モードの色・密集した配置・現在の木の単独表示・36本ごとの次の森に対応。最新の完了回による成長条件を維持する。保存形式・負荷対策・移行手順は [docs/forest.md](docs/forest.md) を参照。

@@ -211,8 +211,12 @@ await shot('9-flash-fy');
 await page.click('#back');
 
 // ---- 木の描画の軽さ
-const ms = await page.evaluate(() => { const t = performance.now(); for (let i = 0; i < 20; i++) Tree.render(1500, 200, 440, 1400); return (performance.now() - t) / 20; });
-check(ms < 20, `木の描画（最大状態）1回 ${ms.toFixed(1)}ms`);
+await page.goto(URL0);
+await page.waitForFunction(() => KanziState.treeView?.metrics().frames > 0);
+await page.waitForTimeout(1000);
+const frames = await page.evaluate(() => KanziState.treeView.metrics().frames);
+await page.waitForTimeout(200);
+check(await page.evaluate(() => KanziState.treeView.metrics().frames) === frames, 'forest idle frames = 0');
 
 // ---- 先生画面: 見せる学年・進度
 await page.goto(URL0 + '?teacher=1');

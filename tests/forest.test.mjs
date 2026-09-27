@@ -1,0 +1,39 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import S from '../src/scheduler.js';
+
+test('森: 未完了の回答は育たず、完了したモードの色を問題数だけ残す', () => {
+  const p = S.newProgress();
+  S.answerRead(p, '山', true, 1, 1);
+  assert.equal(S.forestLog(p), '');
+  for (const [i, mode] of ['read', 'write', 'fk', 'fy'].entries()) S.finishSession(p, i + 1, 2, mode);
+  assert.equal(S.forestLog(p), 'rrwwkkyy');
+  assert.equal(S.activity(p), 8);
+  S.finishSession(p, 4, 2, 'fy');
+  assert.equal(S.forestLog(p), 'rrwwkkyy');
+});
+
+test('森: 旧記録は緑で復元し、月次の圧縮後も色順と総数を保つ', () => {
+  const p = S.newProgress(); p.old = [10, 1, 3]; p.done = { 11: 2 };
+  S.finishSession(p, 12, 3, 'write'); S.finishSession(p, 14, 2, 'fy');
+  const before = S.forestLog(p);
+  assert.equal(before, 'pppppwwwyy');
+  const stale = structuredClone(p);
+  S.compact(p, 13);
+  assert.equal(S.forestLog(p), before);
+  assert.equal(S.forestLog(S.merge(p, stale)), before);
+  assert.equal(S.forestLog(S.merge(stale, p)), before);
+  S.compact(p, 15); assert.equal(S.forestLog(p), before);
+  const legacy = structuredClone(p); delete legacy.forest;
+  assert.equal(S.forestLog(S.merge(legacy, p)), before);
+  assert.equal(S.forestLog(S.merge(p, legacy)), before);
+});
+
+test('森: 別端末の完了回を重複なく統合し、旧端末の再送でも色を保つ', () => {
+  const a = S.newProgress(), b = S.newProgress();
+  S.finishSession(a, 10, 2, 'read'); S.finishSession(b, 20, 3, 'fk');
+  const m = S.merge(a, b);
+  assert.equal(S.forestLog(m), 'rrkkk');
+  assert.equal(S.forestLog(S.merge(m, b)), 'rrkkk');
+  assert.equal(S.forestLog(S.merge(m, { done: { 10: 2, 20: 3 } })), 'rrkkk');
+});
