@@ -18,7 +18,9 @@
   };
 
   var key = 'kanzi.progress.demo';
-  var pending = false;
+  // 未送信の答え: saved = 端末に保存した回数、sent = サーバーに届いた時点の回数。saved > sent なら送る分がある
+  var saved = 0, sent = 0;
+  var inflight = null; // 送信中の Promise（同時に2つ送らない）
   var trial = null; // 先生のおためし中: { key, saved }。記録はこの端末だけに置き、サーバーへ送らない
 
   // ---- デモの設定（先生画面で変える）: { grades: { 組: [学年...] }, pointers: { '組:学年': n }, orders: { 学年: 並び } }
@@ -34,14 +36,13 @@
 
   // 先生が児童画面を試す。戻り値は試用用の進捗（前回の続き）
   function startTrial(email) {
-    trial = { key: 'kanzi.trial.' + email, saved: { key: key, pending: pending } };
+    trial = { key: 'kanzi.trial.' + email, saved: { key: key, saved: saved, sent: sent } };
     key = trial.key;
-    pending = false;
     return Sched.norm(store.get(key));
   }
   function endTrial() {
     if (!trial) return;
-    key = trial.saved.key; pending = trial.saved.pending; trial = null;
+    key = trial.saved.key; saved = trial.saved.saved; sent = trial.saved.sent; trial = null;
   }
   function resetTrial() { if (trial) store.set(trial.key, Sched.newProgress()); }
 
@@ -57,7 +58,7 @@
       if (info.role === 'student') {
         var local = store.get(key);
         info.progress = Sched.merge(info.progress, local); // 送っていない答えがあれば残す
-        pending = !!local;
+        if (local) saved = 1;
       }
       return info;
     });
@@ -66,35 +67,48 @@
   // 答えるたびに呼ぶ（端末へ保存するだけ。速い）
   function save(p) {
     store.set(key, p);
-    pending = true;
+    saved++;
   }
 
-  // 区切りごとに呼ぶ。サーバーの記録と統合した結果を返す（他の端末での学習も反映される）
-  function flush(p) {
-    if (!isGas || !pending || trial) return Promise.resolve(p);
-    return gas('api_save', JSON.stringify(p)).then(function (merged) {
-      var m = Sched.merge(JSON.parse(merged), p);
+  // 区切りごとに呼ぶ。サーバーの記録と統合した結果を返す（他の端末での学習も反映される）。
+  // getP は「いまの進捗」を返す関数。送信中に答えた分も、戻ってきた記録と統合して失わない。
+  // 送信中にもう一度呼ばれたら、終わるのを待ってから（まだ送る分があれば）もう1回だけ送る
+  function flush(getP) {
+    if (!isGas || trial) return Promise.resolve(getP());
+    if (inflight) return inflight.then(function () { return flush(getP); });
+    if (saved <= sent) return Promise.resolve(getP());
+    var mark = saved, p = getP();
+    inflight = gas('api_save', JSON.stringify(p)).then(function (merged) {
+      var m = Sched.merge(JSON.parse(merged), getP());
       store.set(key, m);
-      pending = false;
+      sent = mark;
       return m;
-    }).catch(function () { return p; }); // 通信できなければ端末に残し、次の機会に送る
+    }, function () { return getP(); }); // 通信できなければ端末に残し、次の機会に送る
+    return inflight.then(function (m) { inflight = null; return m; });
   }
 
   // ---- 教師用
-  // 字ごとの集計 { students, perChar: { 字: [答えた人数, 最後の答えがまちがいの人数] } }（児童名は含まない）
-  function stats(klass, grade) {
-    if (isGas) return gas('api_stats', klass, grade);
-    var order = demoSettings().orders[grade] || KANZI_DATA.grades[grade].order, seed = 7 + grade, out = {};
-    function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
-    for (var i = 0; i < order.length; i++) {
-      var started = Math.max(0, Math.round(30 - i * 0.2 - rnd() * 6));
-      out[order.charAt(i)] = [started, Math.round(started * rnd() * 0.5)];
-    }
-    return Promise.resolve({ students: 30, perChar: out });
+  // 先生画面に要るものを1回の通信で: { grades, pointers, test, students, stats }
+  //   students = 子どもごとの記録 [{ no, name, last, sessions, items, learned, miss:[字...] }]（担当の先生だけ）
+  //   stats = 字ごとの集計 { students, perChar: { 字: [答えた人数, 最後の答えがまちがいの人数] } }（児童名は含まない）
+  function teacherView(klass) {
+    if (isGas) return gas('api_teacherView', klass);
+    var s = demoSettings();
+    return Promise.resolve({ grades: demoGrades(klass), pointers: demoPointers(klass), test: s.tests[klass] || null, students: demoStudents(), stats: demoStats() });
   }
-  // 子どもごとの記録 [{ no, name, last, sessions, items, learned, miss:[字...] }]（担当の先生だけ）
-  function students(klass) {
-    if (isGas) return gas('api_students', klass);
+  function demoStats() {
+    var seed = 7, out = {}, g, i;
+    function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    for (g = 1; g <= 6; g++) {
+      var order = KANZI_DATA.grades[g].order;
+      for (i = 0; i < order.length; i++) {
+        var started = Math.max(0, Math.round(30 - i * 0.2 - rnd() * 6));
+        out[order.charAt(i)] = [started, Math.round(started * rnd() * 0.5)];
+      }
+    }
+    return { students: 30, perChar: out };
+  }
+  function demoStudents() {
     var seed = 11, out = [], now = Date.now(), chars = KANZI_DATA.grades[3].order;
     function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
     for (var i = 1; i <= 30; i++) {
@@ -102,20 +116,17 @@
       out.push({ no: i, name: 'じどう' + i, last: used ? now - Math.floor(rnd() * 12) * 86400000 : 0, sessions: sessions, items: sessions * 8,
         learned: used ? Math.floor(rnd() * 120) : 0, miss: used ? [0, 1, 2].map(function () { return chars.charAt(Math.floor(rnd() * 200)); }) : [] });
     }
-    return Promise.resolve(out);
+    return out;
   }
   // 次の漢字テストの範囲 { label, chars }（学級ごと。先生が決める）
-  function testOf(klass) { return isGas ? gas('api_test', klass) : Promise.resolve(demoSettings().tests[klass] || null); }
   function setTest(klass, t) {
     if (isGas) return gas('api_setTest', klass, JSON.stringify(t));
     var s = demoSettings(); s.tests[klass] = t && t.chars ? t : null; saveDemo(s); return Promise.resolve(s.tests[klass]);
   }
-  function pointersOf(klass) { return isGas ? gas('api_pointers', klass) : Promise.resolve(demoPointers(klass)); }
   function setPointer(klass, grade, n) {
     if (isGas) return gas('api_setPointer', klass, grade, n);
     var s = demoSettings(); s.pointers[klass + ':' + grade] = n; saveDemo(s); return Promise.resolve(n);
   }
-  function gradesOf(klass) { return isGas ? gas('api_grades', klass) : Promise.resolve(demoGrades(klass)); }
   function setGrades(klass, list) {
     if (isGas) return gas('api_setGrades', klass, list);
     var s = demoSettings(); s.grades[klass] = list; saveDemo(s); return Promise.resolve(list);
@@ -126,5 +137,5 @@
   }
 
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
-    stats: stats, students: students, testOf: testOf, setTest: setTest, pointersOf: pointersOf, setPointer: setPointer, gradesOf: gradesOf, setGrades: setGrades, setOrder: setOrder, store: store };
+    teacherView: teacherView, setTest: setTest, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder, store: store };
 })(this);

@@ -71,10 +71,6 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .two .big { font-size: 26px; min-height: 96px; }
 .big[disabled] { opacity: .45; cursor: default; }
-.card.flash { cursor: pointer; font: inherit; color: inherit; }
-.card .fy { font-size: clamp(48px, 10vmin, 96px); letter-spacing: .12em; }
-.card .fback { margin-top: 14px; display: block; border-top: 2px dashed var(--line); padding-top: 10px; }
-.card .fback[hidden] { display: none; }
 .t-ground { fill: #E6DDC8; }
 .t-trunk { fill: var(--cat-3); }
 .t-branch { fill: none; stroke: var(--cat-3); stroke-linecap: round; }
@@ -195,6 +191,14 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .teacher textarea { width: 100%; font-size: 20px; }
 .teacher details { font-size: 18px; }
 .teacher details button { min-height: 48px; padding: 0 16px; }
+/* 先生画面の設定: 開閉式。見出し全体が押せる（高さ56px）、右に いまの値 */
+.tset { border: 2px solid var(--line); border-radius: 14px; background: var(--card); margin: 10px 0; }
+.tset > summary { list-style: none; cursor: pointer; min-height: 56px; padding: 0 16px; display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 19px; }
+.tset > summary::-webkit-details-marker { display: none; }
+.tset > summary::before { content: ''; width: 0; height: 0; border-left: 9px solid var(--ink); border-top: 6px solid transparent; border-bottom: 6px solid transparent; transition: transform .15s; }
+.tset[open] > summary::before { transform: rotate(90deg); }
+.tset .ts-now { margin-left: auto; font-weight: 400; color: var(--ink-sub); font-size: 17px; text-align: right; }
+.tset .ts-body { padding: 0 16px 12px; border-top: 1px solid var(--line); }
 
 /* ---- 縦長（タブレット持ち）・狭い画面 */
 @media (max-aspect-ratio: 1/1), (max-width: 760px) {
@@ -287,13 +291,15 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .answer-row { grid-template-columns: 1fr auto auto; }
 
 .flash { height: calc(100vh - 100px); display: flex; cursor: pointer; user-select: none; }
-.fcard { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2vh; background: var(--card); border: 3px solid var(--ink); border-radius: 22px; }
-.fcard .word { font-family: var(--font-kanji); line-height: 1.05; }
-.fcard .tg { font-size: clamp(120px, 34vmin, 320px); }
-.fcard .ot { font-size: clamp(70px, 18vmin, 180px); }
-.fcard .fy { font-size: clamp(60px, 14vmin, 150px); letter-spacing: .12em; font-weight: 700; }
-.fcard .fback { border-top: 3px dashed var(--line); padding-top: 1.5vh; text-align: center; }
-.fcard .fback[hidden] { display: none; }
+.fcard { flex: 1; display: grid; grid-template-rows: minmax(0, 2fr) minmax(0, 3fr) auto; justify-items: center; background: var(--card); border: 3px solid var(--ink); border-radius: 22px; overflow: hidden; }
+/* よみ（上）・漢字（下）の2段は大きさが固定。答えの段は はじめ visibility で隠すだけなので、答えが出ても字が上下に動かない */
+.fcard .frow { width: 100%; display: flex; align-items: center; justify-content: center; text-align: center; min-height: 0; }
+.fcard .fk-row { border-top: 3px dashed var(--line); }
+.fcard:not(.flipped) .ans > * { visibility: hidden; }
+.fcard .word { font-family: var(--font-kanji); line-height: 1.05; white-space: nowrap; }
+.fcard .tg { font-size: clamp(110px, 30vmin, 300px); }
+.fcard .ot { font-size: clamp(64px, 17vmin, 170px); }
+.fcard .fy { font-size: clamp(56px, 12vmin, 140px); letter-spacing: .12em; font-weight: 700; white-space: nowrap; }
 .ftap { margin: 0; color: var(--ink-sub); font-size: 20px; }
 
 .done.wide { max-width: 900px; padding-top: 4vh; }

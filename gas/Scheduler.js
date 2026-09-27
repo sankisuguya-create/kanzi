@@ -20,12 +20,14 @@
   // 進捗1件 = [box, due, reps, last, miss]（last = 最後に答えた時刻 ms。端末間の統合に使う。miss = まちがえた回数）
   // sel: 児童が選んだ漢字 { 字: [1=選んでいる|0=外した, 時刻] }（時刻の新しい方で統合）
   // done: 最後まで終えた回 { 開始時刻: 問題数 }（木の成長。途中でやめた回は入らない）
+  // old: [境目の時刻, 回数, 問題数] … 境目より前に終えた回の合計（サーバーが compact でまとめる。done が際限なく増えないように）
   function newProgress() {
-    return { v: 2, read: {}, write: {}, sel: {}, done: {} };
+    return { v: 2, read: {}, write: {}, sel: {}, done: {}, old: [0, 0, 0] };
   }
   function norm(p) {
     p = p || newProgress();
     p.read = p.read || {}; p.write = p.write || {}; p.sel = p.sel || {}; p.done = p.done || {};
+    p.old = Array.isArray(p.old) && p.old.length === 3 ? p.old : [0, 0, 0];
     return p;
   }
 
@@ -105,10 +107,21 @@
 
   // 木の成長 = 最後まで終えた回の問題数の合計
   function activity(p) {
-    var n = 0;
+    var n = p.old ? p.old[2] : 0;
     for (var k in p.done) n += p.done[k];
     return n;
   }
+  // 境目より前の回を old にまとめる（何回呼んでも同じ結果。境目は前に進むだけ）
+  function compact(p, before) {
+    norm(p);
+    if (!(before > p.old[0])) return p;
+    var o = [before, p.old[1], p.old[2]];
+    for (var d in p.done) if (Number(d) < before) { o[1]++; o[2] += p.done[d]; delete p.done[d]; }
+    p.old = o;
+    return p;
+  }
+  // まとめる境目: 3か月前の月の1日（その時点の現地時刻）
+  function compactBefore(now) { return new Date(now.getFullYear(), now.getMonth() - 3, 1).getTime(); }
   function finishSession(p, startedAt, count) { if (count > 0) p.done[String(startedAt)] = count; }
 
   // おぼえた字 = よむが箱3以上（chars を渡すとその中だけ数える）
@@ -131,9 +144,11 @@
         if (!x || y[t] > x[t] || (k !== 'sel' && y[t] === x[t] && y[2] > x[2])) out[k][c] = y.slice();
       }
     });
-    var d;
-    for (d in a.done) out.done[d] = a.done[d];
-    for (d in b.done) out.done[d] = b.done[d];
+    // まとめた合計は境目の新しい方（同じなら回数の多い方）。境目より前の回は、その合計に入っているので捨てる
+    var o = b.old[0] > a.old[0] || (b.old[0] === a.old[0] && b.old[1] > a.old[1]) ? b.old : a.old, d;
+    out.old = o.slice();
+    for (d in a.done) if (Number(d) >= o[0]) out.done[d] = a.done[d];
+    for (d in b.done) if (Number(d) >= o[0]) out.done[d] = b.done[d];
     return out;
   }
 
@@ -149,7 +164,7 @@
     INTERVALS: INTERVALS, LIMIT: LIMIT, WRITE_UNLOCK_BOX: WRITE_UNLOCK_BOX, MAX_BOX: MAX_BOX,
     day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite, undo: undo,
     dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList,
-    activity: activity, finishSession: finishSession, learned: learned, merge: merge, check: check
+    activity: activity, compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sched = api;

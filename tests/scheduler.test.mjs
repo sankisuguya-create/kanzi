@@ -2,7 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-const S = createRequire(import.meta.url)('../src/scheduler.js');
+const require = createRequire(import.meta.url);
+const S = require('../src/scheduler.js');
 const ORDER = 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんアイウエオカキクケコ';
 
 test('はじめて答えた字は よむ箱に入り、翌日以降の おすすめ に出る', () => {
@@ -102,10 +103,13 @@ test('統合: 字ごとに最後に答えた方、選択は新しい方、終え
   assert.equal(S.activity(m), 15);
 });
 
-test('I6: 200字すべて箱5・回数大でも各セル5万文字未満', () => {
+test('I6: 1〜6年の1026字すべて箱5・回数大でも各セル5万文字未満', () => {
   const p = S.newProgress();
-  const chars = [...'悪安暗医委意育員院飲運泳駅央横屋温化荷界開階寒感漢館岸起期客究急級宮球去橋業曲局銀区苦具君係軽血決研県庫湖向幸港号根祭皿仕死使始指歯詩次事持式実写者主守取酒受州拾終習集住重宿所暑助昭消商章勝乗植申身神真深進世整昔全相送想息速族他打対待代第題炭短談着注柱丁帳調追定庭笛鉄転都度投豆島湯登等動童農波配倍箱畑発反坂板皮悲美鼻筆氷表秒病品負部服福物平返勉放味命面問役薬由油有遊予羊洋葉陽様落流旅両緑礼列練路和'];
-  chars.forEach((c) => { p.read[c] = [5, 99999, 999, 1790000000000]; p.write[c] = [5, 99999, 999, 1790000000000]; });
+  const D = createRequire(import.meta.url)('vm').runInNewContext(require('fs').readFileSync(new URL('../src/data.js', import.meta.url), 'utf8') + ';KANZI_DATA');
+  const chars = Object.keys(D.kanji);
+  assert.equal(chars.length, 1026);
+  void [...'悪安暗医委意育員院飲運泳駅央横屋温化荷界開階寒感漢館岸起期客究急級宮球去橋業曲局銀区苦具君係軽血決研県庫湖向幸港号根祭皿仕死使始指歯詩次事持式実写者主守取酒受州拾終習集住重宿所暑助昭消商章勝乗植申身神真深進世整昔全相送想息速族他打対待代第題炭短談着注柱丁帳調追定庭笛鉄転都度投豆島湯登等動童農波配倍箱畑発反坂板皮悲美鼻筆氷表秒病品負部服福物平返勉放味命面問役薬由油有遊予羊洋葉陽様落流旅両緑礼列練路和'];
+  chars.forEach((c) => { p.read[c] = [5, 99999, 999, 1790000000000, 999]; p.write[c] = [5, 99999, 999, 1790000000000, 999]; });
   assert.ok(JSON.stringify(p.read).length < 50000);
   assert.ok(JSON.stringify(p.write).length < 50000);
 });
@@ -118,4 +122,39 @@ test('I5: 今日すでに答えた分は上限から引く', () => {
   const first = S.dueList(p, today, ORDER).read;
   first.slice(0, 15).forEach((c) => S.answerRead(p, c, true, today, now));
   assert.equal(S.dueList(p, today, ORDER).read.length, S.LIMIT.read - 15);
+});
+
+test('終えた回のまとめ: 境目より前は合計にまとめ、木の大きさは変わらない', () => {
+  const p = S.newProgress();
+  for (let i = 0; i < 5; i++) S.finishSession(p, 1000 + i, 10);
+  S.finishSession(p, 5000, 7);
+  S.compact(p, 2000);
+  assert.deepEqual(p.old, [2000, 5, 50]);
+  assert.deepEqual(Object.keys(p.done), ['5000']);
+  assert.equal(S.activity(p), 57);
+  S.compact(p, 2000); S.compact(p, 1500); // 何度呼んでも・境目が戻っても同じ
+  assert.deepEqual(p.old, [2000, 5, 50]);
+});
+
+test('終えた回のまとめ: 古い端末と統合しても二重に数えない', () => {
+  const server = S.newProgress(), device = S.newProgress();
+  for (let i = 0; i < 5; i++) { S.finishSession(server, 1000 + i, 10); S.finishSession(device, 1000 + i, 10); }
+  S.finishSession(device, 6000, 3); // この端末だけの新しい回
+  S.compact(server, 2000);
+  const m = S.merge(server, device);
+  assert.equal(S.activity(m), 53);
+  assert.deepEqual(Object.keys(m.done), ['6000']);
+  assert.equal(S.activity(S.compact(S.merge(device, m), 2000)), 53);
+});
+
+test('終えた回のまとめ: 6年間 毎日10回やっても meta は5万文字未満', () => {
+  let p = S.newProgress();
+  const start = new Date(2026, 3, 1).getTime();
+  for (let d = 0; d < 6 * 365; d++) {
+    const t = start + d * 86400000;
+    for (let i = 0; i < 10; i++) S.finishSession(p, t + i * 60000, 10);
+    if (d % 7 === 0) p = S.compact(p, S.compactBefore(new Date(t)));
+  }
+  assert.ok(JSON.stringify({ sel: p.sel, done: p.done, old: p.old }).length < 50000);
+  assert.equal(S.activity(p), 6 * 365 * 100);
 });

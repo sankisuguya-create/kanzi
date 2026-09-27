@@ -185,10 +185,15 @@ await page.click('#menu');
 await page.click('#go-fk');
 await page.click('.chooser [data-id="rnd"]');
 await page.waitForSelector('#flash');
-check(await page.isHidden('#fback'), 'カード: はじめは答えが見えない');
+const ansVisible = () => page.evaluate(() => getComputedStyle(document.querySelector('#card .ans > *')).visibility === 'visible');
+const boxes = () => page.evaluate(() => ['.fy', '.word'].map((q) => { const r = document.querySelector('#card ' + q).getBoundingClientRect(); return [Math.round(r.top), Math.round(r.left), Math.round(r.height)]; }));
+check(!(await ansVisible()), 'カード: はじめは答えが見えない');
 const actBefore = await activity();
+const before = await boxes();
 await page.mouse.click(200, 700);
-check(await page.isVisible('#fback'), 'カード: 画面のどこを押しても答え');
+check(await ansVisible(), 'カード: 画面のどこを押しても答え');
+check(JSON.stringify(await boxes()) === JSON.stringify(before), 'カード: 答えが出ても よみ・漢字の位置が動かない');
+check(before[0][0] + before[0][2] <= before[1][0], 'カード: よみが上、漢字が下');
 await shot('9-flash');
 await checkFonts('カード');
 const i0 = await page.evaluate(() => KanziState.session.i);
@@ -198,7 +203,11 @@ await page.click('#back');
 check((await activity()) === actBefore, 'カード: 途中でやめると木はのびない');
 await page.click('#go-fy');
 await page.click('.chooser [data-id="rnd"]');
-check((await page.textContent('#flash .front .fy')).length > 0, 'カード: よみ → かんじ は ひらがなが表');
+check(await page.evaluate(() => getComputedStyle(document.querySelector('#card .fy')).visibility === 'visible' && getComputedStyle(document.querySelector('#card .word')).visibility === 'hidden'), 'カード: よみ → 漢字 は よみ（上）が問題、漢字（下）が答え');
+const fyBefore = await boxes();
+await page.mouse.click(600, 600);
+check(JSON.stringify(await boxes()) === JSON.stringify(fyBefore) && fyBefore[0][0] < fyBefore[1][0], 'カード: よみ → 漢字 でも位置が動かない');
+await shot('9-flash-fy');
 await page.click('#back');
 
 // ---- 木の描画の軽さ
@@ -207,25 +216,32 @@ check(ms < 20, `木の描画（最大状態）1回 ${ms.toFixed(1)}ms`);
 
 // ---- 先生画面: 見せる学年・進度
 await page.goto(URL0 + '?teacher=1');
-await page.waitForSelector('.gchecks');
+await page.waitForSelector('#d-grades');
 check((await page.textContent('.top .sub')).startsWith('3年1組'), '先生: 担当学級（3年1組）で開く');
 check((await page.$$('.kids tbody tr')).length === 30 && (await page.textContent('.kids thead')).includes('おぼえた字'), '先生: 担当学級の子どもごとの記録（30人）');
+check(await page.evaluate(() => [...document.querySelectorAll('details.tset')].every((d) => !d.open) && document.querySelectorAll('details.tset').length === 4), '先生: 設定4つは はじめ たたんである');
+check((await page.textContent('#d-grades-now')) === '1〜3年' && (await page.textContent('#d-test-now')) === 'なし', '先生: たたんでも いまの値が見出しに出る');
+await shot('10-teacher-folded');
+await page.click('#d-grades summary');
 await page.check('.gchecks input[data-g="4"]');
 await page.waitForSelector('.ttab[data-g="4"]');
 check((await page.getAttribute('.ttab[data-g="4"]', 'aria-selected')) === 'true', '先生: 4年を足すと いちばん上の4年が開く');
+check(await page.evaluate(() => document.getElementById('d-grades').open), '先生: 開いた設定は 描き直しても開いたまま');
+await page.click('#d-ptr summary');
 await page.click('.cell[data-i="9"]');
-check((await page.textContent('#ptr')) === '10', '先生: 4年の進度を10字目までに');
+check((await page.textContent('#ptr')) === '10' && (await page.textContent('#d-ptr-now')) === '10字目まで', '先生: 4年の進度を10字目までに');
 await page.click('.ttab[data-g="2"]');
 check((await page.textContent('.teacher')).includes('下の学年なので'), '先生: 下の学年は全部が習った漢字');
 await shot('10-teacher');
 await checkFonts('先生画面');
 
 // ---- 次の漢字テストの範囲（先生が指定）
+await page.click('#d-test summary');
 await page.fill('#test-label', '9月の漢字テスト'); await page.press('#test-label', 'Tab');
 await page.click('.tcell[data-c="引"]'); await page.click('.tcell[data-c="羽"]');
 await page.click('.ttab[data-g="3"]');
 await page.click('.tcell[data-c="悪"]'); await page.click('.tcell[data-c="安"]');
-check((await page.textContent('#test-picked')).includes('4字') && (await page.textContent('#test-msg')).includes('保存'), '先生: テストの範囲を 学年をまたいで4字（押すたびに保存）');
+check((await page.textContent('#test-picked')).includes('4字') && (await page.textContent('#test-msg')).includes('保存') && (await page.textContent('#d-test-now')).startsWith('4字'), '先生: テストの範囲を 学年をまたいで4字（押すたびに保存）');
 await shot('14-teacher-test');
 
 // ---- 書き順を大きく見せる（学年タブ・全画面）
@@ -241,6 +257,19 @@ await page.waitForSelector('#stage.all');
 check((await page.$$('#stage .all-grid svg')).length === 2, '提示: 最後の次は ならべて表示');
 await page.keyboard.press('Escape');
 check(!(await page.$('#stage')), '提示: Esc で終わる');
+await page.click('#cancel');
+// 6字まで選べる（7字目は押せない）。ならべる画面に6字
+await page.click('#show');
+await page.click('.ptab[data-g="1"]');
+for (const c of '一右雨円王音') await page.click(`.cell[data-c="${c}"]`);
+check(await page.isDisabled('.cell[data-c="下"]') && (await page.textContent('.sub')).includes('1〜6字'), '提示: 6字まで選べて、7字目は押せない');
+await page.click('#go');
+await page.waitForSelector('#stage.single');
+for (let i = 0; i < 6; i++) await page.mouse.click(683, 384);
+await page.waitForSelector('#stage.all');
+check((await page.$$('#stage .all-grid svg')).length === 6, '提示: 6字をならべて表示');
+await shot('13-show-6');
+await page.keyboard.press('Escape');
 await page.click('#cancel');
 
 // ---- 先生のおためし: 見せる学年が児童画面に反映
@@ -263,7 +292,7 @@ await page.click('#go-read');
 await page.click('#back');
 await shot('11-trial');
 await page.click('#tb-back');
-await page.waitForSelector('.gchecks');
+await page.waitForSelector('#d-grades');
 
 // 同梱フォント（最後の受け皿）: 端末に日本語フォントが無い場合に使われる。全学年の漢字とかなを持っていること
 const cover = await page.evaluate(async () => {
@@ -287,6 +316,13 @@ await page.evaluate(() => localStorage.setItem('kanzi.settings', JSON.stringify(
 await page.goto(URL0); await page.waitForSelector('#go-read');
 check((await page.textContent('#go-read')).startsWith('よむ') && (await page.textContent('#go-browse')).includes('かん字を ぜんぶ見る') && (await page.textContent('#go-write')).startsWith('かく'),
   '表記: 1年は「よむ」「かく」「かん字」（字・見 は1年の漢字）');
+
+// 6年まで見せる学級でも「はんい」は ひらがな（範・囲 は交ぜ書きにしない）
+await page.evaluate(() => localStorage.setItem('kanzi.settings', JSON.stringify({ grades: { '3-1': [4, 5, 6] }, tests: { '3-1': { label: '', chars: '安悪' } } })));
+await page.goto(URL0); await page.waitForSelector('#go-test');
+check((await page.textContent('#go-test')).includes('はんい') && !/[範囲]/.test(await page.textContent('#app')), '表記: 6年でも「次の漢字テストの はんい」（はん囲 にしない）');
+await page.click('#go-read');
+check((await page.textContent('.chooser [data-id="test"]')).includes('はんい') && !/[範囲]/.test(await page.textContent('.chooser')), '表記: はじめかたも「はんい」');
 
 check(errors.length === 0, 'コンソールエラーなし' + (errors.length ? ': ' + errors.join(' / ') : ''));
 await browser.close();
