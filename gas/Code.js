@@ -164,15 +164,19 @@ function loadForest_(sh, row) {
   var count = sh.getLastColumn() - FOREST_COLUMN_ + 1;
   if (count <= 0) return null;
   var raw = sh.getRange(row, FOREST_COLUMN_, 1, count).getValues()[0].join('');
-  return raw ? JSON.parse(raw) : null;
+  // 壊れていても（列を消した・手で書きかえた等）開けなくならないようにする。失うのは葉の色だけ（成長量は D列の done・old）
+  try { return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
 }
 function writeProgress_(sh, rowNumber, row, forest) {
   var json = JSON.stringify(forest), chunks = [];
   for (var i = 0; i < json.length; i += FOREST_CHUNK_SIZE_) chunks.push(json.slice(i, i + FOREST_CHUNK_SIZE_));
-  var width = Math.max(FOREST_COLUMN_ - 1 + chunks.length, sh.getLastColumn());
-  var maxColumns = sh.getMaxColumns();
-  if (width > maxColumns) sh.insertColumnsAfter(maxColumns, width - maxColumns);
-  sh.getRange(1, FOREST_COLUMN_, 1, chunks.length).setValues([chunks.map(function (_, j) { return '森' + (j + 1); })]);
+  var last = sh.getLastColumn(), width = Math.max(FOREST_COLUMN_ - 1 + chunks.length, last);
+  // 列を足すのは、今ある列より多く要る時だけ（見出しもその時だけ書く。毎回の保存でシートへの書き込みを増やさない）
+  if (FOREST_COLUMN_ - 1 + chunks.length > last) {
+    var maxColumns = sh.getMaxColumns();
+    if (width > maxColumns) sh.insertColumnsAfter(maxColumns, width - maxColumns);
+    sh.getRange(1, FOREST_COLUMN_, 1, chunks.length).setValues([chunks.map(function (_, j) { return '森' + (j + 1); })]);
+  }
   row = row.concat(chunks);
   // 短くなった時も以前の末尾が残らないよう、使用済みの列まで空にする。
   while (row.length < width) row.push('');

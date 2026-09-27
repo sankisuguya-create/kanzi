@@ -37,3 +37,19 @@ test('森: 別端末の完了回を重複なく統合し、旧端末の再送で
   assert.equal(S.forestLog(S.merge(m, b)), 'rrkkk');
   assert.equal(S.forestLog(S.merge(m, { done: { 10: 2, 20: 3 } })), 'rrkkk');
 });
+
+test('森: 27本（972問）で上限。学習の記録は数え続け、色は同じ色の続きをまとめて持つ', () => {
+  const p = S.newProgress();
+  for (let i = 0; i < 120; i++) S.finishSession(p, 1000 + i, 10, i % 2 ? 'write' : 'read');
+  assert.equal(S.activity(p), 1200);
+  assert.equal(S.forestLog(p).length, S.FOREST_CAP);
+  assert.equal(S.FOREST_CAP, 27 * 36);
+  S.compact(p, 5000);
+  assert.equal(S.activity(p), 1200);
+  assert.equal(S.forestLog(p).length, 972);
+  assert.ok(p.forest.rle.length < 400, 'rle ' + p.forest.rle.length);
+  assert.ok(/^(r10w10)+/.test(p.forest.rle));
+  // 旧版（1問1字の base）も読める
+  const legacy = S.newProgress(); legacy.old = [1, 1, 3]; legacy.forest = { base: 'rwk', modes: {} };
+  assert.equal(S.forestLog(legacy), 'rwk');
+});

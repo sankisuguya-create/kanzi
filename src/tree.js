@@ -1,10 +1,10 @@
 // 本人の学習履歴から育つ森。通信・乱数・時刻に依存せず同じ記録は同じ形と色になる。
-// 36回で1本、36本で1エリア。過去のエリアは残し、表示する木だけ描画する。
+// 36回で1本、27本で森が完成（上限。それ以上は育たない）。表示する木だけ描画する。
 // 完成木の画像は画面をまたいで再利用（LRU、RGBA換算12MiBまで）。静止時のRAFは0。
 (function (root) {
   'use strict';
-  const STEP = 36,
-    AREA = 36,
+  const STEP = root.Sched.FOREST_STEP,
+    AREA = root.Sched.FOREST_TREES,
     MAX_PIXELS = 3 * 1024 * 1024;
   const NAMES = ['ケヤキ', 'サクラ', 'カエデ', 'シラカバ', 'スギ'];
   const cache = new Map();
@@ -55,7 +55,7 @@
           type: id % 5,
           modes: log
             .slice(id * STEP, (id + 1) * STEP)
-            .replace(/[prwky]/g, (c) => ({ p: '0', r: '1', w: '2', k: '3', y: '4' })[c])
+            .replace(/[prwky]/g, (c) => ({ p: '0', r: '1', w: '2', k: '3', y: '3' })[c]) // カードは2種類とも同じ色
         });
       return records.get(id);
     }
@@ -67,7 +67,7 @@
       '<span class="forest-region-name"></span><button type="button" class="forest-next">次の森</button></div>' +
       '<details class="forest-colors"><summary>葉の色</summary><div class="forest-legend" aria-label="学習モードと葉の色"><span><i class="forest-p" aria-hidden="true"></i>これまで</span>' +
       '<span><i class="forest-r" aria-hidden="true"></i>よむ</span><span><i class="forest-w" aria-hidden="true"></i>かく</span>' +
-      '<span><i class="forest-k" aria-hidden="true"></i>カード：かんじ→よみ</span><span><i class="forest-y" aria-hidden="true"></i>カード：よみ→かんじ</span></div></details>';
+      '<span><i class="forest-k" aria-hidden="true"></i>カード</span></div></details>';
     const canvas = host.querySelector('canvas'),
       ctx = canvas.getContext('2d', { alpha: false });
     const status = host.querySelector('.forest-status'),
@@ -248,10 +248,12 @@
       const from = currentCamera,
         d = data();
       stop();
-      records.clear(); // 前のエリアの補助情報を保持し続けない（最大36本）。
+      records.clear(); // 前の表示の補助情報を保持し続けない（最大27本）。
       status.textContent =
         n === 0
           ? '小さな たねから はじまる'
+          : n >= AREA * STEP
+            ? AREA + '本の 森が できたよ'
           : active +
             1 +
             '本目の ' +

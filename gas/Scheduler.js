@@ -113,12 +113,21 @@
   }
   // 森の色は完了した回に結び付ける。旧記録（モード不明）は緑。
   function forestMode(kind) { return ({ read: 'r', write: 'w', fk: 'k', fy: 'y' })[kind] || 'p'; }
+  // 森は27本（1本36問）まで。色の記録もこの問題数（972字）で打ち切る。学習の記録（done・old）は打ち切らない
+  var FOREST_TREES = 27, FOREST_STEP = 36, FOREST_CAP = FOREST_TREES * FOREST_STEP;
+  // 色の列は同じ色の続きをまとめて持つ（例 'rrrww' → 'r3w2'）。1回の問題はすべて同じ色なので短くなる
+  function rle(str) { return String(str).replace(/(.)\1*/g, function (run, c) { return c + run.length; }); }
+  function unrle(str) {
+    return String(str || '').replace(/([a-z])(\d+)/g, function (_, c, n) { return c.repeat(Math.min(Number(n), FOREST_CAP)); });
+  }
   function forestState(p) {
     var f = p.forest;
-    return f && typeof f === 'object' ? f : { base: '', modes: {} };
+    return f && typeof f === 'object' ? f : { rle: '', modes: {} };
   }
+  // 過去の色（旧版の base＝1問1字 も読める）
+  function forestStored(f) { return typeof f.rle === 'string' ? unrle(f.rle) : String(f.base || ''); }
   function forestBase(p) {
-    var s = String(forestState(p).base || ''), n = p.old ? p.old[2] : 0;
+    var s = forestStored(forestState(p)), n = Math.min(p.old ? p.old[2] : 0, FOREST_CAP);
     return s.slice(0, n) + 'p'.repeat(Math.max(0, n - s.length));
   }
   function sessionKeys(p) { return Object.keys(p.done || {}).sort(function (a, b) { return Number(a) - Number(b); }); }
@@ -126,10 +135,13 @@
   function forestRun(modes, key, count) { return (knownForestMode(modes[key]) ? modes[key] : 'p').repeat(count); }
   function forestLog(p) {
     var f = forestState(p), modes = f.modes || {}, parts = [forestBase(p)];
+    var len = parts[0].length;
     sessionKeys(p).forEach(function (d) {
-      parts.push(forestRun(modes, d, p.done[d]));
+      if (len >= FOREST_CAP) return;
+      var run = forestRun(modes, d, Math.min(p.done[d], FOREST_CAP - len));
+      parts.push(run); len += run.length;
     });
-    return parts.join('');
+    return parts.join('').slice(0, FOREST_CAP);
   }
   // 境目より前の回を old にまとめる（何回呼んでも同じ結果。境目は前に進むだけ）
   function compact(p, before) {
@@ -139,12 +151,12 @@
     var o = [before, p.old[1], p.old[2]];
     sessionKeys(p).forEach(function (d) {
       if (Number(d) < before) {
-        base += forestRun(modes, d, p.done[d]);
+        if (base.length < FOREST_CAP) base += forestRun(modes, d, Math.min(p.done[d], FOREST_CAP - base.length));
         o[1]++; o[2] += p.done[d];
         delete modes[d]; delete p.done[d];
       }
     });
-    p.forest = { base: base, modes: modes };
+    p.forest = { rle: rle(base.slice(0, FOREST_CAP)), modes: modes };
     p.old = o;
     return p;
   }
@@ -154,7 +166,7 @@
     if (count > 0) {
       p.done[String(startedAt)] = count;
       var f = forestState(p);
-      p.forest = { base: f.base || '', modes: Object.assign({}, f.modes) };
+      p.forest = { rle: typeof f.rle === 'string' ? f.rle : rle(String(f.base || '')), modes: Object.assign({}, f.modes) };
       p.forest.modes[String(startedAt)] = forestMode(kind);
     }
   }
@@ -202,7 +214,7 @@
       var ba = forestBase(a), bb = forestBase(b);
       archived = bb.replace(/p/g, '').length > ba.replace(/p/g, '').length ? b : a;
     }
-    return { base: forestBase(archived), modes: modes };
+    return { rle: rle(forestBase(archived)), modes: modes };
   }
 
   // 不変条件の検査（I3）。違反の説明の配列を返す
@@ -217,6 +229,7 @@
     INTERVALS: INTERVALS, LIMIT: LIMIT, WRITE_UNLOCK_BOX: WRITE_UNLOCK_BOX, MAX_BOX: MAX_BOX,
     day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite, undo: undo,
     dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList,
+    FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

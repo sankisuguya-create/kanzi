@@ -338,7 +338,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .teacher input#test-label { font-size: 18px; min-height: 44px; padding: 0 10px; width: min(100%, 360px); }
 .picked .tlist { font-size: 26px; letter-spacing: .15em; font-family: var(--font-kanji); }
 
-:root { --forest-preview:hsl(139 31% 53%); --forest-read:hsl(199 37% 61%); --forest-write:hsl(27 56% 65%); --forest-card-k:hsl(274 32% 65%); --forest-card-y:hsl(49 52% 60%); }
+:root { --forest-preview:#3F7D3A; --forest-read:#0F5EA8; --forest-write:#C86A00; --forest-card-k:#6E4310; }
 .tree { height:340px; border-radius:12px; }
 .forest-tools { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 8px 4px; }
 .forest-status { flex: 1 1 150px; margin: 0; font-size: 17px; }
@@ -353,6 +353,5 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .forest-r { background: var(--forest-read); border-radius: 50%; }
 .forest-w { background: var(--forest-write); transform: rotate(45deg); }
 .forest-k { background: var(--forest-card-k); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
-.forest-y { background: var(--forest-card-y); }
 .forest-colors { margin: 0; padding: 0 4px; font-size: 16px; }
 .forest-colors summary { min-height: 56px; padding: 14px 6px; cursor: pointer; }

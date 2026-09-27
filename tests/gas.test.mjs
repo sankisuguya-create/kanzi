@@ -48,19 +48,30 @@ const base = () => ({
   設定: [['キー', '値']]
 });
 
-test('森: 10万問の色を分割保存し、旧5列・別児童・再送・先生の集計を保つ', () => {
+test('森: 色は27本（972問）までを1列に保存し、旧5列・別児童・再送・先生の集計を保つ', () => {
   const env = makeEnv(base(), K2), p = env.Sched.newProgress();
   p.old = [1, 10000, 100000];
-  p.forest = { base: 'rwky'.repeat(25000), modes: {} };
+  p.forest = { base: 'rwky'.repeat(25000), modes: {} }; // 旧版の形（1問1字）で送られても読める
   const saved = JSON.parse(env.api_save(JSON.stringify(p)));
   const row = env.book['進捗'].find(r => r[0] === K2);
-  assert.equal(row[5].length, 40000);
-  assert.equal(row[6].length, 40000);
-  assert.equal(env.Sched.forestLog(env.api_init().progress), p.forest.base);
-  assert.equal(env.Sched.forestLog(JSON.parse(env.api_save(JSON.stringify(saved)))), p.forest.base);
+  assert.equal(row.length, 6);
+  assert.ok(row[5].length < 2100, '森の列 ' + row[5].length + '字'); // 1問ごとに色が変わる最悪の場合でも 972×2字ほど
+  const want = 'rwky'.repeat(25000).slice(0, 972);
+  assert.equal(env.Sched.forestLog(env.api_init().progress), want);
+  assert.equal(env.Sched.forestLog(JSON.parse(env.api_save(JSON.stringify(saved)))), want);
   assert.equal(env.book['進捗'].find(r => r[0] === K1).length, 5);
-  assert.equal(JSON.parse(row[3]).old[2], 100000);
+  assert.equal(JSON.parse(row[3]).old[2], 100000); // 学習の記録は打ち切らない
   assert.equal(row[4] instanceof Date, true);
+  assert.equal(env.book['進捗'][0][5], '森1');
+});
+
+test('森: 色の列が壊れていても、その児童は開けて保存もできる（色だけ失う）', () => {
+  const s = base();
+  s.進捗[0].push('森1'); s.進捗[1].push('{"rle":"r1'); // 途中で切れた JSON
+  const env = makeEnv(s, K1);
+  const info = env.api_init();
+  assert.equal(env.Sched.activity(info.progress), 10);
+  assert.doesNotThrow(() => env.api_save(JSON.stringify(info.progress)));
 });
 
 test('担当学級: 教師シートの 学年・組。組が空なら その学年の全学級', () => {

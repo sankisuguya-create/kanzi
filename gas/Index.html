@@ -7,7 +7,6 @@
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=block">
 <style>
-
 /* 色は color-coding スキルの既定トークン。識別に使う色は2重符号化（語・記号・形）と組にする */
 :root {
   --ink: #1A1A1A;
@@ -343,7 +342,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .teacher input#test-label { font-size: 18px; min-height: 44px; padding: 0 10px; width: min(100%, 360px); }
 .picked .tlist { font-size: 26px; letter-spacing: .15em; font-family: var(--font-kanji); }
 
-:root { --forest-preview:hsl(139 31% 53%); --forest-read:hsl(199 37% 61%); --forest-write:hsl(27 56% 65%); --forest-card-k:hsl(274 32% 65%); --forest-card-y:hsl(49 52% 60%); }
+:root { --forest-preview:#3F7D3A; --forest-read:#0F5EA8; --forest-write:#C86A00; --forest-card-k:#6E4310; }
 .tree { height:340px; border-radius:12px; }
 .forest-tools { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 8px 4px; }
 .forest-status { flex: 1 1 150px; margin: 0; font-size: 17px; }
@@ -358,7 +357,6 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .forest-r { background: var(--forest-read); border-radius: 50%; }
 .forest-w { background: var(--forest-write); transform: rotate(45deg); }
 .forest-k { background: var(--forest-card-k); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
-.forest-y { background: var(--forest-card-y); }
 .forest-colors { margin: 0; padding: 0 4px; font-size: 16px; }
 .forest-colors summary { min-height: 56px; padding: 14px 6px; cursor: pointer; }
 </style>
@@ -490,12 +488,21 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   }
   // 森の色は完了した回に結び付ける。旧記録（モード不明）は緑。
   function forestMode(kind) { return ({ read: 'r', write: 'w', fk: 'k', fy: 'y' })[kind] || 'p'; }
+  // 森は27本（1本36問）まで。色の記録もこの問題数（972字）で打ち切る。学習の記録（done・old）は打ち切らない
+  var FOREST_TREES = 27, FOREST_STEP = 36, FOREST_CAP = FOREST_TREES * FOREST_STEP;
+  // 色の列は同じ色の続きをまとめて持つ（例 'rrrww' → 'r3w2'）。1回の問題はすべて同じ色なので短くなる
+  function rle(str) { return String(str).replace(/(.)\1*/g, function (run, c) { return c + run.length; }); }
+  function unrle(str) {
+    return String(str || '').replace(/([a-z])(\d+)/g, function (_, c, n) { return c.repeat(Math.min(Number(n), FOREST_CAP)); });
+  }
   function forestState(p) {
     var f = p.forest;
-    return f && typeof f === 'object' ? f : { base: '', modes: {} };
+    return f && typeof f === 'object' ? f : { rle: '', modes: {} };
   }
+  // 過去の色（旧版の base＝1問1字 も読める）
+  function forestStored(f) { return typeof f.rle === 'string' ? unrle(f.rle) : String(f.base || ''); }
   function forestBase(p) {
-    var s = String(forestState(p).base || ''), n = p.old ? p.old[2] : 0;
+    var s = forestStored(forestState(p)), n = Math.min(p.old ? p.old[2] : 0, FOREST_CAP);
     return s.slice(0, n) + 'p'.repeat(Math.max(0, n - s.length));
   }
   function sessionKeys(p) { return Object.keys(p.done || {}).sort(function (a, b) { return Number(a) - Number(b); }); }
@@ -503,10 +510,13 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   function forestRun(modes, key, count) { return (knownForestMode(modes[key]) ? modes[key] : 'p').repeat(count); }
   function forestLog(p) {
     var f = forestState(p), modes = f.modes || {}, parts = [forestBase(p)];
+    var len = parts[0].length;
     sessionKeys(p).forEach(function (d) {
-      parts.push(forestRun(modes, d, p.done[d]));
+      if (len >= FOREST_CAP) return;
+      var run = forestRun(modes, d, Math.min(p.done[d], FOREST_CAP - len));
+      parts.push(run); len += run.length;
     });
-    return parts.join('');
+    return parts.join('').slice(0, FOREST_CAP);
   }
   // 境目より前の回を old にまとめる（何回呼んでも同じ結果。境目は前に進むだけ）
   function compact(p, before) {
@@ -516,12 +526,12 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     var o = [before, p.old[1], p.old[2]];
     sessionKeys(p).forEach(function (d) {
       if (Number(d) < before) {
-        base += forestRun(modes, d, p.done[d]);
+        if (base.length < FOREST_CAP) base += forestRun(modes, d, Math.min(p.done[d], FOREST_CAP - base.length));
         o[1]++; o[2] += p.done[d];
         delete modes[d]; delete p.done[d];
       }
     });
-    p.forest = { base: base, modes: modes };
+    p.forest = { rle: rle(base.slice(0, FOREST_CAP)), modes: modes };
     p.old = o;
     return p;
   }
@@ -531,7 +541,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     if (count > 0) {
       p.done[String(startedAt)] = count;
       var f = forestState(p);
-      p.forest = { base: f.base || '', modes: Object.assign({}, f.modes) };
+      p.forest = { rle: typeof f.rle === 'string' ? f.rle : rle(String(f.base || '')), modes: Object.assign({}, f.modes) };
       p.forest.modes[String(startedAt)] = forestMode(kind);
     }
   }
@@ -579,7 +589,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       var ba = forestBase(a), bb = forestBase(b);
       archived = bb.replace(/p/g, '').length > ba.replace(/p/g, '').length ? b : a;
     }
-    return { base: forestBase(archived), modes: modes };
+    return { rle: rle(forestBase(archived)), modes: modes };
   }
 
   // 不変条件の検査（I3）。違反の説明の配列を返す
@@ -594,6 +604,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     INTERVALS: INTERVALS, LIMIT: LIMIT, WRITE_UNLOCK_BOX: WRITE_UNLOCK_BOX, MAX_BOX: MAX_BOX,
     day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite, undo: undo,
     dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList,
+    FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
@@ -1073,12 +1084,13 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
 // tree = {type: 樹種番号, modes: パーツごとの色番号文字列}。同じ入力は同じ画像になる。
 (function (root) {
   'use strict';
+  // 葉の色（これまで・よむ・かく・カード）。背景・色覚の型をまたいで見分けられる4色（color-coding の check-palette で確認）
+  // 緑 #3F7D3A・青 #0F5EA8・橙 #C86A00・茶 #6E4310
   const MODE_COLORS = [
-    { h: 139, s: 31, l: 53 },
-    { h: 199, s: 37, l: 61 },
-    { h: 27, s: 56, l: 65 },
-    { h: 274, s: 32, l: 65 },
-    { h: 49, s: 52, l: 60 }
+    { h: 115, s: 37, l: 36 },
+    { h: 209, s: 84, l: 36 },
+    { h: 32, s: 100, l: 39 },
+    { h: 33, s: 75, l: 25 }
   ];
   const seed = (x) => {
     const y = Math.sin(x * 127.1 + 311.7) * 43758.5453;
@@ -1364,12 +1376,12 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
 </script>
 <script>
 // 本人の学習履歴から育つ森。通信・乱数・時刻に依存せず同じ記録は同じ形と色になる。
-// 36回で1本、36本で1エリア。過去のエリアは残し、表示する木だけ描画する。
+// 36回で1本、27本で森が完成（上限。それ以上は育たない）。表示する木だけ描画する。
 // 完成木の画像は画面をまたいで再利用（LRU、RGBA換算12MiBまで）。静止時のRAFは0。
 (function (root) {
   'use strict';
-  const STEP = 36,
-    AREA = 36,
+  const STEP = root.Sched.FOREST_STEP,
+    AREA = root.Sched.FOREST_TREES,
     MAX_PIXELS = 3 * 1024 * 1024;
   const NAMES = ['ケヤキ', 'サクラ', 'カエデ', 'シラカバ', 'スギ'];
   const cache = new Map();
@@ -1420,7 +1432,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
           type: id % 5,
           modes: log
             .slice(id * STEP, (id + 1) * STEP)
-            .replace(/[prwky]/g, (c) => ({ p: '0', r: '1', w: '2', k: '3', y: '4' })[c])
+            .replace(/[prwky]/g, (c) => ({ p: '0', r: '1', w: '2', k: '3', y: '3' })[c]) // カードは2種類とも同じ色
         });
       return records.get(id);
     }
@@ -1432,7 +1444,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       '<span class="forest-region-name"></span><button type="button" class="forest-next">次の森</button></div>' +
       '<details class="forest-colors"><summary>葉の色</summary><div class="forest-legend" aria-label="学習モードと葉の色"><span><i class="forest-p" aria-hidden="true"></i>これまで</span>' +
       '<span><i class="forest-r" aria-hidden="true"></i>よむ</span><span><i class="forest-w" aria-hidden="true"></i>かく</span>' +
-      '<span><i class="forest-k" aria-hidden="true"></i>カード：かんじ→よみ</span><span><i class="forest-y" aria-hidden="true"></i>カード：よみ→かんじ</span></div></details>';
+      '<span><i class="forest-k" aria-hidden="true"></i>カード</span></div></details>';
     const canvas = host.querySelector('canvas'),
       ctx = canvas.getContext('2d', { alpha: false });
     const status = host.querySelector('.forest-status'),
@@ -1613,10 +1625,12 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       const from = currentCamera,
         d = data();
       stop();
-      records.clear(); // 前のエリアの補助情報を保持し続けない（最大36本）。
+      records.clear(); // 前の表示の補助情報を保持し続けない（最大27本）。
       status.textContent =
         n === 0
           ? '小さな たねから はじまる'
+          : n >= AREA * STEP
+            ? AREA + '本の 森が できたよ'
           : active +
             1 +
             '本目の ' +
