@@ -334,10 +334,14 @@
   // ---------------- 書き順の提示（先生がモニターに映す）
   // 1〜5字を選ぶ → 1字ずつ画面いっぱいに（右に音読み・左に訓読み）→ 最後にならべて書き順をくり返し再生
   var SHOW_MAX = 5;
+  // 提示の設定（この端末に覚える）。base: 完成した字をうすく下に表示し、その上を黒でなぞる
+  var SHOW_OPTS_KEY = 'kanzi.g3.showOpts';
+  function showOpts() { var o = Platform.store.get(SHOW_OPTS_KEY) || {}; return { base: o.base !== false }; }
   function showPick() {
     var picked = [];
     app.innerHTML = '<header class="top t"><h1>書き順を 大きく見せる</h1><p class="sub">見せる字を 順に押す（1〜' + SHOW_MAX + '字）</p></header>' +
       '<main class="teacher"><p class="picked" id="picked"></p>' +
+      '<p><label class="opt"><input type="checkbox" id="opt-base"' + (showOpts().base ? ' checked' : '') + '> 完成した字を うすく表示して、その上に書き順を黒で重ねる</label></p>' +
       '<p><button class="big primary" id="go" disabled>はじめる</button></p>' +
       '<div class="grid">' + Array.from(S.order).map(function (c) { return '<button class="cell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
       '<p><button id="cancel">先生画面にもどる</button></p></main>';
@@ -358,6 +362,7 @@
         paint();
       });
     });
+    $('#opt-base').addEventListener('change', function () { Platform.store.set(SHOW_OPTS_KEY, { base: this.checked }); });
     on('#go', function () { showStart(picked.slice()); });
     on('#cancel', function () { teacher(S.klass); });
     paint();
@@ -365,7 +370,9 @@
 
   function kanjiSvg(c, cls) {
     // 十字の点線（字全体のバランスの目安）。線は <line> にして、書き順アニメ（path が対象）に巻き込まない
-    return '<svg viewBox="0 0 109 109" class="' + cls + '"><rect class="frame" x="0.8" y="0.8" width="107.4" height="107.4"/><line class="cross" x1="54.5" y1="1" x2="54.5" y2="108"/><line class="cross" x1="1" y1="54.5" x2="108" y2="54.5"/>' + ST[c].map(function (d) { return '<path d="' + d + '"/>'; }).join('') + '</svg>';
+    return '<svg viewBox="0 0 109 109" class="' + cls + '"><rect class="frame" x="0.8" y="0.8" width="107.4" height="107.4"/><line class="cross" x1="54.5" y1="1" x2="54.5" y2="108"/><line class="cross" x1="1" y1="54.5" x2="108" y2="54.5"/>' +
+      (showOpts().base ? '<g class="base">' + ST[c].map(function (d) { return '<path d="' + d + '"/>'; }).join('') + '</g>' : '') +
+      '<g class="ink">' + ST[c].map(function (d) { return '<path d="' + d + '"/>'; }).join('') + '</g></svg>';
   }
   // 読みがなの大きさ: 基本は 14vh（以前の倍）。長い読み・複数の読みが左右の余白に収まらない時だけ縮める
   function readSize(list) {
@@ -393,7 +400,12 @@
     var stage = document.createElement('div');
     stage.id = 'stage';
     document.body.appendChild(stage);
-    try { if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function () {}); } catch (e) {}
+    // 全画面: 始める時に入り、Esc 等で抜けても、クリック・キー・右上のボタンでまた全画面に戻る
+    function goFull() {
+      if (document.fullscreenElement || !document.fullscreenEnabled) return;
+      try { document.documentElement.requestFullscreen().catch(function () {}); } catch (e) {}
+    }
+    goFull();
     var idx = 0, loop = null;
     function stopLoop() { if (loop) { loop.stop = true; loop = null; } }
     function single() {
@@ -404,7 +416,20 @@
         '<div class="big-kanji">' + kanjiSvg(c, 'show-svg') + '</div>' +
         '<div class="on" aria-label="音読み" style="font-size:' + readSize(k.on) + '">' + readingHtml(k.on, false) + '</div>' +
         '<div class="stage-pos">' + (idx + 1) + ' / ' + list.length + '</div>';
-      Ink.animate(Array.from(stage.querySelectorAll('.show-svg path')), 0.9);
+      playLoop(Array.from(stage.querySelectorAll('.show-svg')));
+    }
+    // 書き順をくり返し再生する（1字の画面・ならべた画面の両方）。終わったら1.5秒止めてから最初から
+    function playLoop(svgs) {
+      var me = loop = { stop: false };
+      (function play() {
+        if (me.stop) return;
+        Promise.all(svgs.map(function (svg) { return Ink.animate(Array.from(svg.querySelectorAll('.ink path')), 0.9); }))
+          .then(function () { setTimeout(function () {
+            if (me.stop) return;
+            svgs.forEach(function (svg) { svg.querySelectorAll('.ink path').forEach(function (p) { p.getAnimations().forEach(function (a) { a.cancel(); }); }); });
+            play();
+          }, 1500); });
+      })();
     }
     // ならべて表示: 字がいちばん大きくなる行数を選ぶ
     function all() {
@@ -418,37 +443,40 @@
       stage.className = 'all';
       stage.innerHTML = '<div class="all-grid" style="gap:' + gap + 'px;grid-template-columns:repeat(' + best.cols + ',' + Math.floor(best.size) + 'px);grid-auto-rows:' + Math.floor(best.size) + 'px">' +
         list.map(function (c) { return kanjiSvg(c, 'show-svg'); }).join('') + '</div>';
-      var me = loop = { stop: false };
-      var svgs = Array.from(stage.querySelectorAll('.show-svg'));
-      (function play() {
-        if (me.stop) return;
-        Promise.all(svgs.map(function (svg) { return Ink.animate(Array.from(svg.querySelectorAll('path')), 0.9); }))
-          .then(function () { setTimeout(function () {
-            if (me.stop) return;
-            svgs.forEach(function (svg) { svg.querySelectorAll('path').forEach(function (p) { p.getAnimations().forEach(function (a) { a.cancel(); }); }); });
-            play();
-          }, 1500); });
-      })();
+      playLoop(Array.from(stage.querySelectorAll('.show-svg')));
     }
     function next() { if (idx < list.length - 1) { idx++; single(); } else if (idx === list.length - 1) { idx++; all(); } }
     function prev() { if (idx > 0) { idx = Math.min(idx, list.length) - 1; single(); } }
     function exit() {
       stopLoop();
       document.removeEventListener('keydown', key);
+      document.removeEventListener('fullscreenchange', paintFull);
+      full.remove();
       stage.remove();
       try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
       showPick();
     }
     function key(ev) {
+      if (ev.key !== 'Escape') goFull();
       if (ev.key === 'ArrowLeft') { ev.preventDefault(); prev(); }
       else if (ev.key === 'ArrowRight' || ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); next(); }
       else if (ev.key === 'Escape') exit();
     }
     stage.addEventListener('click', function (ev) {
       if (ev.target.closest && ev.target.closest('.stage-exit')) return exit();
+      goFull();
       next();
     });
     document.addEventListener('keydown', key);
+    // 全画面でない時だけ出すボタン。埋め込み（GAS）で全画面が許可されていない時は、全画面キーの案内にする
+    var full = document.createElement('button');
+    full.className = 'stage-full';
+    full.textContent = document.fullscreenEnabled ? '⛶ 全画面' : '全画面キー（□）を押してね';
+    full.addEventListener('click', function (ev) { ev.stopPropagation(); goFull(); });
+    document.body.appendChild(full);
+    function paintFull() { full.hidden = !!document.fullscreenElement; }
+    document.addEventListener('fullscreenchange', paintFull);
+    paintFull();
     var x = document.createElement('button');
     single();
     x.className = 'stage-exit'; x.textContent = '×'; x.setAttribute('aria-label', 'おわる');

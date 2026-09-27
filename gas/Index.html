@@ -213,6 +213,9 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 #stage .show-svg { width: 100%; height: 100%; display: block; }
 #stage .show-svg .frame { fill: none; stroke: #9AA0A6; stroke-width: .9; }
 #stage .show-svg .cross { stroke: #9AA0A6; stroke-width: .7; stroke-dasharray: 2.2 2.2; }
+#stage .show-svg .base path { stroke: #D3D7DC; } /* うすい完成形（下地） */
+.opt { font-size: 20px; display: inline-flex; gap: 10px; align-items: center; }
+.opt input { width: 26px; height: 26px; }
 #stage .show-svg path { fill: none; stroke: #111; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }
 /* 読み: 1文字ずつ縦に積み、読みが複数なら右から左へ列をならべる（教科書の縦書きと同じ並び） */
 #stage .kun, #stage .on { display: flex; flex-direction: row-reverse; gap: .35em; align-items: center; justify-content: center; height: 94vh; }
@@ -226,6 +229,8 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 #stage .stage-pos { position: absolute; bottom: 8px; left: 12px; color: var(--ink-sub); font-size: 18px; }
 #stage.all { display: flex; align-items: center; justify-content: center; }
 #stage .all-grid { display: grid; justify-content: center; align-content: center; }
+.stage-full { position: fixed; top: 8px; right: 66px; z-index: 51; height: 48px; padding: 0 16px; font-size: 18px; border: 1px solid var(--line); background: #fff; border-radius: 24px; color: var(--ink-sub); opacity: .75; }
+.stage-full[hidden] { display: none; }
 .stage-exit { position: fixed; top: 8px; right: 10px; z-index: 51; width: 48px; height: 48px; font-size: 26px; border: 1px solid var(--line); background: #fff; border-radius: 50%; color: var(--ink-sub); opacity: .6; }
 </style>
 </head>
@@ -1204,10 +1209,14 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
   // ---------------- 書き順の提示（先生がモニターに映す）
   // 1〜5字を選ぶ → 1字ずつ画面いっぱいに（右に音読み・左に訓読み）→ 最後にならべて書き順をくり返し再生
   var SHOW_MAX = 5;
+  // 提示の設定（この端末に覚える）。base: 完成した字をうすく下に表示し、その上を黒でなぞる
+  var SHOW_OPTS_KEY = 'kanzi.g3.showOpts';
+  function showOpts() { var o = Platform.store.get(SHOW_OPTS_KEY) || {}; return { base: o.base !== false }; }
   function showPick() {
     var picked = [];
     app.innerHTML = '<header class="top t"><h1>書き順を 大きく見せる</h1><p class="sub">見せる字を 順に押す（1〜' + SHOW_MAX + '字）</p></header>' +
       '<main class="teacher"><p class="picked" id="picked"></p>' +
+      '<p><label class="opt"><input type="checkbox" id="opt-base"' + (showOpts().base ? ' checked' : '') + '> 完成した字を うすく表示して、その上に書き順を黒で重ねる</label></p>' +
       '<p><button class="big primary" id="go" disabled>はじめる</button></p>' +
       '<div class="grid">' + Array.from(S.order).map(function (c) { return '<button class="cell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
       '<p><button id="cancel">先生画面にもどる</button></p></main>';
@@ -1228,6 +1237,7 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
         paint();
       });
     });
+    $('#opt-base').addEventListener('change', function () { Platform.store.set(SHOW_OPTS_KEY, { base: this.checked }); });
     on('#go', function () { showStart(picked.slice()); });
     on('#cancel', function () { teacher(S.klass); });
     paint();
@@ -1235,7 +1245,9 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
 
   function kanjiSvg(c, cls) {
     // 十字の点線（字全体のバランスの目安）。線は <line> にして、書き順アニメ（path が対象）に巻き込まない
-    return '<svg viewBox="0 0 109 109" class="' + cls + '"><rect class="frame" x="0.8" y="0.8" width="107.4" height="107.4"/><line class="cross" x1="54.5" y1="1" x2="54.5" y2="108"/><line class="cross" x1="1" y1="54.5" x2="108" y2="54.5"/>' + ST[c].map(function (d) { return '<path d="' + d + '"/>'; }).join('') + '</svg>';
+    return '<svg viewBox="0 0 109 109" class="' + cls + '"><rect class="frame" x="0.8" y="0.8" width="107.4" height="107.4"/><line class="cross" x1="54.5" y1="1" x2="54.5" y2="108"/><line class="cross" x1="1" y1="54.5" x2="108" y2="54.5"/>' +
+      (showOpts().base ? '<g class="base">' + ST[c].map(function (d) { return '<path d="' + d + '"/>'; }).join('') + '</g>' : '') +
+      '<g class="ink">' + ST[c].map(function (d) { return '<path d="' + d + '"/>'; }).join('') + '</g></svg>';
   }
   // 読みがなの大きさ: 基本は 14vh（以前の倍）。長い読み・複数の読みが左右の余白に収まらない時だけ縮める
   function readSize(list) {
@@ -1263,7 +1275,12 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
     var stage = document.createElement('div');
     stage.id = 'stage';
     document.body.appendChild(stage);
-    try { if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function () {}); } catch (e) {}
+    // 全画面: 始める時に入り、Esc 等で抜けても、クリック・キー・右上のボタンでまた全画面に戻る
+    function goFull() {
+      if (document.fullscreenElement || !document.fullscreenEnabled) return;
+      try { document.documentElement.requestFullscreen().catch(function () {}); } catch (e) {}
+    }
+    goFull();
     var idx = 0, loop = null;
     function stopLoop() { if (loop) { loop.stop = true; loop = null; } }
     function single() {
@@ -1274,7 +1291,20 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
         '<div class="big-kanji">' + kanjiSvg(c, 'show-svg') + '</div>' +
         '<div class="on" aria-label="音読み" style="font-size:' + readSize(k.on) + '">' + readingHtml(k.on, false) + '</div>' +
         '<div class="stage-pos">' + (idx + 1) + ' / ' + list.length + '</div>';
-      Ink.animate(Array.from(stage.querySelectorAll('.show-svg path')), 0.9);
+      playLoop(Array.from(stage.querySelectorAll('.show-svg')));
+    }
+    // 書き順をくり返し再生する（1字の画面・ならべた画面の両方）。終わったら1.5秒止めてから最初から
+    function playLoop(svgs) {
+      var me = loop = { stop: false };
+      (function play() {
+        if (me.stop) return;
+        Promise.all(svgs.map(function (svg) { return Ink.animate(Array.from(svg.querySelectorAll('.ink path')), 0.9); }))
+          .then(function () { setTimeout(function () {
+            if (me.stop) return;
+            svgs.forEach(function (svg) { svg.querySelectorAll('.ink path').forEach(function (p) { p.getAnimations().forEach(function (a) { a.cancel(); }); }); });
+            play();
+          }, 1500); });
+      })();
     }
     // ならべて表示: 字がいちばん大きくなる行数を選ぶ
     function all() {
@@ -1288,37 +1318,40 @@ var KANZI_STROKES = {"悪":["M27.02,20.14c1.67,0.22,4.72,0.36,6.38,0.17C45.38,19
       stage.className = 'all';
       stage.innerHTML = '<div class="all-grid" style="gap:' + gap + 'px;grid-template-columns:repeat(' + best.cols + ',' + Math.floor(best.size) + 'px);grid-auto-rows:' + Math.floor(best.size) + 'px">' +
         list.map(function (c) { return kanjiSvg(c, 'show-svg'); }).join('') + '</div>';
-      var me = loop = { stop: false };
-      var svgs = Array.from(stage.querySelectorAll('.show-svg'));
-      (function play() {
-        if (me.stop) return;
-        Promise.all(svgs.map(function (svg) { return Ink.animate(Array.from(svg.querySelectorAll('path')), 0.9); }))
-          .then(function () { setTimeout(function () {
-            if (me.stop) return;
-            svgs.forEach(function (svg) { svg.querySelectorAll('path').forEach(function (p) { p.getAnimations().forEach(function (a) { a.cancel(); }); }); });
-            play();
-          }, 1500); });
-      })();
+      playLoop(Array.from(stage.querySelectorAll('.show-svg')));
     }
     function next() { if (idx < list.length - 1) { idx++; single(); } else if (idx === list.length - 1) { idx++; all(); } }
     function prev() { if (idx > 0) { idx = Math.min(idx, list.length) - 1; single(); } }
     function exit() {
       stopLoop();
       document.removeEventListener('keydown', key);
+      document.removeEventListener('fullscreenchange', paintFull);
+      full.remove();
       stage.remove();
       try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
       showPick();
     }
     function key(ev) {
+      if (ev.key !== 'Escape') goFull();
       if (ev.key === 'ArrowLeft') { ev.preventDefault(); prev(); }
       else if (ev.key === 'ArrowRight' || ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); next(); }
       else if (ev.key === 'Escape') exit();
     }
     stage.addEventListener('click', function (ev) {
       if (ev.target.closest && ev.target.closest('.stage-exit')) return exit();
+      goFull();
       next();
     });
     document.addEventListener('keydown', key);
+    // 全画面でない時だけ出すボタン。埋め込み（GAS）で全画面が許可されていない時は、全画面キーの案内にする
+    var full = document.createElement('button');
+    full.className = 'stage-full';
+    full.textContent = document.fullscreenEnabled ? '⛶ 全画面' : '全画面キー（□）を押してね';
+    full.addEventListener('click', function (ev) { ev.stopPropagation(); goFull(); });
+    document.body.appendChild(full);
+    function paintFull() { full.hidden = !!document.fullscreenElement; }
+    document.addEventListener('fullscreenchange', paintFull);
+    paintFull();
     var x = document.createElement('button');
     single();
     x.className = 'stage-exit'; x.textContent = '×'; x.setAttribute('aria-label', 'おわる');

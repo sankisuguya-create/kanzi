@@ -202,6 +202,18 @@ await page.click('#go');
 await page.waitForSelector('#stage.single');
 await page.waitForTimeout(6000);
 await page.screenshot({ path: path.join(SHOTS, '15-show-single.png') });
+check((await page.$$('#stage .show-svg .base path')).length === (await page.$$('#stage .show-svg .ink path')).length, '提示: うすい完成形（下地）がある');
+// 悪（11画）の1回分が終わって1.5秒後に、最初の画から再生し直すこと
+await page.waitForFunction(() => { const a = document.querySelector('#stage .ink path').getAnimations()[0]; return a && a.currentTime < 800 && performance.now() > 0; }, null, { timeout: 30000, polling: 200 });
+check(true, '提示: 1字の画面でも書き順をくり返し再生する');
+const fs0 = await page.evaluate(() => !!document.fullscreenElement);
+check(fs0 && !(await page.isVisible('.stage-full')), '提示: 始めると全画面になり、「全画面」ボタンは隠れる');
+await page.evaluate(() => document.exitFullscreen());
+await page.waitForFunction(() => !document.fullscreenElement);
+check(await page.isVisible('.stage-full'), '提示: 全画面を抜けると「全画面」ボタンが出る');
+await page.click('.stage-full');
+await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 5000 }).catch(() => {});
+check(await page.evaluate(() => !!document.fullscreenElement) && (await page.textContent('.stage-pos')).startsWith('1'), '提示: ボタンでまた全画面に戻る（字は進まない）');
 check((await page.$$('#stage .show-svg line.cross')).length === 2 && !!(await page.$('#stage .show-svg rect.frame')), '提示: 十字の点線と外枠がある');
 check(await page.evaluate(() => { const o = document.querySelector('#stage .kun .okuri'); return o && getComputedStyle(o).color === 'rgb(15, 94, 168)' && getComputedStyle(o).fontSize === getComputedStyle(o.parentNode).fontSize; }), '提示: 送り仮名は同じ大きさで青');
 check(!!(await page.$('#stage .kun .sep')) && await page.evaluate(() => getComputedStyle(document.querySelector('#stage .kun .rd')).fontWeight === '700'), '提示: 送り仮名の前に区切り、読みがなは太字');
@@ -220,7 +232,14 @@ check(sz >= 420, `提示: ならべた字の大きさ ${Math.round(sz)}px（1366
 await page.waitForTimeout(4000);
 await page.screenshot({ path: path.join(SHOTS, '16-show-all.png') });
 await page.keyboard.press('Escape');
-check(!(await page.$('#stage')) && !(await page.$('.stage-exit')), '提示: Esc で終わる');
+check(!(await page.$('#stage')) && !(await page.$('.stage-exit')) && !(await page.$('.stage-full')), '提示: Esc で終わる');
+// 設定: 下地を消す
+await page.uncheck('#opt-base');
+await page.click('.cell[data-c="悪"]'); await page.click('#go');
+await page.waitForSelector('#stage.single');
+check((await page.$$('#stage .show-svg .base')).length === 0, '提示: 設定で下地を消せる');
+await page.keyboard.press('Escape');
+await page.check('#opt-base');
 await page.click('#cancel');
 await page.waitForSelector('.grid');
 
