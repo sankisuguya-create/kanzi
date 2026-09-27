@@ -7,7 +7,7 @@
   var app = document.getElementById('app');
   // 日本語の字形を使わせる（中国語フォント・中国語の字形を出さない）。GAS の埋め込みでも確実にするため JS でも付ける
   document.documentElement.lang = 'ja'; document.body.lang = 'ja';
-  var S = { info: null, p: null, grades: [3], grade: 3, pointers: {}, orders: {}, sinceFlush: 0, session: null };
+  var S = { info: null, p: null, grades: [3], grade: 3, pointers: {}, orders: {}, sinceFlush: 0, session: null, open: {} };
   var FLUSH_EVERY = 10;
   var SIZE = { read: 10, write: 5, fk: 10, fy: 10 }; // 1回の問題数（えらんだ漢字は全部。上限 SEL_MAX）
   var SEL_MAX = 30;
@@ -56,7 +56,9 @@
   function flush() {
     S.sinceFlush = 0;
     if (!S.p) return Promise.resolve();
-    return Platform.flush(S.p).then(function (m) { S.p = m; });
+    var trial = !!S.trial;
+    // 送信中に答えた分は Platform が「いまの S.p」と統合して返す。戻るまでに おためしの開始・終了があれば捨てる
+    return Platform.flush(function () { return S.p; }).then(function (m) { if (S.p && !!S.trial === trial && m) S.p = m; });
   }
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden' && S.p) flush(); });
 
@@ -399,16 +401,18 @@
     }
   }
 
-  // カード: 答えの入力なし。画面のどこを押しても 答え → 次 と進む（キーは Space・Enter・→）。記録はしない
+  // カード: 答えの入力なし。画面のどこを押しても 答え → 次 と進む（キーは Space・Enter・→）。記録はしない。
+  // よみは上・漢字は下に固定し、答えの欄も はじめから場所をとっておく（visibility で隠すだけ）。答えが出ても字が動かない
   function flashCard(c, dir) {
-    var w = wordFor(c, S.session.i), kan = '<span class="word">' + wordHtml(w, c) + '</span>', yomi = '<span class="fy">' + esc(w[1]) + '</span>';
-    app.innerHTML = bar() + '<main class="flash" id="flash"><div class="fcard" id="card"><div class="front">' + (dir === 'k' ? kan : yomi) + '</div>' +
-      '<div class="fback" id="fback" hidden>' + (dir === 'k' ? yomi : kan) + '</div>' +
+    var w = wordFor(c, S.session.i), ans = dir === 'k' ? 'fy-row' : 'fk-row';
+    app.innerHTML = bar() + '<main class="flash" id="flash"><div class="fcard" id="card">' +
+      '<div class="frow fy-row' + (ans === 'fy-row' ? ' ans' : '') + '"><span class="fy">' + esc(w[1]) + '</span></div>' +
+      '<div class="frow fk-row' + (ans === 'fk-row' ? ' ans' : '') + '"><span class="word">' + wordHtml(w, c) + '</span></div>' +
       K('<p class="ftap" id="ftap">おすと [答|こた]え</p></div></main>');
     on('#back', quit);
     var shown = false;
     function step() {
-      if (!shown) { shown = true; $('#fback').hidden = false; $('#card').classList.add('flipped'); $('#ftap').textContent = K('おすと [次|つぎ]へ'); speak(w[1]); return; }
+      if (!shown) { shown = true; $('#card').classList.add('flipped'); $('#ftap').textContent = K('おすと [次|つぎ]へ'); speak(w[1]); return; }
       S.session.i++; nextItem();
     }
     $('#flash').addEventListener('click', step);
@@ -445,7 +449,9 @@
     var d = new Date(ms), days = Math.floor((Date.now() - ms) / 86400000);
     return (d.getMonth() + 1) + '/' + d.getDate() + (days <= 0 ? '（きょう）' : days <= 6 ? '（' + days + '日前）' : '');
   }
-  function teacher(klass, tgrade) {
+  // 先生画面のデータは学級ごとに1回の通信で読み、学年タブの切り替えでは読み直さない（reuse）。
+  // 学級を変えた時・おためしから戻った時は読み直す
+  function teacher(klass, tgrade, reuse) {
     clearScreen();
     klass = klass || S.klass || (S.info.classes || [])[0] || '';
     S.klass = klass;
@@ -458,11 +464,13 @@
       $('.teacher').innerHTML = '<section><h2>担当の学級がありません</h2><p>スプレッドシートの「教師」シートに、あなたのメールアドレスと 学年・組 を入れてください（1人で何行でも。組を空けると その学年の全学級）。「書き順を 大きく見せる」は使えます。</p></section>';
       return;
     }
-    Promise.all([Platform.gradesOf(klass), Platform.pointersOf(klass), Platform.students(klass), Platform.testOf(klass)]).then(function (r) {
-      var kids = r[2] || [], test = r[3] || { label: '', chars: '' };
-      var grades = r[0], pointers = r[1] || {};
+    var cached = reuse && S.view && S.view.klass === klass;
+    (cached ? Promise.resolve(S.view) : Platform.teacherView(klass)).then(function (view) {
+      view.klass = klass; view.pointers = view.pointers || {}; S.view = view;
+      var kids = view.students || [], test = view.test || { label: '', chars: '' }, st = view.stats || { students: 0, perChar: {} };
+      var grades = view.grades, pointers = view.pointers;
       tgrade = tgrade && grades.indexOf(tgrade) >= 0 ? tgrade : Math.max.apply(null, grades);
-      return Platform.stats(klass, tgrade).then(function (st) {
+      (function () {
         var order = orderOf(tgrade), pointer = pointers[tgrade] || 0, isTop = tgrade === Math.max.apply(null, grades);
         var classes = (S.info.classes || []).length > 1 ? '<p><label>学級 <select id="klass">' + S.info.classes.map(function (k) { return '<option value="' + esc(k) + '"' + (k === klass ? ' selected' : '') + '>' + esc(klassLabel(k)) + '</option>'; }).join('') + '</select></label></p>' : '';
         var kidsHtml = '<section><h2>子どもごとの記録（' + kids.length + '人）</h2><p class="hint">この画面だけに出します（児童の画面には出しません）。「終えた回」は よむ・かく・カードを最後までやった回数、「おぼえた字」は よむで続けて正解して箱3以上になった字の数。</p>' +
@@ -475,35 +483,50 @@
         var hard = Object.keys(st.perChar).filter(function (c) { return D.kanji[c] && D.kanji[c].g === tgrade; })
           .map(function (c) { var v = st.perChar[c]; return { c: c, s: v[0], b: v[1], r: v[0] ? v[1] / v[0] : 0 }; })
           .filter(function (x) { return x.s >= 3 && x.b > 0; }).sort(function (a, b) { return b.r - a.r; }).slice(0, 20);
-        $('.teacher').innerHTML = classes + kidsHtml +
-          '<section><h2>児童に見せる学年</h2><p class="hint">児童のメニューは、いちばん上の学年のタブで開きます。上のタブで学年を切り替えられます。</p>' +
-          '<div class="gchecks">' + ALL_GRADES.map(function (g) { return '<label class="opt"><input type="checkbox" data-g="' + g + '"' + (grades.indexOf(g) >= 0 ? ' checked' : '') + '> ' + g + '年</label>'; }).join('') + '</div>' +
-          '<p class="hint" id="gmsg" aria-live="polite"></p></section>' +
-          '<section><h2>' + tgrade + '年</h2>' + (grades.length > 1 ? '<nav class="tabs t" role="tablist">' + grades.map(function (g) { return '<button role="tab" class="ttab" data-g="' + g + '" aria-selected="' + (g === tgrade) + '">' + g + '年</button>'; }).join('') + '</nav>' : '') +
-          '<h3>授業の進度</h3><p class="hint">' + (isTop
-            ? '授業で習った最後の字を押すと、そこまでが「習った漢字」になります（「ならった漢字から ランダム」の出題範囲）。設定しないと ' + tgrade + '年の字は全部が対象です。いまは <b id="ptr">' + (pointer || '未設定') + '</b>' + (pointer ? ' 字目まで' : '') + '。'
-            : tgrade + '年は下の学年なので、全部の字が「習った漢字」です。') + '</p>' +
-          (isTop ? '<div class="grid">' + Array.from(order).map(function (c, i) { return '<button class="cell' + (i < pointer ? ' taught' : '') + '" data-i="' + i + '" aria-pressed="' + (i < pointer) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
-            '<p><button id="unset">進度を 未設定にもどす</button></p>' : '') +
-          '<h3>次の漢字テストの範囲</h3><p class="hint">字を押すと範囲に入る／外れる（押すたびに自動で保存）。学年タブを切り替えると、ほかの学年の字も足せます。児童の「読む・書く・カード」の はじめかたに「次の漢字テストの はんい」として出ます。</p>' +
-          '<p><label>テストの名前 <input id="test-label" maxlength="40" value="' + esc(test.label || '') + '" placeholder="例: 9月の50問テスト"></label></p>' +
-          '<p class="picked" id="test-picked"></p>' +
-          '<div class="grid">' + Array.from(order).map(function (c) { return '<button class="tcell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
-          '<p><button id="test-clear">範囲を ぜんぶ はずす</button> <span id="test-msg" aria-live="polite"></span></p>' +
+        var gradeTabs = grades.length > 1 ? '<nav class="tabs t" role="tablist">' + grades.map(function (g) { return '<button role="tab" class="ttab" data-g="' + g + '" aria-selected="' + (g === tgrade) + '">' + g + '年</button>'; }).join('') + '</nav>' : '';
+        // 設定は開閉式（押すと開く）。見出しの右に いまの値を出すので、開かなくても状態がわかる。開いた・閉じたは画面を描き直しても保つ
+        function fold(id, title, now, body) {
+          return '<details class="tset" id="' + id + '"' + (S.open[id] ? ' open' : '') + '><summary><span class="ts-title">' + title + '</span><span class="ts-now" id="' + id + '-now">' + now + '</span></summary><div class="ts-body">' + body + '</div></details>';
+        }
+        function gradesNow(list) { return list.length > 1 && list[list.length - 1] - list[0] === list.length - 1 ? list[0] + '〜' + list[list.length - 1] + '年' : list.map(function (g) { return g + '年'; }).join('・'); }
+        $('.teacher').innerHTML = classes +
+          '<section class="tsets"><h2>設定</h2>' +
+          fold('d-grades', '児童に見せる学年', esc(gradesNow(grades)),
+            '<p class="hint">児童のメニューは、いちばん上の学年のタブで開きます。</p>' +
+            '<div class="gchecks">' + ALL_GRADES.map(function (g) { return '<label class="opt"><input type="checkbox" data-g="' + g + '"' + (grades.indexOf(g) >= 0 ? ' checked' : '') + '> ' + g + '年</label>'; }).join('') + '</div>' +
+            '<p class="hint" id="gmsg" aria-live="polite"></p>') +
+          '</section><section class="tsets"><h2>' + tgrade + '年</h2>' + gradeTabs +
+          fold('d-test', '次の漢字テストの範囲', '',
+            '<p class="hint">字を押すと範囲に入る／外れる（押すたびに自動で保存）。上の学年タブを切り替えると、ほかの学年の字も足せます。児童の「読む・書く・カード」の はじめかたに「次の漢字テストの はんい」として出ます。</p>' +
+            '<p><label>テストの名前 <input id="test-label" maxlength="40" value="' + esc(test.label || '') + '" placeholder="例: 9月の50問テスト"></label></p>' +
+            '<p class="picked" id="test-picked"></p>' +
+            '<div class="grid">' + Array.from(order).map(function (c) { return '<button class="tcell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
+            '<p><button id="test-clear">範囲を ぜんぶ はずす</button> <span id="test-msg" aria-live="polite"></span></p>') +
+          fold('d-ptr', tgrade + '年の 授業の進度', isTop ? (pointer ? pointer + '字目まで' : '未設定（全部）') : '全部（下の学年）',
+            '<p class="hint">' + (isTop
+              ? '授業で習った最後の字を押すと、そこまでが「習った漢字」になります（「ならった漢字から ランダム」の出題範囲）。設定しないと ' + tgrade + '年の字は全部が対象です。いまは <b id="ptr">' + (pointer || '未設定') + '</b>' + (pointer ? ' 字目まで' : '') + '。'
+              : tgrade + '年は下の学年なので、全部の字が「習った漢字」です。') + '</p>' +
+            (isTop ? '<div class="grid">' + Array.from(order).map(function (c, i) { return '<button class="cell' + (i < pointer ? ' taught' : '') + '" data-i="' + i + '" aria-pressed="' + (i < pointer) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
+              '<p><button id="unset">進度を 未設定にもどす</button></p>' : '')) +
+          fold('d-order', tgrade + '年の 出題順', S.orders[tgrade] ? '設定済みの順' : '配当表の順（仮）',
+            '<p class="hint">教科書の新出順を貼り付けます。' + tgrade + '年の' + D.grades[tgrade].order.length + '字を順番どおりに（区切りの空白・改行はあってもよい）。</p>' +
+            '<textarea id="order" rows="5">' + esc(order) + '</textarea><p><button id="save-order">この順番にする</button> <span id="order-msg" aria-live="polite"></span></p>') +
           '<h3>学級でつまずいている字</h3><p class="hint">よむで答えたことのある児童のうち、最後の答えがまちがいだった児童の割合が高い字（' + st.students + '人中。児童名は出しません）。</p>' +
           (hard.length ? '<ol class="hard">' + hard.map(function (x) { return '<li><span class="hc">' + esc(x.c) + '</span>' + x.s + '人中 ' + x.b + '人（' + Math.round(x.r * 100) + '%）</li>'; }).join('') + '</ol>' : '<p>まだ データが ありません。</p>') +
-          '<details><summary>' + tgrade + '年の出題順を変える（教科書の新出順を貼り付け）</summary><p class="hint">' + tgrade + '年の' + D.grades[tgrade].order.length + '字を順番どおりに貼り付けます（区切りの空白・改行はあってもよい）。いまは「' + (S.orders[tgrade] ? '設定済みの順' : '配当表の順（仮）') + '」。</p>' +
-          '<textarea id="order" rows="5">' + esc(order) + '</textarea><p><button id="save-order">この順番にする</button> <span id="order-msg" aria-live="polite"></span></p></details></section>';
+          '</section>' + kidsHtml;
+        app.querySelectorAll('details.tset').forEach(function (d) { d.addEventListener('toggle', function () { S.open[d.id] = d.open; }); });
         var sel = $('#klass'); if (sel) sel.addEventListener('change', function () { teacher(sel.value); });
         // 次の漢字テストの範囲: 押すたびに保存（自動保存）
         var tchars = Array.from(test.chars || '');
         function paintTest() {
+          $('#d-test-now').textContent = tchars.length ? tchars.length + '字' + ($('#test-label').value.trim() ? '（' + $('#test-label').value.trim() + '）' : '') : 'なし';
           $('#test-picked').innerHTML = tchars.length ? '<b>' + tchars.length + '字</b> <span class="tlist">' + tchars.map(esc).join(' ') + '</span>' : '<span class="hint">まだ ありません</span>';
           app.querySelectorAll('.tcell').forEach(function (b) { var on = tchars.indexOf(b.dataset.c) >= 0; b.classList.toggle('tsel', on); b.setAttribute('aria-pressed', on); });
         }
         function saveTest() {
           var t = { label: $('#test-label').value.trim(), chars: tchars.join('') };
-          Platform.setTest(klass, t).then(function () { $('#test-msg').textContent = '✓ 保存しました'; }).catch(function () { $('#test-msg').textContent = '× 保存できませんでした'; });
+          view.test = t.chars ? t : null;
+          Platform.setTest(klass, t).then(function () { $('#test-msg').textContent = '✓ 保存しました'; }, function () { $('#test-msg').textContent = '× 保存できませんでした'; });
         }
         app.querySelectorAll('.tcell').forEach(function (b) {
           b.addEventListener('click', function () {
@@ -512,17 +535,19 @@
             paintTest(); saveTest();
           });
         });
-        $('#test-label').addEventListener('change', saveTest);
+        $('#test-label').addEventListener('change', function () { paintTest(); saveTest(); });
         on('#test-clear', function () { tchars = []; paintTest(); saveTest(); });
         paintTest();
         app.querySelectorAll('.gchecks input').forEach(function (cb) {
           cb.addEventListener('change', function () {
             var list = Array.from(app.querySelectorAll('.gchecks input')).filter(function (x) { return x.checked; }).map(function (x) { return +x.dataset.g; });
             if (!list.length) { cb.checked = true; $('#gmsg').textContent = '× 1つ以上の学年を えらんでください'; return; }
-            Platform.setGrades(klass, list).then(function () { teacher(klass); }); // 学年を変えたら、いちばん上の学年を開く
+            $('#gmsg').textContent = '保存中…';
+            // 学年を変えたら、いちばん上の学年を開く
+            Platform.setGrades(klass, list).then(function () { view.grades = list; teacher(klass, 0, true); }, function () { cb.checked = !cb.checked; $('#gmsg').textContent = '× 保存できませんでした'; });
           });
         });
-        app.querySelectorAll('.ttab').forEach(function (b) { b.addEventListener('click', function () { teacher(klass, +b.dataset.g); }); });
+        app.querySelectorAll('.ttab').forEach(function (b) { b.addEventListener('click', function () { teacher(klass, +b.dataset.g, true); }); });
         app.querySelectorAll('.cell').forEach(function (b) {
           b.addEventListener('click', function () {
             var n = +b.dataset.i + 1;
@@ -530,23 +555,25 @@
             pointer = n;
             app.querySelectorAll('.cell').forEach(function (x, i) { x.classList.toggle('taught', i < n); x.setAttribute('aria-pressed', i < n); });
             $('#ptr').textContent = n || '未設定';
-            Platform.setPointer(klass, tgrade, n);
+            $('#d-ptr-now').textContent = n ? n + '字目まで' : '未設定（全部）';
+            pointers[tgrade] = n;
+            Platform.setPointer(klass, tgrade, n).then(null, function () { $('#ptr').textContent = '× 保存できませんでした。もう一度 押してください'; });
           });
         });
-        on('#unset', function () { Platform.setPointer(klass, tgrade, 0).then(function () { teacher(klass, tgrade); }); });
+        on('#unset', function () { Platform.setPointer(klass, tgrade, 0).then(function () { pointers[tgrade] = 0; teacher(klass, tgrade, true); }, function () { $('#ptr').textContent = '× 保存できませんでした'; }); });
         on('#save-order', function () {
           var v = $('#order').value.replace(/[\s,、，・]/g, ''), m = $('#order-msg'), base = D.grades[tgrade].order, arr = Array.from(v);
           var ok = arr.length === base.length && arr.every(function (c) { return base.indexOf(c) >= 0; }) && new Set(arr).size === base.length;
           if (!ok) { m.textContent = '× ' + tgrade + '年の' + base.length + '字がちょうど1回ずつ入っていません（' + arr.length + '字）'; return; }
-          Platform.setOrder(tgrade, v).then(function () { S.orders[tgrade] = v; m.textContent = '✓ 保存しました'; });
+          Platform.setOrder(tgrade, v).then(function () { S.orders[tgrade] = v; m.textContent = '✓ 保存しました'; $('#d-order-now').textContent = '設定済みの順'; }, function (e) { m.textContent = '× ' + (e && e.message || '保存できませんでした'); });
         });
-      });
+      })();
     }).catch(function (e) { $('.teacher').innerHTML = '<p>よみこめませんでした: ' + esc(e && e.message || e) + '</p>'; });
   }
 
   // ================= 書き順の提示（先生がモニターに映す）
-  // 1〜5字を選ぶ → 1字ずつ画面いっぱいに（右に音読み・左に訓読み）→ 最後にならべて書き順をくり返し再生
-  var SHOW_MAX = 5;
+  // 1〜6字を選ぶ → 1字ずつ画面いっぱいに（右に音読み・左に訓読み）→ 最後にならべて書き順をくり返し再生
+  var SHOW_MAX = 6;
   function showPick(picked, pg) {
     clearScreen();
     picked = picked || [];
@@ -673,16 +700,17 @@
     bar.querySelector('#tb-back').addEventListener('click', endTrial);
   }
   function startTrial(klass) {
-    // 見せる学年・進度は選んでいる組のものを使う
-    Promise.all([Platform.gradesOf(klass), Platform.pointersOf(klass), Platform.testOf(klass)]).then(function (r) {
+    // 見せる学年・進度・テスト範囲は、先生画面で読んだ その学級のもの（読み直さない）
+    var v = S.view && S.view.klass === klass ? Promise.resolve(S.view) : Platform.teacherView(klass);
+    v.then(function (view) {
       S.trial = true;
-      S.test = r[2] || null;
-      S.grades = r[0]; S.grade = maxGrade(); S.pointers = r[1] || {};
+      S.test = view.test || null;
+      S.grades = view.grades.map(Number).sort(function (a, b) { return a - b; }); S.grade = maxGrade(); S.pointers = view.pointers || {};
       S.p = Platform.startTrial(S.info.email);
       S.dayOffset = 0;
       trialBar();
       menu();
-    });
+    }, function (e) { alert('ひらけませんでした: ' + (e && e.message || e)); });
   }
   function endTrial() {
     S.trial = false; S.p = null; S.dayOffset = 0;

@@ -29,3 +29,10 @@ test('すべての字に例語と筆順がある', () => {
     }
   }
 });
+
+test('筆順の path: 数がくっついていない（丸めた時に区切りが消えていない）', () => {
+  for (const c of Object.keys(ST)) for (const d of ST[c]) {
+    assert.match(d, /^[Mm][\d.,\-a-zA-Z]+$/, c);
+    assert.doesNotMatch(d, /\d*\.\d+\.\d/, `${c}: ${d}`);
+  }
+});

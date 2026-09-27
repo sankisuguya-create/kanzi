@@ -110,6 +110,21 @@ for (const [ch, ws] of entries) for (const [w, k, , , alts] of ws) {
 }
 
 // ---- KanjiVG（筆順）
+// 座標を小数1桁に丸め、要らない区切りを省く（109x109 の枠で誤差0.05以下。判定・表示に影響しない大きさ）。
+// 画面の読み込みが約2割軽くなる（GAS では1ファイルに埋め込むので、その分そのまま速くなる）
+function compactPath(d) {
+  // 命令の文字と数に分けてから、数を丸めて つなぎ直す（数と数の間は、次が負なら区切りなし、そうでなければ ,）
+  const toks = d.match(/[a-zA-Z]|-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?/gi);
+  let out = '', prevNum = false;
+  for (const t of toks) {
+    if (/^[a-zA-Z]$/.test(t)) { out += t; prevNum = false; continue; }
+    const v = Math.round(parseFloat(t) * 10) / 10 || 0; // -0 は 0
+    const str = String(v);
+    out += (prevNum && v >= 0 ? ',' : '') + str;
+    prevNum = true;
+  }
+  return out;
+}
 fs.mkdirSync(KVG_CACHE, { recursive: true });
 const strokes = {};
 const allChars = GRADES.flatMap((g) => orders[g]);
@@ -128,7 +143,7 @@ for (const c of allChars) {
   if (ps.some((p, i) => p[0] !== i + 1)) err(`${c}: KanjiVGの画番号が連番でない`);
   const expect = byChar.get(c).strokeCounts[0];
   if (ps.length !== expect) err(`${c}: KanjiVGの画数${ps.length}が辞書の画数${expect}と違う`);
-  strokes[c] = ps.map((p) => p[1]);
+  strokes[c] = ps.map((p) => compactPath(p[1]));
 }
 
 if (warns.length) console.log(`--- 目視確認（形態素解析と正本のよみが違う ${warns.length}件。多くは解析側の揺れ）\n` + warns.join('\n'));
