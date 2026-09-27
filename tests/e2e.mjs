@@ -58,6 +58,23 @@ async function scribble() {
 }
 const activity = () => page.evaluate(() => Sched.activity(KanziState.p));
 
+// ---- 中国語フォントを出さない: 画面の全要素について、実際に描画に使われたフォントを調べる（Chrome DevTools Protocol）
+const cdp = await page.context().newCDPSession(page);
+await cdp.send('DOM.enable'); await cdp.send('CSS.enable');
+const CHINESE = /WenQuanYi|wqy|Droid Sans Fallback|CJK SC|CJK TC|CJK HK|Sans SC|Sans TC|Serif SC|Serif TC|YaHei|JhengHei|SimSun|SimHei|NSimSun|PingFang|Heiti|STHeiti|Songti|Kaiti|FangSong|MingLiU|PMingLiU|Hei\b|AR PL|UKai|UMing|Unifont/i;
+const usedFonts = new Set();
+async function checkFonts(label) {
+  const { root } = await cdp.send('DOM.getDocument', { depth: -1 });
+  const { nodeIds } = await cdp.send('DOM.querySelectorAll', { nodeId: root.nodeId, selector: 'body, body *' });
+  const found = new Set();
+  for (const id of nodeIds) {
+    try { (await cdp.send('CSS.getPlatformFontsForNode', { nodeId: id })).fonts.forEach((f) => found.add(f.familyName)); } catch (e) {}
+  }
+  found.forEach((f) => usedFonts.add(f));
+  const bad = [...found].filter((f) => CHINESE.test(f));
+  check(bad.length === 0, `フォント（${label}）: 中国語フォントなし [${[...found].join(', ')}]`);
+}
+
 await page.goto(URL0);
 await page.evaluate(() => localStorage.clear());
 await page.reload();
@@ -74,8 +91,15 @@ check((await page.getAttribute('.tab[data-g="3"]', 'aria-selected')) === 'true',
 check(!(await page.$('#go-preview')), 'メニュー: よしゅう はない');
 check(await page.isDisabled('#go-seen'), 'メニュー: 何も選んでいない時は「えらんだ漢字を見る」は押せない');
 await shot('1-menu');
+await checkFonts('メニュー');
 await page.click('.tab[data-g="2"]');
 check((await page.textContent('#go-browse')).startsWith('2年の漢字'), 'メニュー: タブで学年を切り替える');
+await page.click('.tab[data-g="3"]');
+
+// ---- 漢字の表記は その子の学年（見せる学年のいちばん上）の配当表どおり
+check((await page.textContent('#go-read')).startsWith('読む') && (await page.textContent('#go-browse')).includes('漢字を ぜんぶ見る'), '表記: 3年は「読む」「漢字」');
+await page.click('.tab[data-g="1"]');
+check((await page.textContent('#go-read')).startsWith('読む'), '表記: 下の学年のタブを開いても表記は その子の学年のまま');
 await page.click('.tab[data-g="3"]');
 
 // ---- 漢字を ぜんぶ見る: 見る
@@ -88,6 +112,7 @@ check((await page.textContent('.monitor .kun')).includes('わる') && (await pag
 check((await page.textContent('.vwords')).includes('悪い') && (await page.textContent('.vwords')).includes('悪人'), '見る: 左に その字を使った ことば');
 await page.waitForTimeout(2500);
 await shot('2-view');
+await checkFonts('見る');
 await page.keyboard.press('ArrowRight');
 check((await page.textContent('.bar .prog')).startsWith('2 /'), '見る: → で つぎの字');
 await page.click('#back');
@@ -98,6 +123,7 @@ for (const c of ['悪', '安', '暗']) await page.click(`.kc[data-c="${c}"]`);
 check((await page.textContent('#selc')) === 'えらんだ字 3', 'えらぶ: 押した字が えらばれる');
 await page.click('.kc[data-c="暗"]'); await page.click('.kc[data-c="暗"]');
 await shot('3-pick');
+await checkFonts('一覧');
 await page.click('#back');
 check((await page.textContent('#go-seen')).includes('3字'), 'メニュー: えらんだ漢字を見る（3字）');
 await page.click('#go-seen');
@@ -107,8 +133,9 @@ await page.click('#back');
 
 // ---- よむ（えらんだ漢字）: 送り仮名は答えに入れない
 await page.click('#go-read');
-check(await page.isDisabled('.chooser [data-id="due"]') && await page.isDisabled('.chooser [data-id="miss"]') && (await page.textContent('.chooser [data-id="sel"]')).includes('3もん'), 'はじめかた: おすすめ・まちがい は まだ無く、えらんだ漢字は3もん');
+check(await page.isDisabled('.chooser [data-id="due"]') && await page.isDisabled('.chooser [data-id="miss"]') && (await page.textContent('.chooser [data-id="sel"]')).includes('3問'), 'はじめかた: おすすめ・まちがい は まだ無く、えらんだ漢字は3問');
 await shot('4-chooser');
+await checkFonts('はじめかた');
 const act0 = await activity();
 await page.click('.chooser [data-id="sel"]');
 await page.waitForSelector('#yomi');
@@ -116,17 +143,19 @@ check((await cur()) === '悪' && (await page.textContent('.okuri-after')) === '�
 await page.keyboard.type('waru');
 check((await page.inputValue('#yomi')) === 'わる', 'よむ: ローマ字 → ひらがな');
 await shot('5-read');
+await checkFonts('よむ');
 await page.keyboard.press('Enter');
 await page.waitForSelector('#next');
-check((await page.textContent('#rmsg')).includes('せいかい'), 'よむ: 「悪い」の答えは「わる」');
+check((await page.textContent('#rmsg')).includes('正かい'), 'よむ: 「悪い」の答えは「わる」');
 await page.click('#next');
 await page.fill('#yomi', 'あああ'); await page.keyboard.press('Enter');
-check((await page.textContent('#rmsg')).includes('もういちど'), 'よむ: 1回目のまちがいは打ち直せる');
+check((await page.textContent('#rmsg')).includes('もう一度'), 'よむ: 1回目のまちがいは打ち直せる');
 await page.fill('#yomi', 'いいい'); await page.keyboard.press('Enter');
 await page.waitForSelector('#next'); await page.click('#next');
 await page.click('#idk'); await page.waitForSelector('#next'); await page.click('#next');
 await page.waitForSelector('.endlist');
 await shot('6-done');
+await checkFonts('おわり');
 check((await page.$$('.endlist li')).length === 3 && (await page.textContent('.endlist')).includes('○ できた') && (await page.textContent('.endlist')).includes('× まちがい'), 'おわり: 出た字の一覧に ○×');
 check((await activity()) === act0 + 3, 'おわり: 最後まで終えたので木が3のびる');
 await page.uncheck('.endlist input[data-c="悪"]');
@@ -140,13 +169,14 @@ await page.click('.chooser [data-id="sel"]');
 await page.waitForSelector('.pad');
 check(!(await page.$('.stages')) && !(await page.$('#demo')) && (await page.$$('.pad-guide .g-all, .pad-guide .g-next')).length === 0, 'かく: なぞり・見本なし');
 await shot('7-write');
+await checkFonts('かく');
 await drawChar();
 await page.waitForSelector('.res');
 check((await page.textContent('.res')).includes('できた'), 'かく: 正しく書くと「できた」');
 await page.waitForSelector('.res', { state: 'detached' });
 await scribble(); await scribble();
 await page.waitForSelector('.res', { timeout: 60000 });
-check((await page.textContent('.res')).includes('また こんど'), 'かく: 2回続けてまちがえると 正しい書き順を見せて「まちがい」');
+check((await page.textContent('.res')).includes('また 今度'), 'かく: 2回続けてまちがえると 正しい書き順を見せて「まちがい」');
 await shot('8-write-stuck');
 await page.waitForSelector('.endlist', { timeout: 10000 });
 await page.click('#menu');
@@ -160,6 +190,7 @@ const actBefore = await activity();
 await page.mouse.click(200, 700);
 check(await page.isVisible('#fback'), 'カード: 画面のどこを押しても答え');
 await shot('9-flash');
+await checkFonts('カード');
 const i0 = await page.evaluate(() => KanziState.session.i);
 await page.mouse.click(1200, 300);
 check((await page.evaluate(() => KanziState.session.i)) === i0 + 1, 'カード: もう一度押すと次へ');
@@ -187,6 +218,7 @@ check((await page.textContent('#ptr')) === '10', '先生: 4年の進度を10字�
 await page.click('.ttab[data-g="2"]');
 check((await page.textContent('.teacher')).includes('下の学年なので'), '先生: 下の学年は全部が習った漢字');
 await shot('10-teacher');
+await checkFonts('先生画面');
 
 // ---- 書き順を大きく見せる（学年タブ・全画面）
 await page.click('#show');
@@ -209,11 +241,31 @@ await page.click('#try');
 await page.waitForSelector('#trial-bar');
 check((await page.$$('.tabs .tab')).length === 4 && (await page.getAttribute('.tab[data-g="4"]', 'aria-selected')) === 'true', 'おためし: 先生が許可した1〜4年のタブ、4年で開く');
 await page.click('#go-read');
-check((await page.textContent('.chooser [data-id="rnd"]')).includes('10もん'), 'おためし: 4年の進度（10字）から ランダム10もん');
+check((await page.textContent('.chooser [data-id="rnd"]')).includes('10問'), 'おためし: 4年の進度（10字）から ランダム10問');
 await page.click('#back');
 await shot('11-trial');
 await page.click('#tb-back');
 await page.waitForSelector('.gchecks');
+
+// 同梱フォント（最後の受け皿）: 端末に日本語フォントが無い場合に使われる。全学年の漢字とかなを持っていること
+const cover = await page.evaluate(async () => {
+  await document.fonts.load('400 20px MoriJP', '漢'); await document.fonts.load('700 20px MoriJP', '漢');
+  const faces = [...document.fonts].filter((f) => f.family.replace(/"/g, '') === 'MoriJP' && f.status === 'loaded').length;
+  const el = document.createElement('div'); el.id = 'fonttest'; el.style.fontFamily = 'MoriJP'; el.lang = 'ja';
+  el.textContent = Object.keys(KANZI_DATA.kanji).join('') + 'あいうえおアイウエオ漢字の森'; document.body.appendChild(el);
+  return faces;
+});
+const { root: r2 } = await cdp.send('DOM.getDocument', { depth: -1 });
+const { nodeId: fid } = await cdp.send('DOM.querySelector', { nodeId: r2.nodeId, selector: '#fonttest' });
+const ff = (await cdp.send('CSS.getPlatformFontsForNode', { nodeId: fid })).fonts;
+check(cover === 2 && ff.length === 1 && ff[0].isCustomFont && !CHINESE.test(ff[0].familyName), `同梱フォント: 標準・太字が読み込め、1026字とかなを すべて自分で描く（${ff.map((f) => f.familyName + ':' + f.glyphCount).join(', ')}）`);
+console.log('使われたフォント: ' + [...usedFonts].join(', '));
+
+// 見せる学年が1年だけの学級: 2年以上の漢字は ひらがな（交ぜ書き）
+await page.evaluate(() => localStorage.setItem('kanzi.settings', JSON.stringify({ grades: { '3-1': [1] } })));
+await page.goto(URL0); await page.waitForSelector('#go-read');
+check((await page.textContent('#go-read')).startsWith('よむ') && (await page.textContent('#go-browse')).includes('かん字を ぜんぶ見る') && (await page.textContent('#go-write')).startsWith('かく'),
+  '表記: 1年は「よむ」「かく」「かん字」（字・見 は1年の漢字）');
 
 check(errors.length === 0, 'コンソールエラーなし' + (errors.length ? ': ' + errors.join(' / ') : ''));
 await browser.close();

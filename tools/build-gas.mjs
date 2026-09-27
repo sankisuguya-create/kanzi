@@ -6,7 +6,13 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 let html = read('index.html');
-html = html.replace(/<link rel="stylesheet" href="([^"]+)">/g, (_, f) => `<style>\n${read(f)}</style>`);
+// 同梱フォントの @font-face は GAS では参照できないので外し、同じ Noto Sans JP を Google Fonts から受け皿として読む
+const FONT_LINK = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=block">';
+html = html.replace(/<link rel="stylesheet" href="([^"]+)">/g, (_, f) => {
+  const css = read(f).replace(/\/\* @mori-font-start[\s\S]*?@mori-font-end \*\/\n?/, '');
+  if (css.includes('fonts/mori-jp')) throw new Error('同梱フォントの指定が残っている');
+  return `${FONT_LINK}\n<style>\n${css}</style>`;
+});
 html = html.replace(/<script src="([^"]+)"><\/script>/g, (_, f) => {
   const js = read(f);
   if (js.includes('</script')) throw new Error(`${f} に </script が含まれる`);

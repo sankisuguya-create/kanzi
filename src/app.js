@@ -5,6 +5,8 @@
   'use strict';
   var D = KANZI_DATA, ST = KANZI_STROKES;
   var app = document.getElementById('app');
+  // 日本語の字形を使わせる（中国語フォント・中国語の字形を出さない）。GAS の埋め込みでも確実にするため JS でも付ける
+  document.documentElement.lang = 'ja'; document.body.lang = 'ja';
   var S = { info: null, p: null, grades: [3], grade: 3, pointers: {}, orders: {}, sinceFlush: 0, session: null };
   var FLUSH_EVERY = 10;
   var SIZE = { read: 10, write: 5, fk: 10, fy: 10 }; // 1回の問題数（えらんだ漢字は全部。上限 SEL_MAX）
@@ -32,6 +34,12 @@
   function learnedChars(g) {
     var o = orderOf(g), ptr = S.pointers[g];
     return (g < maxGrade() || !ptr) ? o.split('') : o.slice(0, ptr).split('');
+  }
+  // 児童向けの文言: [漢|よみ] と書いた漢字は、その子の学年（見せる学年のいちばん上）までに習う字なら漢字、
+  // まだ習わない字なら よみ（ひらがな）で出す。学年別漢字配当表どおりの交ぜ書き（例: 1・2年「かん字」、3年から「漢字」）
+  function K(str) {
+    var g = maxGrade();
+    return String(str).replace(/\[([^|\]]+)\|([^\]]+)\]/g, function (_, k, r) { var i = D.kanji[k]; return i && i.g <= g ? k : r; });
   }
   function allowedChars() { return S.grades.map(orderOf).join('').split(''); }
 
@@ -85,12 +93,12 @@
       '<main class="menu">' +
       '<section class="tree-box">' + Tree.render(act, learned, chars.length, prev) + '</section>' +
       '<section class="actions">' +
-      '<button class="big" id="go-browse">' + g + '年の漢字を ぜんぶ見る<span class="meta">' + orderOf(g).length + '字・見る／えらぶ</span></button>' +
-      '<div class="two"><button class="big primary" id="go-read">よむ<span class="meta">かんじ → よみを かく</span></button>' +
-      '<button class="big primary" id="go-write">かく<span class="meta">よみ → かんじを かく</span></button></div>' +
-      '<div class="two"><button class="big" id="go-fk">カード<span class="meta">かんじ → よみ</span></button>' +
-      '<button class="big" id="go-fy">カード<span class="meta">よみ → かんじ</span></button></div>' +
-      '<button class="big" id="go-seen"' + (nSel ? '' : ' disabled') + '>えらんだ漢字を見る<span class="meta">' + (nSel ? nSel + '字' : 'まだ えらんでいないよ') + '</span></button>' +
+      '<button class="big" id="go-browse">' + g + K('年の[漢|かん][字|じ]を ぜんぶ[見|み]る<span class="meta">') + orderOf(g).length + K('[字|じ]・[見|み]る／[選|えら]ぶ</span></button>') +
+      K('<div class="two"><button class="big primary" id="go-read">[読|よ]む<span class="meta">[漢|かん][字|じ] → [読|よ]みを [書|か]く</span></button>') +
+      K('<button class="big primary" id="go-write">[書|か]く<span class="meta">[読|よ]み → [漢|かん][字|じ]を [書|か]く</span></button></div>') +
+      K('<div class="two"><button class="big" id="go-fk">カード<span class="meta">[漢|かん][字|じ] → [読|よ]み</span></button>') +
+      K('<button class="big" id="go-fy">カード<span class="meta">[読|よ]み → [漢|かん][字|じ]</span></button></div>') +
+      '<button class="big" id="go-seen"' + (nSel ? '' : ' disabled') + '>' + K('[選|えら]んだ[漢|かん][字|じ]を[見|み]る') + '<span class="meta">' + (nSel ? nSel + K('[字|じ]') : K('まだ [選|えら]んでいないよ')) + '</span></button>' +
       '</section></main>' + (S.info.demo && !S.trial ? '<p class="demo-note">デモ（この端末にだけ保存）</p>' : '');
     bindTabs(function (ng) { S.grade = ng; menu(); });
     on('#go-browse', function () { browse('look'); });
@@ -106,12 +114,12 @@
     clearScreen();
     var g = S.grade, order = orderOf(g).split('');
     app.innerHTML =
-      '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + g + '年の漢字（' + order.length + '字）</span><span></span></header>' +
+      '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + g + K('年の[漢|かん][字|じ]（') + order.length + K('[字|じ]）') + '</span><span></span></header>' +
       '<div class="browse-tools"><div class="seg" role="group" aria-label="おしたときの うごき">' +
-      '<button id="m-look" aria-pressed="' + (mode === 'look') + '">👀 見る</button><button id="m-pick" aria-pressed="' + (mode === 'pick') + '">✓ えらぶ</button></div>' +
+      '<button id="m-look" aria-pressed="' + (mode === 'look') + '">👀 ' + K('[見|み]る') + '</button><button id="m-pick" aria-pressed="' + (mode === 'pick') + '">✓ ' + K('[選|えら]ぶ') + '</button></div>' +
       '<span class="sel-count" id="selc"></span>' +
-      (mode === 'pick' ? '<button class="clear" id="clear">えらんだ字を ぜんぶ はずす</button>' : '') + '</div>' +
-      '<p class="browse-hint">' + (mode === 'look' ? '字を おすと、かきじゅんと ことばが 見られるよ' : '字を おすと、もんだいに 出す字に えらべるよ（もういちど おすと はずれる）') + '</p>' +
+      (mode === 'pick' ? K('<button class="clear" id="clear">[選|えら]んだ[字|じ]を ぜんぶ はずす</button>') : '') + '</div>' +
+      '<p class="browse-hint">' + (mode === 'look' ? K('[字|じ]を おすと、[書|か]き[順|じゅん]と [言|こと][葉|ば]が [見|み]られるよ') : K('[字|じ]を おすと、[問|もん][題|だい]に [出|だ]す[字|じ]に [選|えら]べるよ（もう[一|いち][度|ど] おすと はずれる）')) + '</p>' +
       '<div class="kgrid" id="kgrid">' + order.map(function (c) { return '<button class="kc" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>';
     function paint() {
       var n = 0;
@@ -120,7 +128,7 @@
         b.classList.toggle('sel', s);
         b.setAttribute('aria-pressed', s);
       });
-      $('#selc').textContent = 'えらんだ字 ' + n;
+      $('#selc').textContent = K('[選|えら]んだ[字|じ] ') + n;
     }
     on('#back', menu);
     on('#m-look', function () { browse('look'); });
@@ -198,12 +206,12 @@
     }).join('');
     app.innerHTML =
       '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + (idx + 1) + ' / ' + list.length + '</span>' +
-      '<span class="nav"><button id="prev"' + (idx ? '' : ' disabled') + '>← まえ</button><button id="next"' + (idx < list.length - 1 ? '' : ' disabled') + '>つぎ →</button></span></header>' +
-      '<main class="view"><section class="vwords"><h2>' + esc(c) + ' を つかう ことば</h2><ul>' + words + '</ul>' +
-      '<p class="vmeta">' + k.n + 'かく・' + k.g + '年</p>' +
+      '<span class="nav"><button id="prev"' + (idx ? '' : ' disabled') + '>← ' + K('[前|まえ]') + '</button><button id="next"' + (idx < list.length - 1 ? '' : ' disabled') + '>' + K('[次|つぎ]') + ' →</button></span></header>' +
+      '<main class="view"><section class="vwords"><h2>' + esc(c) + K(' を [使|つか]う [言|こと][葉|ば]</h2>') + '<ul>' + words + '</ul>' +
+      '<p class="vmeta">' + k.n + K('[画|かく]・') + k.g + '年</p>' +
       '<button class="pick-one" id="pick" aria-pressed="' + Sched.isSel(S.p, c) + '"></button></section>' +
       '<section class="monitor">' + monitorHtml(c, H, side) + '</section></main>';
-    function paintPick() { var s = Sched.isSel(S.p, c); var b = $('#pick'); b.setAttribute('aria-pressed', s); b.textContent = s ? '✓ えらんでいる（おすと はずす）' : '☆ この字を えらぶ'; }
+    function paintPick() { var s = Sched.isSel(S.p, c); var b = $('#pick'); b.setAttribute('aria-pressed', s); b.textContent = s ? K('✓ [選|えら]んでいる（おすと はずす）') : K('☆ この[字|じ]を [選|えら]ぶ'); }
     paintPick();
     cleanup.push(playLoop(Array.from(app.querySelectorAll('.show-svg'))));
     on('#back', back);
@@ -218,25 +226,25 @@
   }
 
   // ================= 児童: 問題の始め方（どの字で やるか）
-  var KIND_NAME = { read: 'よむ', write: 'かく', fk: 'カード（かんじ → よみ）', fy: 'カード（よみ → かんじ）' };
+  var KIND_NAME = { read: '[読|よ]む', write: '[書|か]く', fk: 'カード（[漢|かん][字|じ] → [読|よ]み）', fy: 'カード（[読|よ]み → [漢|かん][字|じ]）' };
   function sources(kind) {
     var g = S.grade, order = orderOf(g), n = SIZE[kind], tbl = kind === 'write' ? 'write' : 'read';
     var due = Sched.dueList(S.p, today(), order)[tbl];
     return [
-      { id: 'due', label: 'おすすめ', sub: 'わすれそうな字', list: due.slice(0, n) },
-      { id: 'sel', label: 'えらんだ漢字', sub: 'じぶんで えらんだ字', list: Sched.selected(S.p, order).slice(0, SEL_MAX) },
-      { id: 'rnd', label: 'ならった漢字から ランダム', sub: '', list: shuffle(learnedChars(g).slice()).slice(0, n) },
-      { id: 'miss', label: 'まちがいの 多い漢字', sub: '', list: Sched.missList(S.p, tbl, order).slice(0, n) }
+      { id: 'due', label: 'おすすめ', sub: '[忘|わす]れそうな[字|じ]', list: due.slice(0, n) },
+      { id: 'sel', label: '[選|えら]んだ[漢|かん][字|じ]', sub: '[自|じ][分|ぶん]で [選|えら]んだ[字|じ]', list: Sched.selected(S.p, order).slice(0, SEL_MAX) },
+      { id: 'rnd', label: '[習|なら]った[漢|かん][字|じ]から ランダム', sub: '', list: shuffle(learnedChars(g).slice()).slice(0, n) },
+      { id: 'miss', label: 'まちがいの [多|おお]い[漢|かん][字|じ]', sub: '', list: Sched.missList(S.p, tbl, order).slice(0, n) }
     ];
   }
   function chooser(kind) {
     clearScreen();
     var src = sources(kind);
     app.innerHTML =
-      '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + KIND_NAME[kind] + '・' + S.grade + '年</span><span></span></header>' +
-      '<main class="chooser"><h2>どの字で やる？</h2>' + src.map(function (s) {
-        return '<button class="big' + (s.list.length ? '' : ' empty') + '" data-id="' + s.id + '"' + (s.list.length ? '' : ' disabled') + '>' + s.label +
-          '<span class="meta">' + (s.list.length ? s.list.length + 'もん' + (s.sub ? '・' + s.sub : '') : 'いまは ないよ') + '</span></button>';
+      '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + K(KIND_NAME[kind]) + '・' + S.grade + '年</span><span></span></header>' +
+      K('<main class="chooser"><h2>どの[字|じ]で やる？</h2>') + src.map(function (s) {
+        return '<button class="big' + (s.list.length ? '' : ' empty') + '" data-id="' + s.id + '"' + (s.list.length ? '' : ' disabled') + '>' + K(s.label) +
+          '<span class="meta">' + (s.list.length ? s.list.length + K('[問|もん]') + (s.sub ? '・' + K(s.sub) : '') : K('[今|いま]は ないよ')) + '</span></button>';
       }).join('') + '</main>';
     on('#back', menu);
     app.querySelectorAll('.chooser .big').forEach(function (b) {
@@ -277,10 +285,10 @@
     app.innerHTML = bar() +
       '<main class="read">' +
       '<div class="card" id="card"><span class="kana" id="kana">' + esc(w[1]) + '</span><span class="word">' + wordHtml(w, c) + '</span></div>' +
-      '<form class="answer" id="form" autocomplete="off"><label class="q" for="yomi">よみを ひらがなで かこう' + (okuri ? '（おくりがなは かかない）' : '') + '</label>' +
+      '<form class="answer" id="form" autocomplete="off"><label class="q" for="yomi">' + K('[読|よ]みを ひらがなで [書|か]こう') + (okuri ? K('（[送|おく]りがなは [書|か]かない）') : '') + '</label>' +
       '<div class="answer-row"><input id="yomi" lang="ja" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">' +
       (okuri ? '<span class="okuri-after" aria-label="おくりがな">' + esc(okuri) + '</span>' : '') +
-      '<button class="btn-ok" id="ok" type="submit">こたえる</button></div></form>' +
+      K('<button class="btn-ok" id="ok" type="submit">[答|こた]える</button></div></form>') +
       '<p class="rmsg" id="rmsg" aria-live="polite"></p>' +
       '<div class="after" id="after"><button class="btn-mada" id="idk" type="button">わからない</button></div>' +
       '</main>';
@@ -306,7 +314,7 @@
       if (!v) { say('ひらがなで 入れてね'); return; }
       if (answers.indexOf(v) >= 0) return finish(tries === 0, true);
       tries++;
-      if (tries < 2) { say('× ちがうよ。もういちど', 'ng'); input.select(); return; }
+      if (tries < 2) { say(K('× ちがうよ。もう[一|いち][度|ど]'), 'ng'); input.select(); return; }
       finish(false, false);
     });
     on('#idk', function () { if (!done) finish(false, false); });
@@ -319,9 +327,9 @@
       input.readOnly = true;
       $('#card').classList.add('flipped');
       speak(w[1]);
-      say(correct ? (ok ? '✓ せいかい！' : '✓ せいかい（2かいめ）') : 'こたえは「' + shown + '」' + (okuri ? '（' + okuri + '）' : ''), correct ? 'good' : 'ans');
-      $('#after').innerHTML = (canSpeak ? '<button class="speak" id="speak" type="button">🔊 きく</button>' : '') +
-        '<button class="big primary" id="next" type="button">つぎへ</button>';
+      say(correct ? (ok ? K('✓ [正|せい][解|かい]！') : K('✓ [正|せい][解|かい]（2[回|かい]め）')) : K('[答|こた]えは「') + shown + '」' + (okuri ? '（' + okuri + '）' : ''), correct ? 'good' : 'ans');
+      $('#after').innerHTML = (canSpeak ? K('<button class="speak" id="speak" type="button">🔊 [聞|き]く</button>') : '') +
+        K('<button class="big primary" id="next" type="button">[次|つぎ]へ</button>');
       on('#speak', function () { speak(w[1]); });
       var next = $('#next'), moved = false;
       function go() { if (moved) return; moved = true; nextItem(); }
@@ -340,8 +348,8 @@
     app.innerHTML = bar() +
       '<main class="write">' +
       '<div class="wl"><p class="prompt">' + prompt + '</p><p class="prompt-kana">' + esc(w[1]) + '</p>' +
-      '<p class="msg" id="msg" aria-live="polite">□の 字を かこう</p>' +
-      '<div class="tools"><button id="redo">かきなおす</button></div></div>' +
+      K('<p class="msg" id="msg" aria-live="polite">□の [字|じ]を [書|か]こう</p>') +
+      K('<div class="tools"><button id="redo">[書|か]きなおす</button></div></div>') +
       '<div class="padbox" id="pad"></div></main>';
     on('#back', quit);
     var msg = $('#msg'), finished = false;
@@ -356,27 +364,27 @@
     }
     var pad = new Ink.Pad($('#pad'), {
       strokes: ST[c], mode: 'free',
-      onMiss: function (kind) { say(kind === 'reverse' ? 'かく むきが ちがうよ。もういちど' : 'もういちど かいてみよう'); },
+      onMiss: function (kind) { say(kind === 'reverse' ? K('[書|か]く [向|む]きが ちがうよ。もう[一|いち][度|ど]') : K('もう[一|いち][度|ど] [書|か]いてみよう')); },
       onStroke: function () { say(''); },
       onStuck: function () {
         record(false);
-        say('ただしい かきじゅんを 見よう');
+        say(K('[正|ただ]しい [書|か]き[順|じゅん]を [見|み]よう'));
         pad.demo(0.8).then(function () { pad.mode = 'show'; pad.tplPaths.forEach(function (p) { p.setAttribute('class', 'g-demo'); }); result(false, false); });
       },
       onDone: function (res) {
         var ok = !res.assisted;
         record(ok);
-        var after = res.orderMiss > 0 ? (say('字は できたよ。かきじゅんを 見てみよう'), pad.demo(0.8)) : Promise.resolve();
+        var after = res.orderMiss > 0 ? (say(K('[字|じ]は できたよ。[書|か]き[順|じゅん]を [見|み]てみよう')), pad.demo(0.8)) : Promise.resolve();
         after.then(function () { result(ok, res.orderMiss > 0); });
       }
     });
-    on('#redo', function () { if (!finished) { pad.reset(); say('□の 字を かこう'); } });
+    on('#redo', function () { if (!finished) { pad.reset(); say(K('□の [字|じ]を [書|か]こう')); } });
     function result(ok, orderMiss) {
       var box = document.createElement('div');
       box.className = 'result';
-      box.innerHTML = '<p class="res ' + (ok ? 'good' : 'again') + '">' + (ok ? '✓ できた！' : '↺ また こんど かこう') + '</p>' +
-        (orderMiss ? '<p class="res-note">かきじゅんを たしかめたよ</p>' : '') +
-        '<button class="big primary" id="next">つぎへ</button>';
+      box.innerHTML = '<p class="res ' + (ok ? 'good' : 'again') + '">' + (ok ? '✓ できた！' : K('↺ また [今|こん][度|ど] [書|か]こう')) + '</p>' +
+        (orderMiss ? K('<p class="res-note">[書|か]き[順|じゅん]を たしかめたよ</p>') : '') +
+        K('<button class="big primary" id="next">[次|つぎ]へ</button>');
       $('.wl').appendChild(box);
       $('.tools').hidden = true;
       var moved = false, go = function () { if (!moved) { moved = true; nextItem(); } };
@@ -391,11 +399,11 @@
     var w = wordFor(c, S.session.i), kan = '<span class="word">' + wordHtml(w, c) + '</span>', yomi = '<span class="fy">' + esc(w[1]) + '</span>';
     app.innerHTML = bar() + '<main class="flash" id="flash"><div class="fcard" id="card"><div class="front">' + (dir === 'k' ? kan : yomi) + '</div>' +
       '<div class="fback" id="fback" hidden>' + (dir === 'k' ? yomi : kan) + '</div>' +
-      '<p class="ftap" id="ftap">おすと こたえ</p></div></main>';
+      K('<p class="ftap" id="ftap">おすと [答|こた]え</p></div></main>');
     on('#back', quit);
     var shown = false;
     function step() {
-      if (!shown) { shown = true; $('#fback').hidden = false; $('#card').classList.add('flipped'); $('#ftap').textContent = 'おすと つぎへ'; speak(w[1]); return; }
+      if (!shown) { shown = true; $('#fback').hidden = false; $('#card').classList.add('flipped'); $('#ftap').textContent = K('おすと [次|つぎ]へ'); speak(w[1]); return; }
       S.session.i++; nextItem();
     }
     $('#flash').addEventListener('click', step);
@@ -409,8 +417,8 @@
     Platform.save(S.p);
     flush();
     app.innerHTML =
-      '<main class="done wide"><p class="done-big">おわり！ ' + s.items.length + 'もん やったよ</p>' +
-      '<p class="hint">チェックを はずすと、えらんだ漢字から はずれるよ</p>' +
+      '<main class="done wide"><p class="done-big">おわり！ ' + s.items.length + K('[問|もん] やったよ</p>') +
+      K('<p class="hint">チェックを はずすと、[選|えら]んだ[漢|かん][字|じ]から はずれるよ</p>') +
       '<ul class="endlist">' + s.items.map(function (c) {
         var r = s.results[c];
         return '<li><label><input type="checkbox" data-c="' + esc(c) + '"' + (Sched.isSel(S.p, c) ? ' checked' : '') + '>' +

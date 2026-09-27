@@ -1,3 +1,8 @@
+/* @mori-font-start 同梱の日本語フォント（最後の受け皿）。端末の日本語フォントで足りる時は読み込まれない。
+   font-display: block … 読み込み中に別のフォント（中国語フォントの可能性）で仮表示しない。GAS 版では tools/build-gas.mjs が Google Fonts に差し替える */
+@font-face { font-family: "MoriJP"; font-weight: 400; font-display: block; src: url("fonts/mori-jp-400.woff2") format("woff2"); }
+@font-face { font-family: "MoriJP"; font-weight: 700; font-display: block; src: url("fonts/mori-jp-700.woff2") format("woff2"); }
+/* @mori-font-end */
 /* 色は color-coding スキルの既定トークン。識別に使う色は2重符号化（語・記号・形）と組にする */
 :root {
   --ink: #1A1A1A;
@@ -15,18 +20,22 @@
   --line: #C9CDD2;
   /* 木の色は装飾（識別に使わない） */
   --leaf-0: #4E8A3E; --leaf-1: #6BA34F; --leaf-2: #3F7535;
+  /* フォントは1か所で決める。一般的な日本語フォントを並べ、中国語フォントに落ちないように最後は日本語ゴシックにする */
+  --font-sans: "BIZ UDPGothic", "Noto Sans JP", "Noto Sans CJK JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", "Meiryo", "IPAexGothic", "IPAPGothic", "IPAGothic", "MoriJP", "Noto Sans JP", sans-serif;
+  --font-kanji: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", "Noto Serif CJK JP", "Hiragino Mincho ProN", "Yu Mincho", "IPAexMincho", "IPAMincho", var(--font-sans); /* 漢字を大きく見せる所: 教科書体 → 明朝 → ゴシック */
   --tap: 64px; /* 児童のタップ対象の下限より大きく（評価軸 §2） */
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
   background: var(--paper); color: var(--ink);
-  font-family: "BIZ UDPGothic", "Noto Sans JP", "Noto Sans CJK JP", "Hiragino Sans", sans-serif;
+  font-family: var(--font-sans);
   font-size: 20px; line-height: 1.5;
   -webkit-tap-highlight-color: transparent;
 }
 #app { max-width: 1100px; margin: 0 auto; padding: 12px 16px 24px; min-height: 100%; }
 button { font: inherit; color: inherit; cursor: pointer; }
+input, select, textarea { font-family: inherit; } /* フォーム部品も同じ日本語フォントを引き継ぐ */
 button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 
 /* ---- 見出し */
@@ -88,7 +97,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   background: var(--card); border: 3px solid var(--ink); border-radius: 22px; padding: 18px;
 }
-.card .word { font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", "Noto Serif CJK JP", serif; line-height: 1.1; }
+.card .word { font-family: var(--font-kanji); line-height: 1.1; }
 .card .tg { font-size: clamp(96px, 22vmin, 190px); }
 .card .ot { font-size: clamp(56px, 12vmin, 110px); }
 .card .kana { font-size: 40px; letter-spacing: .15em; visibility: hidden; min-height: 1.3em; }
@@ -134,9 +143,9 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 /* ---- かく */
 .write { display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: start; }
 .wl { display: grid; gap: 10px; align-content: start; }
-.prompt { margin: 0; font-size: 56px; font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", serif; }
+.prompt { margin: 0; font-size: 56px; font-family: var(--font-kanji); }
 .prompt .box { display: inline-block; width: 1em; height: 1em; border: 3px solid var(--ink); vertical-align: -0.1em; background: var(--fill-b); }
-.prompt rt { font-size: 24px; font-family: sans-serif; letter-spacing: .1em; }
+.prompt rt { font-size: 24px; font-family: var(--font-sans); letter-spacing: .1em; }
 .prompt-kana { margin: 0; color: var(--ink-sub); font-size: 22px; letter-spacing: .1em; }
 .stages { display: flex; gap: 8px; list-style: none; padding: 0; margin: 4px 0; flex-wrap: wrap; }
 .stages li { padding: 4px 12px; border: 2px solid var(--line); border-radius: 999px; color: var(--ink-sub); font-size: 18px; }
@@ -158,7 +167,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .pv-info { display: grid; gap: 14px; align-content: start; }
 .words { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .words li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px 14px; }
-.pw { font-size: 44px; font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", serif; }
+.pw { font-size: 44px; font-family: var(--font-kanji); }
 .pw b { font-weight: 400; text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
 .pk { font-size: 24px; letter-spacing: .1em; }
 .say { min-width: var(--tap); min-height: var(--tap); font-size: 26px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; }
@@ -242,16 +251,16 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .browse-tools .clear { min-height: 48px; padding: 0 14px; font-size: 16px; background: var(--card); border: 2px solid var(--line); border-radius: 10px; }
 .browse-hint { margin: 0 0 8px; color: var(--ink-sub); font-size: 18px; }
 .kgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
-.kc { position: relative; min-height: 64px; font-size: 34px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", serif; }
+.kc { position: relative; min-height: 64px; font-size: 34px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; font-family: var(--font-kanji); }
 .kc.sel { background: var(--fill-b); border: 3px solid var(--cat-3); }
-.kc.sel::after { content: "✓"; position: absolute; top: 1px; right: 5px; font-size: 16px; font-family: sans-serif; font-weight: 700; color: var(--cat-3); }
+.kc.sel::after { content: "✓"; position: absolute; top: 1px; right: 5px; font-size: 16px; font-family: var(--font-sans); font-weight: 700; color: var(--cat-3); }
 
 .bar .nav { display: flex; gap: 8px; }
 .view { display: grid; grid-template-columns: minmax(260px, 1fr) auto; gap: 18px; align-items: start; }
 .vwords h2 { font-size: 22px; margin: 0 0 8px; }
 .vwords ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .vwords li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px 14px; }
-.vw { font-size: 42px; font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", serif; }
+.vw { font-size: 42px; font-family: var(--font-kanji); }
 .vw .tg { text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
 .vk { font-size: 24px; letter-spacing: .1em; }
 .vmeta { color: var(--ink-sub); }
@@ -279,7 +288,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 
 .flash { height: calc(100vh - 100px); display: flex; cursor: pointer; user-select: none; }
 .fcard { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2vh; background: var(--card); border: 3px solid var(--ink); border-radius: 22px; }
-.fcard .word { font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", serif; line-height: 1.05; }
+.fcard .word { font-family: var(--font-kanji); line-height: 1.05; }
 .fcard .tg { font-size: clamp(120px, 34vmin, 320px); }
 .fcard .ot { font-size: clamp(70px, 18vmin, 180px); }
 .fcard .fy { font-size: clamp(60px, 14vmin, 150px); letter-spacing: .12em; font-weight: 700; }
@@ -291,7 +300,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .endlist { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; width: 100%; }
 .endlist label { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 6px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
 .endlist input { width: 28px; height: 28px; }
-.endlist .ec { font-size: 40px; font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", serif; }
+.endlist .ec { font-size: 40px; font-family: var(--font-kanji); }
 .endlist .er { font-size: 18px; font-weight: 700; }
 .endlist .er.good { color: var(--cat-1); }
 .endlist .er.again { color: var(--ink-alert); }
@@ -310,7 +319,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .kids th, .kids td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; white-space: nowrap; }
 .kids th { background: var(--fill-a); font-weight: 700; }
 .kids tr.idle td { background: var(--fill-b); }
-.kids .kmiss { font-size: 22px; letter-spacing: .2em; font-family: "UD Digi Kyokasho N-R", "BIZ UDMincho", "Noto Serif JP", serif; }
+.kids .kmiss { font-size: 22px; letter-spacing: .2em; font-family: var(--font-kanji); }
 
 /* タイトル「漢字の森」: 森の3つの木を別の色に（飾り。識別には使わない） */
 .title { display: inline-flex; align-items: center; gap: .05em; }

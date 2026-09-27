@@ -39,12 +39,22 @@
 npm install        # 検査用の辞書（kanjidic2-json）と形態素解析（kuromoji）
 npm run build      # data-src/ と KanjiVG から src/*-g3.js、src/ から gas/Index.html を生成
 npm test           # 出題計算・データの検査
-npm run e2e        # Chromium で通し操作（playwright-core と CHROMIUM が必要）
+npm run e2e        # Chromium で通し操作（playwright-core と CHROMIUM が必要）。各画面で使われたフォントに中国語フォントが無いことも調べる
+npm run build:font # 同梱の日本語フォント src/fonts/ を作り直す（python3 の fonttools・brotli が必要）
 ```
 
 - 例語・読みを直すときは `data-src/words-gN.txt`（N=学年）を編集して `npm run build`。生成物（`src/data.js`・`src/strokes.js`）は直接編集しない。
 - `src/` を変えたら `npm run build:gas` で `gas/Index.html` を作り直す。
 
+## フォント（中国語フォントを出さない）
+
+- 文字は日本語フォントだけで描く。指定の順: BIZ UDPゴシック → Noto Sans JP / Noto Sans CJK JP（Chromebook）→ ヒラギノ（Mac・iPhone）→ 游ゴシック・メイリオ（Windows）→ IPA フォント → **同梱の日本語フォント**（`src/fonts/`、Noto Sans JP から常用漢字・人名用漢字・かな・英数字を切り出したもの）。漢字を大きく見せる所は教科書体・明朝を先に並べ、無ければ同じ日本語ゴシックに落ちる。
+- 同梱フォントは端末の日本語フォントで足りる時は読み込まれない。読み込み中に別のフォントで仮表示しない（`font-display: block`）。
+- GAS 版は同じ Noto Sans JP を Google Fonts から受け皿として読む。
+- ページは `lang="ja"`（JS でも付ける）。
+
 ## ライセンス・出典
+
+フォント: Noto Sans JP（© Google、SIL Open Font License 1.1。`src/fonts/LICENSE-NotoSansJP.txt`）を切り出して同梱。
 
 筆順データ: [KanjiVG](https://kanjivg.tagaini.net/)（© Ulrich Apel ほか、CC BY-SA 3.0）。`src/strokes.js` と `gas/Index.html` はこれを改変・同梱しているため、この2ファイルは CC BY-SA 3.0 で提供する。

@@ -7,7 +7,8 @@
     "build:data": "node tools/build-data.mjs",
     "build:gas": "node tools/build-gas.mjs",
     "test": "node --test tests/*.test.mjs",
-    "e2e": "node tests/e2e.mjs"
+    "e2e": "node tests/e2e.mjs",
+    "build:font": "node tools/build-font.mjs"
   },
   "devDependencies": {
     "kanjidic2-json": "^0.1.0",
