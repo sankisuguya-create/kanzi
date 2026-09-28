@@ -25,7 +25,7 @@
 
   // ---- デモの設定（先生画面で変える）: { grades: { 組: [学年...] }, pointers: { '組:学年': n }, orders: { 学年: 並び } }
   var SKEY = 'kanzi.settings';
-  function demoSettings() { var s = store.get(SKEY) || {}; s.grades = s.grades || {}; s.pointers = s.pointers || {}; s.orders = s.orders || {}; s.tests = s.tests || {}; return s; }
+  function demoSettings() { var s = store.get(SKEY) || {}; s.grades = s.grades || {}; s.pointers = s.pointers || {}; s.orders = s.orders || {}; s.tests = s.tests || {}; s.writeLevels = s.writeLevels || {}; return s; }
   function saveDemo(s) { store.set(SKEY, s); }
   function demoGrades(klass) { return demoSettings().grades[klass] || [1, 2, 3]; }
   function demoPointers(klass) {
@@ -51,7 +51,7 @@
     if (!isGas) {
       var role = /teacher/.test(location.search) ? 'teacher' : 'student', s = demoSettings(), klass = '3-1';
       return Promise.resolve({ role: role, demo: true, email: 'demo', klass: klass, progress: Sched.norm(store.get(key)),
-        grades: demoGrades(klass), pointers: demoPointers(klass), orders: s.orders, test: s.tests[klass] || null, classes: [klass] });
+        grades: demoGrades(klass), pointers: demoPointers(klass), orders: s.orders, test: s.tests[klass] || null, writeLevel: s.writeLevels[klass] || '', classes: [klass] });
     }
     return gas('api_init').then(function (info) {
       key = 'kanzi.progress.' + info.email;
@@ -94,7 +94,7 @@
   function teacherView(klass) {
     if (isGas) return gas('api_teacherView', klass);
     var s = demoSettings();
-    return Promise.resolve({ grades: demoGrades(klass), pointers: demoPointers(klass), test: s.tests[klass] || null, students: demoStudents(), stats: demoStats() });
+    return Promise.resolve({ grades: demoGrades(klass), pointers: demoPointers(klass), test: s.tests[klass] || null, writeLevel: s.writeLevels[klass] || '', students: demoStudents(), stats: demoStats() });
   }
   function demoStats() {
     var seed = 7, out = {}, g, i;
@@ -123,6 +123,12 @@
     if (isGas) return gas('api_setTest', klass, JSON.stringify(t));
     var s = demoSettings(); s.tests[klass] = t && t.chars ? t : null; saveDemo(s); return Promise.resolve(s.tests[klass]);
   }
+  // 書く問題の判定の強さ（学級ごと）: '' ＝ふつう、'easy' ＝やさしい
+  function setWriteLevel(klass, level) {
+    level = level === 'easy' ? 'easy' : '';
+    if (isGas) return gas('api_setWriteLevel', klass, level);
+    var s = demoSettings(); s.writeLevels[klass] = level; saveDemo(s); return Promise.resolve(level);
+  }
   function setPointer(klass, grade, n) {
     if (isGas) return gas('api_setPointer', klass, grade, n);
     var s = demoSettings(); s.pointers[klass + ':' + grade] = n; saveDemo(s); return Promise.resolve(n);
@@ -137,5 +143,5 @@
   }
 
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
-    teacherView: teacherView, setTest: setTest, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder, store: store };
+    teacherView: teacherView, setTest: setTest, setWriteLevel: setWriteLevel, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder, store: store };
 })(this);

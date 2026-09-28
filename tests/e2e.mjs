@@ -156,8 +156,8 @@ await page.click('#idk'); await page.waitForSelector('#next'); await page.click(
 await page.waitForSelector('.endlist');
 await shot('6-done');
 await checkFonts('おわり');
-check((await page.$$('.endlist li')).length === 3 && (await page.textContent('.endlist')).includes('○ できた') && (await page.textContent('.endlist')).includes('× まちがい'), 'おわり: 出た字の一覧に ○×');
-check((await activity()) === act0 + 3, 'おわり: 最後まで終えたので木が3のびる');
+check((await page.$$('.endlist li')).length === 3 && (await page.textContent('.endlist')).includes('○ できた') && (await page.textContent('.endlist')).includes('わからない'), 'おわり: 出た字の一覧に ○×');
+check((await activity()) === act0 + 2, 'おわり: 最後まで終えたので木がのびる（「わからない」の1問をのぞく2問）');
 await page.uncheck('.endlist input[data-c="悪"]');
 check(!(await page.evaluate(() => Sched.isSel(KanziState.p, '悪'))), 'おわり: チェックを外すと えらんだ漢字から はずれる');
 await page.click('#menu');
@@ -223,7 +223,7 @@ await page.goto(URL0 + '?teacher=1');
 await page.waitForSelector('#d-grades');
 check((await page.textContent('.top .sub')).startsWith('3年1組'), '先生: 担当学級（3年1組）で開く');
 check((await page.$$('.kids tbody tr')).length === 30 && (await page.textContent('.kids thead')).includes('おぼえた字'), '先生: 担当学級の子どもごとの記録（30人）');
-check(await page.evaluate(() => [...document.querySelectorAll('details.tset')].every((d) => !d.open) && document.querySelectorAll('details.tset').length === 4), '先生: 設定4つは はじめ たたんである');
+check(await page.evaluate(() => [...document.querySelectorAll('details.tset')].every((d) => !d.open) && document.querySelectorAll('details.tset').length === 5), '先生: 設定5つは はじめ たたんである');
 check((await page.textContent('#d-grades-now')) === '1〜3年' && (await page.textContent('#d-test-now')) === 'なし', '先生: たたんでも いまの値が見出しに出る');
 await shot('10-teacher-folded');
 await page.click('#d-grades summary');
@@ -371,6 +371,72 @@ await checkFonts('かな（書く）');
 await page.click('#back');
 await page.goto(URL0 + '?teacher=1'); await page.waitForSelector('#d-grades');
 check((await page.textContent('#d-grades-now')).startsWith('ひらがな・カタカナ・1年') && !!(await page.$('.gchecks input[data-g="h"]')), '先生: 見せる学年に ひらがな・カタカナ');
+
+// ---- わからない（スキップ）・途中でやめる・書く判定の強さ
+await page.evaluate(() => localStorage.clear());
+await page.goto(URL0); await page.waitForSelector('#go-read');
+const act2 = () => page.evaluate(() => Sched.activity(KanziState.p));
+// 途中でやめた回は育たない（読む・書く・カード。最後の問題に答えた直後に やめても）
+for (const go of ['#go-read', '#go-fk', '#go-write']) {
+  const a0 = await act2();
+  await page.click(go); await page.click('.chooser [data-id="rnd"]');
+  if (go === '#go-read') { for (let i = 0; i < 10; i++) { await page.waitForSelector('#idk'); await page.click('#idk'); if (i < 9) await page.click('#next'); } }
+  else if (go === '#go-fk') { await page.waitForSelector('#flash'); await page.mouse.click(600, 400); await page.mouse.click(600, 400); }
+  else { await page.waitForSelector('.pad'); await drawChar(); await page.waitForSelector('.res'); }
+  await page.click('#back'); await page.waitForTimeout(2800);
+  check((await act2()) === a0 && !!(await page.$('.menu')), `途中でやめると 木は育たない（${go}）`);
+}
+// 読む: 全部「わからない」で終えても 木は育たない
+await page.evaluate(() => { const o = KANZI_DATA.grades[3].order; [0, 1, 2].forEach((i) => Sched.setSel(KanziState.p, o[i], true, 1)); });
+let a1 = await act2();
+await page.click('#go-read'); await page.click('.chooser [data-id="sel"]');
+check((await page.textContent('#idk')).includes('答えを 見る'), 'わからない: 読むに「わからない（答えを見る）」');
+for (let i = 0; i < 3; i++) { await page.waitForSelector('#idk'); await page.click('#idk'); check((await page.textContent('#rmsg')).includes('答えは'), `わからない: 読むで答えを見せる（${i + 1}問め）`); await page.click('#next'); }
+await page.waitForSelector('.endlist');
+check((await act2()) === a1 && (await page.textContent('.done')).includes('「わからない」の 3問は') && (await page.textContent('.endlist')).includes('わからない'), 'わからない: 全部わからないなら 木は育たない（一覧にも出る）');
+await page.click('#menu');
+// 書く: 1問め わからない、2問め 正しく書く、3問め わからない → 木は1問ぶん
+a1 = await act2();
+await page.click('#go-write'); await page.click('.chooser [data-id="sel"]');
+await page.waitForSelector('#skip'); await page.click('#skip');
+await page.waitForSelector('.res', { timeout: 15000 });
+check((await page.textContent('.res')).includes('また') && (await page.evaluate(() => KanziState.session.skipped[KanziState.session.items[0]])) === true, 'わからない: 書くで正しい書き順を見せて次へ');
+await page.click('#next'); await page.waitForSelector('.pad'); await drawChar(); await page.waitForSelector('.res'); await page.click('#next');
+await page.waitForSelector('#skip'); await page.click('#skip'); await page.waitForSelector('.res', { timeout: 15000 }); await page.click('#next');
+await page.waitForSelector('.endlist');
+check((await act2()) === a1 + 1, `わからない: 書くは答えた1問だけ 木が育つ（${a1} → ${await act2()}）`);
+await page.click('#menu');
+// 判定の強さ: やさしい の方が、ずれた字を正解にしやすい（3年200字、各画に ずれ±10）
+const lv = await page.evaluate(() => {
+  const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); document.body.appendChild(tmp);
+  const sample = (d) => { const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', d); tmp.appendChild(p); const L = p.getTotalLength(), out = []; for (let i = 0; i <= 20; i++) { const q = p.getPointAtLength(L * i / 20); out.push({ x: q.x, y: q.y }); } p.remove(); return out; };
+  const n = { normal: 0, easy: 0 };
+  [...KANZI_DATA.grades[3].order].forEach((c, j) => {
+    for (const level of ['normal', 'easy']) {
+      let seed = 7 + j * 13; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      const host = document.createElement('div'); document.body.appendChild(host); let done = false, stuck = false;
+      const pad = new Ink.Pad(host, { strokes: KANZI_STROKES[c], mode: 'free', level, onDone: () => { done = true; }, onStuck: () => { stuck = true; } });
+      for (const st of KANZI_STROKES[c].map(sample)) {
+        if (done || stuck) break;
+        const sx = (rnd() - 0.5) * 20, sy = (rnd() - 0.5) * 20, bx = (rnd() - 0.5) * 20, by = (rnd() - 0.5) * 20;
+        pad.judge({ pts: st.map((p, i) => { const w = Math.sin(Math.PI * i / (st.length - 1)); return { x: p.x + sx + bx * w, y: p.y + sy + by * w }; }), line: document.createElementNS('http://www.w3.org/2000/svg', 'polyline') });
+      }
+      host.remove(); if (done) n[level]++;
+    }
+  });
+  return n;
+});
+check(lv.easy >= lv.normal + 40, `判定: やさしい の方が ずれた字を正解にしやすい（200字中 ふつう ${lv.normal}・やさしい ${lv.easy}）`);
+// 先生が「やさしい」を選ぶと、おためしの児童画面の「書く」が やさしい になる
+await page.goto(URL0 + '?teacher=1'); await page.waitForSelector('#d-write');
+check((await page.textContent('#d-write-now')) === 'ふつう', '先生: 書く問題の判定は はじめ ふつう');
+await page.click('#d-write summary'); await page.check('input[name="wlevel"][value="easy"]');
+await page.waitForFunction(() => document.getElementById('wmsg').textContent.includes('保存'));
+check((await page.textContent('#d-write-now')) === 'やさしい', '先生: 書く問題の判定を やさしい に');
+await shot('18-teacher-write-level');
+await page.click('#try'); await page.waitForSelector('#trial-bar');
+check((await page.evaluate(() => KanziState.writeLevel)) === 'easy', 'おためし: 児童画面の書くが やさしい');
+await page.click('#tb-back');
 
 check(errors.length === 0, 'コンソールエラーなし' + (errors.length ? ': ' + errors.join(' / ') : ''));
 await browser.close();

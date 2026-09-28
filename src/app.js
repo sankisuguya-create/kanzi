@@ -295,7 +295,7 @@
     });
   }
   function startSession(kind, list) {
-    S.session = { kind: kind, items: list, i: 0, results: {}, startedAt: nowMs() };
+    S.session = { kind: kind, items: list, i: 0, results: {}, skipped: {}, startedAt: nowMs() }; // skipped: 「わからない」で答えを見た字（木には数えない）
     nextItem();
   }
   function nextItem() {
@@ -330,7 +330,7 @@
       (okuri ? '<span class="okuri-after" aria-label="おくりがな">' + esc(okuri) + '</span>' : '') +
       K('<button class="btn-ok" id="ok" type="submit">[答|こた]える</button></div></form>') +
       '<p class="rmsg" id="rmsg" aria-live="polite"></p>' +
-      '<div class="after" id="after"><button class="btn-mada" id="idk" type="button">わからない</button></div>' +
+      '<div class="after" id="after"><button class="btn-mada" id="idk" type="button">' + K('わからない（[答|こた]えを [見|み]る）') + '</button></div>' +
       '</main>';
     on('#back', quit);
     var input = $('#yomi'), msg = $('#rmsg'), composing = false, tries = 0, done = false;
@@ -357,7 +357,7 @@
       if (tries < 2) { say(K('× ちがうよ。もう[一|いち][度|ど]'), 'ng'); input.select(); return; }
       finish(false, false);
     });
-    on('#idk', function () { if (!done) finish(false, false); });
+    on('#idk', function () { if (!done) { S.session.skipped[c] = true; finish(false, false); } });
     function finish(ok, correct) {
       done = true;
       Sched.answerRead(S.p, c, ok, today(), nowMs());
@@ -392,7 +392,7 @@
       '<div class="wl"><p class="prompt">' + prompt + '</p>' +
       (listen ? '<p class="prompt-kana"><button class="speak" id="say" type="button">🔊 ' + K('[聞|き]く') + '</button></p>' : '<p class="prompt-kana">' + esc(w[1]) + '</p>') +
       K('<p class="msg" id="msg" aria-live="polite">□の [字|じ]を [書|か]こう</p>') +
-      K('<div class="tools"><button id="redo">[書|か]きなおす</button></div></div>') +
+      K('<div class="tools"><button id="redo">[書|か]きなおす</button><button class="btn-mada" id="skip">わからない（[書|か]き[順|じゅん]を [見|み]る）</button></div></div>') +
       '<div class="padbox" id="pad"></div></main>';
     on('#back', quit);
     if (listen) { speak(w[1]); on('#say', function () { speak(w[1]); }); }
@@ -407,14 +407,10 @@
       return note;
     }
     var pad = new Ink.Pad($('#pad'), {
-      strokes: ST[c], mode: 'free',
+      strokes: ST[c], mode: 'free', level: S.writeLevel === 'easy' ? 'easy' : 'normal', // 判定の強さは先生が学級ごとに選ぶ
       onMiss: function (kind) { say(kind === 'reverse' ? K('[書|か]く [向|む]きが ちがうよ。もう[一|いち][度|ど]') : K('もう[一|いち][度|ど] [書|か]いてみよう')); },
       onStroke: function () { say(''); },
-      onStuck: function () {
-        record(false);
-        say(K('[正|ただ]しい [書|か]き[順|じゅん]を [見|み]よう'));
-        pad.demo(0.8).then(function () { pad.mode = 'show'; pad.tplPaths.forEach(function (p) { p.setAttribute('class', 'g-demo'); }); result(false, false); });
-      },
+      onStuck: showAnswer,
       onDone: function (res) {
         var ok = !res.assisted;
         record(ok);
@@ -422,7 +418,17 @@
         after.then(function () { result(ok, res.orderMiss > 0); });
       }
     });
+    // まちがいが続いた時・「わからない」を押した時: 正しい書き順を見せて「まちがい」で次へ
+    function showAnswer() {
+      if (finished) return;
+      record(false);
+      pad.stuck = true;
+      $('.tools').hidden = true;
+      say(K('[正|ただ]しい [書|か]き[順|じゅん]を [見|み]よう'));
+      pad.demo(0.8).then(function () { pad.mode = 'show'; pad.tplPaths.forEach(function (p) { p.setAttribute('class', 'g-demo'); }); result(false, false); });
+    }
     on('#redo', function () { if (!finished) { pad.reset(); say(K('□の [字|じ]を [書|か]こう')); } });
+    on('#skip', function () { if (!finished) { S.session.skipped[c] = true; showAnswer(); } });
     function result(ok, orderMiss) {
       var box = document.createElement('div');
       box.className = 'result';
@@ -459,16 +465,19 @@
   // 最後まで終えた時: 木を育て、出た字の一覧（○×）と「えらぶ」のチェックを出す
   function sessionDone() {
     var s = S.session, graded = s.kind === 'read' || s.kind === 'write';
-    Sched.finishSession(S.p, s.startedAt, s.items.length, s.kind);
+    // 木が育つのは、最後まで終えた回の「わからない」以外の問題数（全部わからないなら育たない）
+    var nSkip = s.items.filter(function (c) { return s.skipped[c]; }).length;
+    Sched.finishSession(S.p, s.startedAt, s.items.length - nSkip, s.kind);
     Platform.save(S.p);
     flush();
     app.innerHTML =
       '<main class="done wide"><p class="done-big">おわり！ ' + s.items.length + K('[問|もん] やったよ</p>') +
+      (nSkip ? '<p class="hint">' + K('「わからない」の ') + nSkip + K('[問|もん]は、[木|き]には [入|はい]らないよ') + '</p>' : '') +
       K('<p class="hint">チェックを はずすと、[選|えら]んだ[漢|かん][字|じ]から はずれるよ</p>') +
       '<ul class="endlist">' + s.items.map(function (c) {
         var r = s.results[c];
         return '<li><label><input type="checkbox" data-c="' + esc(c) + '"' + (Sched.isSel(S.p, c) ? ' checked' : '') + '>' +
-          '<span class="ec">' + esc(c) + '</span>' + (graded ? '<span class="er ' + (r ? 'good' : 'again') + '">' + (r ? '○ できた' : '× まちがい') + '</span>' : '') + '</label></li>';
+          '<span class="ec">' + esc(c) + '</span>' + (graded ? '<span class="er ' + (r ? 'good' : 'again') + '">' + (r ? '○ できた' : s.skipped[c] ? K('？ わからない') : '× まちがい') + '</span>' : '') + '</label></li>';
       }).join('') + '</ul>' +
       '<button class="big primary" id="menu">メニューへ</button></main>';
     app.querySelectorAll('.endlist input').forEach(function (cb) {
@@ -538,6 +547,12 @@
             '<p class="hint">児童のメニューは、いちばん上の学年のタブで開きます。ひらがな・カタカナは「見る」と「書く」だけです（1年向け）。</p>' +
             '<div class="gchecks">' + ALL_TABS.map(function (g) { return '<label class="opt"><input type="checkbox" data-g="' + g + '"' + (shown.map(String).indexOf(String(g)) >= 0 ? ' checked' : '') + '> ' + gName(g) + '</label>'; }).join('') + '</div>' +
             '<p class="hint" id="gmsg" aria-live="polite"></p>') +
+          fold('d-write', '書く問題の判定', view.writeLevel === 'easy' ? 'やさしい' : 'ふつう',
+            '<p class="hint">児童の「書く」で、字の形をどこまで正解にするか（この学級の全員。書き順は どちらでも見ます）。</p>' +
+            '<div class="wlevel">' + [['', 'ふつう', '字の形・位置のずれが小さい時だけ正解。2回続けてまちがえると正しい書き順を見せる'],
+              ['easy', 'やさしい', 'ずれが大きくても正解にしやすい。3回続けてまちがえるまで待つ（形のちがう字を正解にすることも少し増える）']].map(function (o) {
+              return '<label class="opt"><input type="radio" name="wlevel" value="' + o[0] + '"' + ((view.writeLevel || '') === o[0] ? ' checked' : '') + '> <b>' + o[1] + '</b> <span class="hint">' + o[2] + '</span></label>';
+            }).join('') + '</div><p class="hint" id="wmsg" aria-live="polite"></p>') +
           '</section><section class="tsets"><h2>' + tgrade + '年</h2>' + gradeTabs +
           fold('d-test', '次の漢字テストの範囲', '',
             '<p class="hint">字を押すと範囲に入る／外れる（押すたびに自動で保存）。上の学年タブを切り替えると、ほかの学年の字も足せます。児童の「読む・書く・カード」の はじめかたに「次の漢字テストの はんい」として出ます。</p>' +
@@ -588,6 +603,17 @@
             $('#gmsg').textContent = '保存中…';
             // 学年を変えたら、いちばん上の学年を開く
             Platform.setGrades(klass, list).then(function () { view.grades = list; teacher(klass, 0, true); }, function () { cb.checked = !cb.checked; $('#gmsg').textContent = '× 保存できませんでした'; });
+          });
+        });
+        app.querySelectorAll('input[name="wlevel"]').forEach(function (r) {
+          r.addEventListener('change', function () {
+            var v = r.value, prev = view.writeLevel || '';
+            $('#wmsg').textContent = '保存中…';
+            Platform.setWriteLevel(klass, v).then(function () {
+              view.writeLevel = v; $('#d-write-now').textContent = v === 'easy' ? 'やさしい' : 'ふつう'; $('#wmsg').textContent = '✓ 保存しました';
+            }, function () {
+              app.querySelector('input[name="wlevel"][value="' + prev + '"]').checked = true; $('#wmsg').textContent = '× 保存できませんでした';
+            });
           });
         });
         app.querySelectorAll('.ttab').forEach(function (b) { b.addEventListener('click', function () { teacher(klass, +b.dataset.g, true); }); });
@@ -751,7 +777,7 @@
     v.then(function (view) {
       S.trial = true;
       S.test = view.test || null;
-      applyGrades(view.grades); S.pointers = view.pointers || {};
+      applyGrades(view.grades); S.pointers = view.pointers || {}; S.writeLevel = view.writeLevel || '';
       S.p = Platform.startTrial(S.info.email);
       S.dayOffset = 0;
       trialBar();
@@ -772,6 +798,7 @@
     S.pointers = info.pointers || {};
     S.test = info.test || null;
     applyGrades(info.grades);
+    S.writeLevel = info.writeLevel || '';
     if (info.role === 'teacher') return teacher();
     if (info.role !== 'student') {
       app.innerHTML = '<main class="done"><p>このアカウントでは つかえません。学校のアカウントで ひらいてね。</p></main>';

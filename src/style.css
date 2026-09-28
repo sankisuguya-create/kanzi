@@ -355,3 +355,6 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .forest-k { background: var(--forest-card-k); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .forest-colors { margin: 0; padding: 0 4px; font-size: 16px; }
 .forest-colors summary { min-height: 56px; padding: 14px 6px; cursor: pointer; }
+/* 先生画面: 書く問題の判定（ふつう／やさしい） */
+.wlevel .opt { display: block; margin: 10px 0; }
+.wlevel .opt .hint { display: block; margin: 2px 0 0 28px; }
