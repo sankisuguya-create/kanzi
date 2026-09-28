@@ -375,8 +375,14 @@ check((await page.textContent('#d-grades-now')).startsWith('ひらがな・カ�
 // ---- 読む: 答えが一つに決まる問い方（かなを含む句は その字の読みだけ、字＋送り仮名は送り仮名を後ろに）
 await page.evaluate(() => { localStorage.clear(); });
 await page.goto(URL0); await page.waitForSelector('#go-read');
-await page.evaluate(() => { for (const c of ['港', '悪']) { KanziState.p.read[c] = [1, 99999, 1, 0, 0]; Sched.setSel(KanziState.p, c, true, 1); } });
+await page.evaluate(() => { for (const c of ['去', '港', '悪']) { KanziState.p.read[c] = [1, 99999, 1, 0, 0]; Sched.setSel(KanziState.p, c, true, 1); } });
 await page.click('#go-read'); await page.click('.chooser [data-id="sel"]'); await page.waitForSelector('#yomi');
+// 学年より上の字は交ぜ書きにせず ルビ（過去 の 過 に「か」）
+check((await cur()) === '去' && (await page.textContent('.card .word rt')) === 'か' && (await page.evaluate(() => document.querySelector('.card .word').textContent)) === '過か去', 'よむ: 学年より上の字は ルビ（過去 の 過 に か）');
+await shot('5-read-ruby');
+await page.fill('#yomi', 'かこ'); await page.keyboard.press('Enter'); await page.waitForSelector('#next');
+check((await page.textContent('#rmsg')).includes('正かい'), 'よむ: 過去 → かこ');
+await page.click('#next'); await page.waitForSelector('#yomi');
 check((await cur()) === '港' && (await page.textContent('.card .word')) === '港に船が入る' && (await page.$('.card.part')) && (await page.textContent('label.q')).includes('線を引いた字') && !(await page.$('.okuri-after')), 'よむ: かなを含む句は 線を引いた字の読みだけを問う（港に船が入る）');
 check(await page.evaluate(() => getComputedStyle(document.querySelector('.card .tg')).textDecorationLine.includes('underline')), 'よむ: 問う字に下線');
 await shot('5-read-part');
@@ -387,6 +393,12 @@ check((await cur()) === '悪' && (await page.textContent('.okuri-after')) === '�
 await page.fill('#yomi', 'わる'); await page.keyboard.press('Enter'); await page.waitForSelector('#next');
 check((await page.textContent('#rmsg')).includes('正かい'), 'よむ: 「悪い」の答えは「わる」');
 await page.click('#next'); await page.waitForSelector('.endlist'); await page.click('#menu');
+// 書く: 例語の他の字のルビも出る（□の字の読みとは別）
+await page.evaluate(() => { KanziState.p.write['去'] = [1, 99999, 1, 0, 0]; });
+await page.click('#go-write'); await page.click('.chooser [data-id="sel"]'); await page.waitForSelector('.pad');
+check((await cur()) === '去' && (await page.evaluate(() => [...document.querySelectorAll('.prompt rt')].map((r) => r.textContent).join(','))) === 'か,こ', '書く: 過□ の 過 にルビ か、□の上に こ');
+await shot('8-write-ruby');
+await page.click('#back');
 
 // ---- わからない（スキップ）・途中でやめる・書く判定の強さ
 await page.evaluate(() => localStorage.clear());

@@ -54,7 +54,9 @@ test('読む問題の答えが一つに決まる: 例語は2字以上・字は1�
   for (const c of Object.keys(D.kanji)) for (const w of D.kanji[c].w) {
     assert.ok([...w[0]].length >= 2, `${c}: 「${w[0]}」が1字`);
     assert.equal(w[0].split(c).length, 2, `${c}: 「${w[0]}」に字が2回以上`);
-    assert.ok(!w[4] || !w[4].length, `${c}: 「${w[0]}」の読みが2通り`);
+    assert.ok(!Array.isArray(w[4]), `${c}: 「${w[0]}」の読みが2通り`);
+    // 学年より上の字には必ずルビ（交ぜ書きにしない）
+    [...w[0]].forEach((ch, i) => { if (D.kanji[ch] && D.kanji[ch].g > D.kanji[c].g || (/\p{Script=Han}/u.test(ch) && !D.kanji[ch])) assert.ok(w[4] && w[4][i], `${c}: 「${w[0]}」の「${ch}」にルビがない`); });
   }
 });
 
@@ -64,4 +66,12 @@ test('3年: ドリルの音訓を例語でおおう（例: 着＝チャク・き
   for (const x of ['じゅう', 'ちょう', 'え', 'おも', 'かさ']) assert.ok(r('重').has(x), '重 ' + x);
   const n = [...D.grades[3].order].reduce((a, c) => a + D.kanji[c].w.length, 0);
   assert.ok(n >= 500, '3年の例語 ' + n);
+});
+
+test('交ぜ書きをやめてルビ: 過去・関係・名前 など', () => {
+  const find = (c, word) => D.kanji[c].w.find((w) => w[0] === word);
+  assert.deepEqual(find('去', '過去')[4], { 0: 'か' });
+  assert.deepEqual(find('係', '関係')[4], { 0: 'かん' });
+  assert.deepEqual(find('名', '名前')[4], { 1: 'まえ' });
+  assert.equal(find('則', '規則') || find('規', '規則') ? true : false, true);
 });

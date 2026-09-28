@@ -65,7 +65,10 @@
   // 例語は答えた回数ごとに入れ替える（音・訓を交互に：D7）
   // 例語がない字（カタカナのヲ）は、その字だけを例語にする
   function wordFor(c, n) { var w = info(c).w; return w.length ? w[(n || 0) % w.length] : [c, hira(c), hira(c), 'kana']; }
-  function wordHtml(w, c) { return Array.from(w[0]).map(function (ch) { return '<span class="' + (ch === c ? 'tg' : 'ot') + '">' + esc(ch) + '</span>'; }).join(''); }
+  // 例語の学年より上の字にはルビ（w[4] = { 何字目: よみ }。交ぜ書きにしない）
+  function rubyOf(w) { return w[4] && !Array.isArray(w[4]) ? w[4] : {}; }
+  function withRuby(ch, rt) { return rt ? '<ruby>' + esc(ch) + '<rt>' + esc(rt) + '</rt></ruby>' : esc(ch); }
+  function wordHtml(w, c) { var rb = rubyOf(w); return Array.from(w[0]).map(function (ch, i) { return '<span class="' + (ch === c ? 'tg' : 'ot') + '">' + withRuby(ch, rb[i]) + '</span>'; }).join(''); }
 
   function commit() {
     Platform.save(S.p);
@@ -392,8 +395,9 @@
   // カタカナ: □の上に その字の ひらがなを出す（例: □イス の□の上に「あ」）
   function writeCard(c) {
     var e = S.p.write[c], w = wordFor(c, e && e[2]), hiraQ = !!(D.kana[c] && D.kana[c].s === 'h'), listen = hiraQ && canSpeak;
-    var prompt = Array.from(w[0]).map(function (ch) {
-      return ch === c ? '<span class="blank"><ruby><span class="box">　</span><rt>' + (listen ? '' : esc(w[2])) + '</rt></ruby></span>' : '<span class="ot">' + esc(ch) + '</span>';
+    var rb = rubyOf(w);
+    var prompt = Array.from(w[0]).map(function (ch, i) {
+      return ch === c ? '<span class="blank"><ruby><span class="box">　</span><rt>' + (listen ? '' : esc(w[2])) + '</rt></ruby></span>' : '<span class="ot">' + withRuby(ch, rb[i]) + '</span>';
     }).join('');
     app.innerHTML = bar() +
       '<main class="write">' +

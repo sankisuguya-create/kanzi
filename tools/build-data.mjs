@@ -66,20 +66,31 @@ if (order.length !== gradeChars.length || new Set(order).size !== order.length |
 orders[GRADE] = order;
 const seen = new Set();
 for (const line of lines(`words-g${GRADE}.txt`)) {
-  const [ch, rest] = line.split('|');
+  const ch = line.slice(0, line.indexOf('|')), rest = line.slice(line.indexOf('|') + 1); // 例語の中の {字|よみ} の | で切らない
   if (entries.has(ch)) err(`${ch}: 重複`);
   const words = rest.split(',').map((s) => s.split(':'));
   const out = [];
   const on = [], kun = [];
-  for (const [w, kk, r] of words) {
-    if (!w || !kk || !r) { err(`${ch}: 書式エラー「${line}」`); continue; }
+  for (const [wRaw, kk, r] of words) {
+    if (!wRaw || !kk || !r) { err(`${ch}: 書式エラー「${line}」`); continue; }
+    // 学年より上の字は {字|よみ} と書いてルビをふる（交ぜ書きにしない）。w は表示用の字だけの形、ruby は { 何字目: よみ }
+    const ruby = {};
+    let w = '';
+    for (const m of wRaw.matchAll(/\{([^|}]+)\|([^}]+)\}|([^{])/g)) {
+      if (m[3]) { w += m[3]; continue; }
+      if ([...m[1]].length !== 1 || !/\p{Script=Han}/u.test(m[1])) err(`${ch}: 「${wRaw}」のルビは漢字1字ごとに {字|よみ}`);
+      if (gradeOf(m[1]) <= GRADE) err(`${ch}: 「${wRaw}」の「${m[1]}」は${GRADE}年までの字なので ルビはいらない`);
+      ruby[[...w].length] = m[2];
+      w += m[1];
+    }
+    if (ruby[[...w].indexOf(ch)] !== undefined) err(`${ch}: 「${wRaw}」の問う字にルビがある`);
     const [k, ...alts] = kk.split('/');
     if (!w.includes(ch)) err(`${ch}: 例語「${w}」に字が含まれない`);
     // 読む問題の答えを一つに決めるため: 2字以上・字は1回だけ・読みは1通り
     if ([...w].length < 2) err(`${ch}: 例語「${w}」が1字（答えが一つに決まらない。2字以上の語か句にする）`);
     if (w.split(ch).length !== 2) err(`${ch}: 例語「${w}」に字が2回以上ある`);
     if (alts.length) err(`${ch}: 例語「${w}」の読みが2通り（${[k, ...alts].join('/')}）。読みが一つに決まる語にする`);
-    for (const c of w) if (/\p{Script=Han}/u.test(c) && gradeOf(c) > GRADE) err(`${ch}: 例語「${w}」に${GRADE}年より上の字「${c}」`);
+    [...w].forEach((c, i) => { if (/\p{Script=Han}/u.test(c) && gradeOf(c) > GRADE && ruby[i] === undefined) err(`${ch}: 例語「${w}」に${GRADE}年より上の字「${c}」（ルビ {字|よみ} をふる）`); });
     if (!k.includes(r)) err(`${ch}: 例語「${w}」のよみ「${k}」に字のよみ「${r}」が含まれない`);
     const m = readingType(ch, r);
     if (!m) { err(`${ch}: よみ「${r}」が辞書の音訓に一致しない`); continue; }
@@ -94,7 +105,7 @@ for (const line of lines(`words-g${GRADE}.txt`)) {
     }
     // 同じ語幹は最初の1つだけ（持つ／持ち物 → も.つ のみ）
     if (!list.some((x) => x.split('.')[0] === base.split('.')[0])) list.push(base);
-    out.push(alts.length ? [w, k, r, t, alts] : [w, k, r, t]);
+    out.push(Object.keys(ruby).length ? [w, k, r, t, ruby] : [w, k, r, t]); // 5つめ＝ルビ { 何字目: よみ }
   }
   entries.set(ch, out);
   readings.set(ch, { on, kun });
@@ -108,9 +119,9 @@ for (const c of gradeChars) if (!seen.has(c)) err(`${c}: 例語がない（${GRA
 const kuromoji = require('kuromoji');
 const tokenizer = await new Promise((res, rej) =>
   kuromoji.builder({ dicPath: path.join(path.dirname(require.resolve('kuromoji')), '..', 'dict') }).build((e, t) => (e ? rej(e) : res(t))));
-for (const [ch, ws] of entries) for (const [w, k, , , alts] of ws) {
+for (const [ch, ws] of entries) for (const [w, k] of ws) {
   const guess = kata2hira(tokenizer.tokenize(w).map((t) => t.reading || t.surface_form).join(''));
-  if (guess !== k && !(alts || []).includes(guess)) warns.push(`${ch}: 「${w}」 正本=${k} 解析=${guess}`);
+  if (guess !== k) warns.push(`${ch}: 「${w}」 正本=${k} 解析=${guess}`);
 }
 
 // ---- KanjiVG（筆順）
