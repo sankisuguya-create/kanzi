@@ -47,7 +47,8 @@ try {
   for(const mode of ['p','r','w','k','y']){
     await seed(36,mode);images.push(await page.locator('canvas.tree').evaluate(c=>c.toDataURL()));
   }
-  assert.equal(new Set(images).size,5);
+  assert.equal(new Set(images).size,4); // 葉の色は4色（カード2種類は同じ色）
+  assert.equal(images[3],images[4]);
   const beforeReload=images[4];await page.reload();
   await page.waitForFunction(() => KanziState.treeView.metrics().frames > 0);
   assert.equal(await page.locator('canvas.tree').evaluate(c=>c.toDataURL()),beforeReload);
@@ -59,22 +60,19 @@ try {
   const idle=await page.evaluate(() => KanziState.treeView.metrics().frames);
   await page.waitForTimeout(350);
   assert.equal(await page.evaluate(() => KanziState.treeView.metrics().frames),idle);
-  // 戻る先・ページ数が増えても描画上限とキャッシュ上限は一定。
-  await seed(100000);let metrics=await page.evaluate(() => KanziState.treeView.metrics());
-  assert.ok(metrics.visibleTrees<=36);assert.ok(metrics.cachePixels<=3*1024*1024);
-  for(let i=0;i<10;i++){
-    await page.locator('.forest-prev').click();await page.waitForTimeout(50);
-    const moved=await page.evaluate(()=>KanziState.treeView.metrics());
-    assert.ok(moved.cachedRecords<=36, '過去の森の補助情報がたまり続けない');
-    assert.ok(moved.cachePixels<=3*1024*1024);
-  }
-  assert.equal(await page.locator('.forest-regions').isVisible(),true);
-  await page.locator('.forest-prev').click();await page.waitForTimeout(100);
-  const oldArea=await page.locator('.forest-region-name').textContent();
+  // 27本（972問）で森が完成し、それ以上は育たない。描画する木・キャッシュは上限のまま
+  await seed(972);let metrics=await page.evaluate(() => KanziState.treeView.metrics());
+  assert.equal(metrics.visibleTrees,27);
+  assert.match(await page.locator('.forest-status').textContent(),/27本の 森が できたよ/);
+  const full=await page.locator('canvas.tree').evaluate(c=>c.toDataURL());
+  await seed(100000,'mixed',99999);metrics=await page.evaluate(() => KanziState.treeView.metrics());
+  assert.equal(metrics.visibleTrees,27);assert.ok(metrics.cachePixels<=3*1024*1024);
+  assert.equal(await page.evaluate(() => KanziState.treeView.metrics().animating),false,'上限の後は成長の演出もしない');
+  assert.equal(await page.locator('canvas.tree').evaluate(c=>c.toDataURL()),full,'10万問でも27本の森のまま');
+  assert.equal(await page.locator('.forest-regions').isVisible(),false);
   await page.locator('.forest-focus').click();await page.waitForTimeout(950);
   assert.equal(await page.evaluate(() => KanziState.treeView.metrics().visibleTrees),1);
   await page.locator('.forest-focus').click();await page.waitForTimeout(950);
-  assert.notEqual(await page.locator('.forest-region-name').textContent(),oldArea);
   await page.screenshot({path:path.join(SHOTS,'forest-large.png')});
   // 繰り返しメニューを作っても画像キャッシュを使い回し、破棄後に描画しない。
   const timings=await page.evaluate(async()=>{
@@ -102,5 +100,5 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/gas/Index.html`);
   await page.waitForFunction(()=>window.KanziState?.treeView?.metrics().frames>0);
   assert.equal(errors.length,0,errors.join('\n'));
-  console.log(JSON.stringify({checked:'seed, sprouts, 5 species, mode colors, reload, 36→37, 100000 activities, areas, disposal, reduced motion, narrow screen, GAS bundle',idleFrames:0,cacheMiB:metrics.cachePixels*4/1024/1024,warmMountMs:timings.map(x=>Math.round(x)),errors}));
+  console.log(JSON.stringify({checked:'seed, sprouts, 5 species, 4 mode colors, reload, 36→37, cap 27 trees (972 / 100000), disposal, reduced motion, narrow screen, GAS bundle',idleFrames:0,cacheMiB:metrics.cachePixels*4/1024/1024,warmMountMs:timings.map(x=>Math.round(x)),errors}));
 } finally {await browser.close();server.close();}
