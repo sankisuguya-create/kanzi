@@ -6,6 +6,13 @@
   var NS = 'http://www.w3.org/2000/svg';
   var N = 32; // 比較に使う点の数
   var TOL = 19; // 1画の平均ずれの許容（109四方の座標で。児童の入力精度に合わせて広め：R16）
+  // 判定の強さ（先生が学級ごとに選ぶ）。easy＝やさしい: ずれ・長さの許容を広げ、3回続けてまちがえるまで待つ。書く向きは見る（書き順の学習のため）。
+  // 3年の200字で実測（各画に なめらかなずれ・曲がりを加えて書く。docs/design.md §19）:
+  //   ずれ±10で正解になる字 normal 123 → easy 195 ／ 同じ画数の別の字を書いて正解になる割合 normal 0.3% → easy 4.5%
+  var LEVELS = {
+    normal: { tol: TOL, minLen: 0.35, maxLen: 2.3, anyDir: false, stuckAfter: 2 },
+    easy: { tol: 25, minLen: 0.25, maxLen: 3.0, anyDir: false, stuckAfter: 3 }
+  };
   var MAX_SHIFT = 14; // 字全体のずれを補正する上限
 
   function el(name, attrs, parent) {
@@ -168,13 +175,13 @@
 
   Pad.prototype.judge = function (c) {
     var drawn = resample(c.pts), dlen = polyLen(c.pts), off = this.offset();
-    var nx = this.expected(), best = -1, bestS = Infinity, reversed = false;
+    var nx = this.expected(), best = -1, bestS = Infinity, reversed = false, L = LEVELS[this.opts.level] || LEVELS.normal, TOL = L.tol;
     var fit = function (i) {
       var t = this.tpl[i];
       var f = meanDist(drawn, t.pts, off, false), r = meanDist(drawn, t.pts, off, true);
       var shortTpl = t.len < 22; // 点などの短い画は向きを問わない
-      var lenOk = shortTpl || (dlen > t.len * 0.35 && dlen < t.len * 2.3 + 15);
-      return { s: shortTpl ? Math.min(f, r) : f, rev: !shortTpl && r < f * 0.7 && r <= TOL, ok: lenOk };
+      var lenOk = shortTpl || (dlen > t.len * L.minLen && dlen < t.len * L.maxLen + 15);
+      return { s: shortTpl || L.anyDir ? Math.min(f, r) : f, rev: !shortTpl && r < f * 0.7 && r <= TOL, ok: lenOk };
     }.bind(this);
     var e = fit(nx);
     if (e.ok && e.s <= TOL) { best = nx; bestS = e.s; }
@@ -191,7 +198,7 @@
       setTimeout(function () { if (c.line.parentNode) c.line.parentNode.removeChild(c.line); }, 450);
       this.result.misses++;
       this.streak++;
-      if (this.mode === 'free' && this.streak >= 2 && !this.hintOn) {
+      if (this.mode === 'free' && this.streak >= L.stuckAfter && !this.hintOn) {
         this.result.assisted = true;
         // onStuck があれば、ヒントを出さずに知らせる（呼び出し側が正解の書き順を見せて次へ進む）
         if (this.opts.onStuck) { this.stuck = true; this.opts.onStuck(this.result); return; }
@@ -227,5 +234,5 @@
     });
   };
 
-  root.Ink = { Pad: Pad, animate: animate, _resample: resample };
+  root.Ink = { LEVELS: LEVELS, Pad: Pad, animate: animate, _resample: resample };
 })(this);

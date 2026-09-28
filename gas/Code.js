@@ -195,7 +195,7 @@ function api_init() {
   var me = begin_(), orders = orders_();
   if (me.role === 'student') {
     var klass = classOf_(me.email);
-    return { role: 'student', email: me.email, klass: klass, progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders, test: test_(klass) };
+    return { role: 'student', email: me.email, klass: klass, progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders, test: test_(klass), writeLevel: writeLevel_(klass) };
   }
   if (me.role === 'teacher') return { role: 'teacher', email: me.email, classes: teacherClasses_(me.email), orders: orders };
   return { role: 'unknown', email: me.email };
@@ -261,7 +261,7 @@ function api_teacherView(klass) {
     out.miss = miss.sort(function (a, b) { return b.r - a.r; }).map(function (x) { return x.c; }).filter(function (x) { return seen[x] ? false : (seen[x] = true); }).slice(0, 3);
     return out;
   }).sort(function (a, b) { return (Number(a.no) || 999) - (Number(b.no) || 999); });
-  return { grades: grades_(klass), pointers: pointers_(klass), test: test_(klass), students: students, stats: { students: kids.length, perChar: per } };
+  return { grades: grades_(klass), pointers: pointers_(klass), test: test_(klass), writeLevel: writeLevel_(klass), students: students, stats: { students: kids.length, perChar: per } };
 }
 
 function api_setGrades(klass, list) {
@@ -278,6 +278,14 @@ function api_setTest(klass, json) {
   var v = chars ? { label: String(t.label || '').slice(0, 40), chars: chars } : null;
   setSetting_('test:' + klass, v ? JSON.stringify(v) : '');
   return v;
+}
+// 書く問題の判定の強さ（設定のキー write:<学級>）: '' ＝ふつう、'easy' ＝やさしい
+function writeLevel_(klass) { return String(setting_('write:' + klass)) === 'easy' ? 'easy' : ''; }
+function api_setWriteLevel(klass, level) {
+  requireClass_(klass);
+  level = level === 'easy' ? 'easy' : '';
+  setSetting_('write:' + klass, level);
+  return level;
 }
 function api_setPointer(klass, grade, n) {
   requireClass_(klass);

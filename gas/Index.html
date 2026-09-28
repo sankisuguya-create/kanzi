@@ -359,6 +359,9 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .forest-k { background: var(--forest-card-k); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .forest-colors { margin: 0; padding: 0 4px; font-size: 16px; }
 .forest-colors summary { min-height: 56px; padding: 14px 6px; cursor: pointer; }
+/* 先生画面: 書く問題の判定（ふつう／やさしい） */
+.wlevel .opt { display: block; margin: 10px 0; }
+.wlevel .opt .hint { display: block; margin: 2px 0 0 28px; }
 </style>
 </head>
 <body lang="ja">
@@ -639,7 +642,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
 
   // ---- デモの設定（先生画面で変える）: { grades: { 組: [学年...] }, pointers: { '組:学年': n }, orders: { 学年: 並び } }
   var SKEY = 'kanzi.settings';
-  function demoSettings() { var s = store.get(SKEY) || {}; s.grades = s.grades || {}; s.pointers = s.pointers || {}; s.orders = s.orders || {}; s.tests = s.tests || {}; return s; }
+  function demoSettings() { var s = store.get(SKEY) || {}; s.grades = s.grades || {}; s.pointers = s.pointers || {}; s.orders = s.orders || {}; s.tests = s.tests || {}; s.writeLevels = s.writeLevels || {}; return s; }
   function saveDemo(s) { store.set(SKEY, s); }
   function demoGrades(klass) { return demoSettings().grades[klass] || [1, 2, 3]; }
   function demoPointers(klass) {
@@ -665,7 +668,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     if (!isGas) {
       var role = /teacher/.test(location.search) ? 'teacher' : 'student', s = demoSettings(), klass = '3-1';
       return Promise.resolve({ role: role, demo: true, email: 'demo', klass: klass, progress: Sched.norm(store.get(key)),
-        grades: demoGrades(klass), pointers: demoPointers(klass), orders: s.orders, test: s.tests[klass] || null, classes: [klass] });
+        grades: demoGrades(klass), pointers: demoPointers(klass), orders: s.orders, test: s.tests[klass] || null, writeLevel: s.writeLevels[klass] || '', classes: [klass] });
     }
     return gas('api_init').then(function (info) {
       key = 'kanzi.progress.' + info.email;
@@ -708,7 +711,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   function teacherView(klass) {
     if (isGas) return gas('api_teacherView', klass);
     var s = demoSettings();
-    return Promise.resolve({ grades: demoGrades(klass), pointers: demoPointers(klass), test: s.tests[klass] || null, students: demoStudents(), stats: demoStats() });
+    return Promise.resolve({ grades: demoGrades(klass), pointers: demoPointers(klass), test: s.tests[klass] || null, writeLevel: s.writeLevels[klass] || '', students: demoStudents(), stats: demoStats() });
   }
   function demoStats() {
     var seed = 7, out = {}, g, i;
@@ -737,6 +740,12 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     if (isGas) return gas('api_setTest', klass, JSON.stringify(t));
     var s = demoSettings(); s.tests[klass] = t && t.chars ? t : null; saveDemo(s); return Promise.resolve(s.tests[klass]);
   }
+  // 書く問題の判定の強さ（学級ごと）: '' ＝ふつう、'easy' ＝やさしい
+  function setWriteLevel(klass, level) {
+    level = level === 'easy' ? 'easy' : '';
+    if (isGas) return gas('api_setWriteLevel', klass, level);
+    var s = demoSettings(); s.writeLevels[klass] = level; saveDemo(s); return Promise.resolve(level);
+  }
   function setPointer(klass, grade, n) {
     if (isGas) return gas('api_setPointer', klass, grade, n);
     var s = demoSettings(); s.pointers[klass + ':' + grade] = n; saveDemo(s); return Promise.resolve(n);
@@ -751,7 +760,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   }
 
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
-    teacherView: teacherView, setTest: setTest, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder, store: store };
+    teacherView: teacherView, setTest: setTest, setWriteLevel: setWriteLevel, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder, store: store };
 })(this);
 </script>
 <script>
@@ -855,6 +864,13 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   var NS = 'http://www.w3.org/2000/svg';
   var N = 32; // 比較に使う点の数
   var TOL = 19; // 1画の平均ずれの許容（109四方の座標で。児童の入力精度に合わせて広め：R16）
+  // 判定の強さ（先生が学級ごとに選ぶ）。easy＝やさしい: ずれ・長さの許容を広げ、3回続けてまちがえるまで待つ。書く向きは見る（書き順の学習のため）。
+  // 3年の200字で実測（各画に なめらかなずれ・曲がりを加えて書く。docs/design.md §19）:
+  //   ずれ±10で正解になる字 normal 123 → easy 195 ／ 同じ画数の別の字を書いて正解になる割合 normal 0.3% → easy 4.5%
+  var LEVELS = {
+    normal: { tol: TOL, minLen: 0.35, maxLen: 2.3, anyDir: false, stuckAfter: 2 },
+    easy: { tol: 25, minLen: 0.25, maxLen: 3.0, anyDir: false, stuckAfter: 3 }
+  };
   var MAX_SHIFT = 14; // 字全体のずれを補正する上限
 
   function el(name, attrs, parent) {
@@ -1017,13 +1033,13 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
 
   Pad.prototype.judge = function (c) {
     var drawn = resample(c.pts), dlen = polyLen(c.pts), off = this.offset();
-    var nx = this.expected(), best = -1, bestS = Infinity, reversed = false;
+    var nx = this.expected(), best = -1, bestS = Infinity, reversed = false, L = LEVELS[this.opts.level] || LEVELS.normal, TOL = L.tol;
     var fit = function (i) {
       var t = this.tpl[i];
       var f = meanDist(drawn, t.pts, off, false), r = meanDist(drawn, t.pts, off, true);
       var shortTpl = t.len < 22; // 点などの短い画は向きを問わない
-      var lenOk = shortTpl || (dlen > t.len * 0.35 && dlen < t.len * 2.3 + 15);
-      return { s: shortTpl ? Math.min(f, r) : f, rev: !shortTpl && r < f * 0.7 && r <= TOL, ok: lenOk };
+      var lenOk = shortTpl || (dlen > t.len * L.minLen && dlen < t.len * L.maxLen + 15);
+      return { s: shortTpl || L.anyDir ? Math.min(f, r) : f, rev: !shortTpl && r < f * 0.7 && r <= TOL, ok: lenOk };
     }.bind(this);
     var e = fit(nx);
     if (e.ok && e.s <= TOL) { best = nx; bestS = e.s; }
@@ -1040,7 +1056,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       setTimeout(function () { if (c.line.parentNode) c.line.parentNode.removeChild(c.line); }, 450);
       this.result.misses++;
       this.streak++;
-      if (this.mode === 'free' && this.streak >= 2 && !this.hintOn) {
+      if (this.mode === 'free' && this.streak >= L.stuckAfter && !this.hintOn) {
         this.result.assisted = true;
         // onStuck があれば、ヒントを出さずに知らせる（呼び出し側が正解の書き順を見せて次へ進む）
         if (this.opts.onStuck) { this.stuck = true; this.opts.onStuck(this.result); return; }
@@ -1076,7 +1092,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     });
   };
 
-  root.Ink = { Pad: Pad, animate: animate, _resample: resample };
+  root.Ink = { LEVELS: LEVELS, Pad: Pad, animate: animate, _resample: resample };
 })(this);
 </script>
 <script>
@@ -2019,7 +2035,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     });
   }
   function startSession(kind, list) {
-    S.session = { kind: kind, items: list, i: 0, results: {}, startedAt: nowMs() };
+    S.session = { kind: kind, items: list, i: 0, results: {}, skipped: {}, startedAt: nowMs() }; // skipped: 「わからない」で答えを見た字（木には数えない）
     nextItem();
   }
   function nextItem() {
@@ -2054,7 +2070,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       (okuri ? '<span class="okuri-after" aria-label="おくりがな">' + esc(okuri) + '</span>' : '') +
       K('<button class="btn-ok" id="ok" type="submit">[答|こた]える</button></div></form>') +
       '<p class="rmsg" id="rmsg" aria-live="polite"></p>' +
-      '<div class="after" id="after"><button class="btn-mada" id="idk" type="button">わからない</button></div>' +
+      '<div class="after" id="after"><button class="btn-mada" id="idk" type="button">' + K('わからない（[答|こた]えを [見|み]る）') + '</button></div>' +
       '</main>';
     on('#back', quit);
     var input = $('#yomi'), msg = $('#rmsg'), composing = false, tries = 0, done = false;
@@ -2081,7 +2097,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       if (tries < 2) { say(K('× ちがうよ。もう[一|いち][度|ど]'), 'ng'); input.select(); return; }
       finish(false, false);
     });
-    on('#idk', function () { if (!done) finish(false, false); });
+    on('#idk', function () { if (!done) { S.session.skipped[c] = true; finish(false, false); } });
     function finish(ok, correct) {
       done = true;
       Sched.answerRead(S.p, c, ok, today(), nowMs());
@@ -2116,7 +2132,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       '<div class="wl"><p class="prompt">' + prompt + '</p>' +
       (listen ? '<p class="prompt-kana"><button class="speak" id="say" type="button">🔊 ' + K('[聞|き]く') + '</button></p>' : '<p class="prompt-kana">' + esc(w[1]) + '</p>') +
       K('<p class="msg" id="msg" aria-live="polite">□の [字|じ]を [書|か]こう</p>') +
-      K('<div class="tools"><button id="redo">[書|か]きなおす</button></div></div>') +
+      K('<div class="tools"><button id="redo">[書|か]きなおす</button><button class="btn-mada" id="skip">わからない（[書|か]き[順|じゅん]を [見|み]る）</button></div></div>') +
       '<div class="padbox" id="pad"></div></main>';
     on('#back', quit);
     if (listen) { speak(w[1]); on('#say', function () { speak(w[1]); }); }
@@ -2131,14 +2147,10 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       return note;
     }
     var pad = new Ink.Pad($('#pad'), {
-      strokes: ST[c], mode: 'free',
+      strokes: ST[c], mode: 'free', level: S.writeLevel === 'easy' ? 'easy' : 'normal', // 判定の強さは先生が学級ごとに選ぶ
       onMiss: function (kind) { say(kind === 'reverse' ? K('[書|か]く [向|む]きが ちがうよ。もう[一|いち][度|ど]') : K('もう[一|いち][度|ど] [書|か]いてみよう')); },
       onStroke: function () { say(''); },
-      onStuck: function () {
-        record(false);
-        say(K('[正|ただ]しい [書|か]き[順|じゅん]を [見|み]よう'));
-        pad.demo(0.8).then(function () { pad.mode = 'show'; pad.tplPaths.forEach(function (p) { p.setAttribute('class', 'g-demo'); }); result(false, false); });
-      },
+      onStuck: showAnswer,
       onDone: function (res) {
         var ok = !res.assisted;
         record(ok);
@@ -2146,7 +2158,17 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
         after.then(function () { result(ok, res.orderMiss > 0); });
       }
     });
+    // まちがいが続いた時・「わからない」を押した時: 正しい書き順を見せて「まちがい」で次へ
+    function showAnswer() {
+      if (finished) return;
+      record(false);
+      pad.stuck = true;
+      $('.tools').hidden = true;
+      say(K('[正|ただ]しい [書|か]き[順|じゅん]を [見|み]よう'));
+      pad.demo(0.8).then(function () { pad.mode = 'show'; pad.tplPaths.forEach(function (p) { p.setAttribute('class', 'g-demo'); }); result(false, false); });
+    }
     on('#redo', function () { if (!finished) { pad.reset(); say(K('□の [字|じ]を [書|か]こう')); } });
+    on('#skip', function () { if (!finished) { S.session.skipped[c] = true; showAnswer(); } });
     function result(ok, orderMiss) {
       var box = document.createElement('div');
       box.className = 'result';
@@ -2183,16 +2205,19 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   // 最後まで終えた時: 木を育て、出た字の一覧（○×）と「えらぶ」のチェックを出す
   function sessionDone() {
     var s = S.session, graded = s.kind === 'read' || s.kind === 'write';
-    Sched.finishSession(S.p, s.startedAt, s.items.length, s.kind);
+    // 木が育つのは、最後まで終えた回の「わからない」以外の問題数（全部わからないなら育たない）
+    var nSkip = s.items.filter(function (c) { return s.skipped[c]; }).length;
+    Sched.finishSession(S.p, s.startedAt, s.items.length - nSkip, s.kind);
     Platform.save(S.p);
     flush();
     app.innerHTML =
       '<main class="done wide"><p class="done-big">おわり！ ' + s.items.length + K('[問|もん] やったよ</p>') +
+      (nSkip ? '<p class="hint">' + K('「わからない」の ') + nSkip + K('[問|もん]は、[木|き]には [入|はい]らないよ') + '</p>' : '') +
       K('<p class="hint">チェックを はずすと、[選|えら]んだ[漢|かん][字|じ]から はずれるよ</p>') +
       '<ul class="endlist">' + s.items.map(function (c) {
         var r = s.results[c];
         return '<li><label><input type="checkbox" data-c="' + esc(c) + '"' + (Sched.isSel(S.p, c) ? ' checked' : '') + '>' +
-          '<span class="ec">' + esc(c) + '</span>' + (graded ? '<span class="er ' + (r ? 'good' : 'again') + '">' + (r ? '○ できた' : '× まちがい') + '</span>' : '') + '</label></li>';
+          '<span class="ec">' + esc(c) + '</span>' + (graded ? '<span class="er ' + (r ? 'good' : 'again') + '">' + (r ? '○ できた' : s.skipped[c] ? K('？ わからない') : '× まちがい') + '</span>' : '') + '</label></li>';
       }).join('') + '</ul>' +
       '<button class="big primary" id="menu">メニューへ</button></main>';
     app.querySelectorAll('.endlist input').forEach(function (cb) {
@@ -2262,6 +2287,12 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
             '<p class="hint">児童のメニューは、いちばん上の学年のタブで開きます。ひらがな・カタカナは「見る」と「書く」だけです（1年向け）。</p>' +
             '<div class="gchecks">' + ALL_TABS.map(function (g) { return '<label class="opt"><input type="checkbox" data-g="' + g + '"' + (shown.map(String).indexOf(String(g)) >= 0 ? ' checked' : '') + '> ' + gName(g) + '</label>'; }).join('') + '</div>' +
             '<p class="hint" id="gmsg" aria-live="polite"></p>') +
+          fold('d-write', '書く問題の判定', view.writeLevel === 'easy' ? 'やさしい' : 'ふつう',
+            '<p class="hint">児童の「書く」で、字の形をどこまで正解にするか（この学級の全員。書き順は どちらでも見ます）。</p>' +
+            '<div class="wlevel">' + [['', 'ふつう', '字の形・位置のずれが小さい時だけ正解。2回続けてまちがえると正しい書き順を見せる'],
+              ['easy', 'やさしい', 'ずれが大きくても正解にしやすい。3回続けてまちがえるまで待つ（形のちがう字を正解にすることも少し増える）']].map(function (o) {
+              return '<label class="opt"><input type="radio" name="wlevel" value="' + o[0] + '"' + ((view.writeLevel || '') === o[0] ? ' checked' : '') + '> <b>' + o[1] + '</b> <span class="hint">' + o[2] + '</span></label>';
+            }).join('') + '</div><p class="hint" id="wmsg" aria-live="polite"></p>') +
           '</section><section class="tsets"><h2>' + tgrade + '年</h2>' + gradeTabs +
           fold('d-test', '次の漢字テストの範囲', '',
             '<p class="hint">字を押すと範囲に入る／外れる（押すたびに自動で保存）。上の学年タブを切り替えると、ほかの学年の字も足せます。児童の「読む・書く・カード」の はじめかたに「次の漢字テストの はんい」として出ます。</p>' +
@@ -2312,6 +2343,17 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
             $('#gmsg').textContent = '保存中…';
             // 学年を変えたら、いちばん上の学年を開く
             Platform.setGrades(klass, list).then(function () { view.grades = list; teacher(klass, 0, true); }, function () { cb.checked = !cb.checked; $('#gmsg').textContent = '× 保存できませんでした'; });
+          });
+        });
+        app.querySelectorAll('input[name="wlevel"]').forEach(function (r) {
+          r.addEventListener('change', function () {
+            var v = r.value, prev = view.writeLevel || '';
+            $('#wmsg').textContent = '保存中…';
+            Platform.setWriteLevel(klass, v).then(function () {
+              view.writeLevel = v; $('#d-write-now').textContent = v === 'easy' ? 'やさしい' : 'ふつう'; $('#wmsg').textContent = '✓ 保存しました';
+            }, function () {
+              app.querySelector('input[name="wlevel"][value="' + prev + '"]').checked = true; $('#wmsg').textContent = '× 保存できませんでした';
+            });
           });
         });
         app.querySelectorAll('.ttab').forEach(function (b) { b.addEventListener('click', function () { teacher(klass, +b.dataset.g, true); }); });
@@ -2475,7 +2517,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     v.then(function (view) {
       S.trial = true;
       S.test = view.test || null;
-      applyGrades(view.grades); S.pointers = view.pointers || {};
+      applyGrades(view.grades); S.pointers = view.pointers || {}; S.writeLevel = view.writeLevel || '';
       S.p = Platform.startTrial(S.info.email);
       S.dayOffset = 0;
       trialBar();
@@ -2496,6 +2538,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     S.pointers = info.pointers || {};
     S.test = info.test || null;
     applyGrades(info.grades);
+    S.writeLevel = info.writeLevel || '';
     if (info.role === 'teacher') return teacher();
     if (info.role !== 'student') {
       app.innerHTML = '<main class="done"><p>このアカウントでは つかえません。学校のアカウントで ひらいてね。</p></main>';

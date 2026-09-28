@@ -173,3 +173,15 @@ test('見せる学年に ひらがな・カタカナを入れられる（1〜6�
   assert.deepEqual(Array.from(makeEnv(env.book, K1).api_init().grades), ['h', 'k', 1]);
   assert.throws(() => env.api_setGrades('3-1', ['h']), /1年〜6年から/);
 });
+
+test('書く問題の判定: 担当の先生が学級ごとに選び、その学級の児童に届く', () => {
+  const env = makeEnv(base(), T);
+  assert.equal(env.api_teacherView('3-1').writeLevel, '');
+  assert.equal(env.api_setWriteLevel('3-1', 'easy'), 'easy');
+  assert.equal(env.api_teacherView('3-1').writeLevel, 'easy');
+  assert.equal(env.api_setWriteLevel('3-1', 'hack'), '');
+  env.api_setWriteLevel('3-1', 'easy');
+  assert.throws(() => env.api_setWriteLevel('3-2', 'easy'), /担当学級ではありません/);
+  assert.equal(makeEnv(env.book, K1).api_init().writeLevel, 'easy');
+  assert.equal(makeEnv(env.book, K3).api_init().writeLevel, '');
+});
