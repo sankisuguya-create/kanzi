@@ -75,6 +75,10 @@ for (const line of lines(`words-g${GRADE}.txt`)) {
     if (!w || !kk || !r) { err(`${ch}: 書式エラー「${line}」`); continue; }
     const [k, ...alts] = kk.split('/');
     if (!w.includes(ch)) err(`${ch}: 例語「${w}」に字が含まれない`);
+    // 読む問題の答えを一つに決めるため: 2字以上・字は1回だけ・読みは1通り
+    if ([...w].length < 2) err(`${ch}: 例語「${w}」が1字（答えが一つに決まらない。2字以上の語か句にする）`);
+    if (w.split(ch).length !== 2) err(`${ch}: 例語「${w}」に字が2回以上ある`);
+    if (alts.length) err(`${ch}: 例語「${w}」の読みが2通り（${[k, ...alts].join('/')}）。読みが一つに決まる語にする`);
     for (const c of w) if (/\p{Script=Han}/u.test(c) && gradeOf(c) > GRADE) err(`${ch}: 例語「${w}」に${GRADE}年より上の字「${c}」`);
     if (!k.includes(r)) err(`${ch}: 例語「${w}」のよみ「${k}」に字のよみ「${r}」が含まれない`);
     const m = readingType(ch, r);

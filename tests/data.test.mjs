@@ -49,3 +49,19 @@ test('ひらがな・カタカナ: 46字ずつ、画数どおりの筆順、例�
   }
   assert.equal(D.kana['あ'].n, 3); assert.equal(D.kana['き'].n, 4); assert.equal(D.kana['そ'].n, 1); assert.equal(D.kana['ネ'].n, 4);
 });
+
+test('読む問題の答えが一つに決まる: 例語は2字以上・字は1回だけ・読みは1通り（1〜6年）', () => {
+  for (const c of Object.keys(D.kanji)) for (const w of D.kanji[c].w) {
+    assert.ok([...w[0]].length >= 2, `${c}: 「${w[0]}」が1字`);
+    assert.equal(w[0].split(c).length, 2, `${c}: 「${w[0]}」に字が2回以上`);
+    assert.ok(!w[4] || !w[4].length, `${c}: 「${w[0]}」の読みが2通り`);
+  }
+});
+
+test('3年: ドリルの音訓を例語でおおう（例: 着＝チャク・き・つ、重＝ジュウ・チョウ・え・おも・かさ）', () => {
+  const r = (c) => new Set(D.kanji[c].w.map((w) => w[2]));
+  for (const x of ['ちゃく', 'き', 'つ']) assert.ok(r('着').has(x), '着 ' + x);
+  for (const x of ['じゅう', 'ちょう', 'え', 'おも', 'かさ']) assert.ok(r('重').has(x), '重 ' + x);
+  const n = [...D.grades[3].order].reduce((a, c) => a + D.kanji[c].w.length, 0);
+  assert.ok(n >= 500, '3年の例語 ' + n);
+});
