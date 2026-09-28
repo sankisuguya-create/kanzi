@@ -114,12 +114,12 @@ await page.waitForTimeout(2500);
 await shot('2-view');
 await checkFonts('見る');
 await page.keyboard.press('ArrowRight');
-check((await page.textContent('.bar .prog')).startsWith('2 /'), '見る: → で つぎの字');
+check((await page.textContent('.bar .prog')).startsWith('97 /'), '見る: → で つぎの字');
 await page.click('#back');
 
 // ---- 漢字を ぜんぶ見る: えらぶ
 await page.click('#m-pick');
-for (const c of ['悪', '安', '暗']) await page.click(`.kc[data-c="${c}"]`);
+for (const c of ['悪', '暗', '医']) await page.click(`.kc[data-c="${c}"]`);
 check((await page.textContent('#selc')) === 'えらんだ字 3', 'えらぶ: 押した字が えらばれる');
 await page.click('.kc[data-c="暗"]'); await page.click('.kc[data-c="暗"]');
 await shot('3-pick');
