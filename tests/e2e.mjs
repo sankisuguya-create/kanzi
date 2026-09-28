@@ -438,6 +438,22 @@ await page.click('#try'); await page.waitForSelector('#trial-bar');
 check((await page.evaluate(() => KanziState.writeLevel)) === 'easy', 'おためし: 児童画面の書くが やさしい');
 await page.click('#tb-back');
 
+// ---- 児童のメニューは スクロールせずに全部見える（CZ1104 のブラウザ表示 約1366×630、狭い画面 1024×600）
+for (const [w, h] of [[1366, 630], [1024, 600]]) {
+  await page.setViewportSize({ width: w, height: h });
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('kanzi.settings', JSON.stringify({ grades: { '3-1': ['h', 'k', 1, 2, 3] }, tests: { '3-1': { label: '9月', chars: '悪安' } } })); });
+  await page.goto(URL0); await page.waitForSelector('#go-test'); await page.waitForTimeout(300);
+  const fit = () => page.evaluate(() => document.documentElement.scrollHeight <= innerHeight && Math.max(...[...document.querySelectorAll('#app *')].map((e) => e.getBoundingClientRect().bottom)) <= innerHeight + 1);
+  const minBtn = await page.evaluate(() => Math.min(...[...document.querySelectorAll('.actions .big')].map((b) => b.getBoundingClientRect().height)));
+  check(await fit() && minBtn >= 60, `メニュー: ${w}×${h} でスクロールなし（ボタンがいちばん多い時。いちばん低いボタン ${Math.round(minBtn)}px）`);
+  await page.click('.forest-colors summary'); await page.waitForTimeout(200);
+  check(await fit(), `メニュー: ${w}×${h} で「葉の色」を開いても はみ出さない`);
+  if (w === 1366) await shot('19-menu-fit');
+}
+await page.click('#go-browse');
+check(await page.evaluate(() => !document.body.classList.contains('menu-screen')), 'メニュー: ほかの画面では 高さを固定しない（一覧はスクロールできる）');
+await page.setViewportSize({ width: 1366, height: 768 });
+
 check(errors.length === 0, 'コンソールエラーなし' + (errors.length ? ': ' + errors.join(' / ') : ''));
 await browser.close();
 server.close();
