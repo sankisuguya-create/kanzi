@@ -128,6 +128,9 @@
           (testChars().length ? '<button class="big test" id="go-test">' + K('[次|つぎ]の[漢|かん][字|じ]テストの はんいを [見|み]る') + '<span class="meta">' + (S.test.label ? esc(S.test.label) + '・' : '') + testChars().length + K('[字|じ]') + '</span></button>' : '')) +
       '<button class="big" id="go-seen"' + (nSel ? '' : ' disabled') + '>' + K('[選|えら]んだ') + noun + K('を[見|み]る') + '<span class="meta">' + (nSel ? nSel + K('[字|じ]') : K('まだ [選|えら]んでいないよ')) + '</span></button>' +
       '</section></main>' + (S.info.demo && !S.trial ? '<p class="demo-note">デモ（この端末にだけ保存）</p>' : '');
+    // メニューは画面の高さに収める（スクロールしない）。ほかの画面に移る時に外す
+    document.body.classList.add('menu-screen');
+    cleanup.push(function () { document.body.classList.remove('menu-screen'); });
     var forestView = Tree.mount($('#forest'), { progress: p, prevActivity: prev });
     S.treeView = forestView;
     cleanup.push(function () { forestView.destroy(); });
