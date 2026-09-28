@@ -139,14 +139,14 @@ await checkFonts('はじめかた');
 const act0 = await activity();
 await page.click('.chooser [data-id="sel"]');
 await page.waitForSelector('#yomi');
-check((await cur()) === '悪' && (await page.textContent('.okuri-after')) === 'い', 'よむ: 送り仮名（い）は入力欄の後ろに出る');
-await page.keyboard.type('waru');
-check((await page.inputValue('#yomi')) === 'わる', 'よむ: ローマ字 → ひらがな');
+check((await cur()) === '悪' && (await page.textContent('.card .word')) === '悪人' && !(await page.$('.okuri-after')), 'よむ: 漢字だけの語（悪人）は 送り仮名なし');
+await page.keyboard.type('akuninn');
+check((await page.inputValue('#yomi')) === 'あくにん', 'よむ: ローマ字 → ひらがな');
 await shot('5-read');
 await checkFonts('よむ');
 await page.keyboard.press('Enter');
 await page.waitForSelector('#next');
-check((await page.textContent('#rmsg')).includes('正かい'), 'よむ: 「悪い」の答えは「わる」');
+check((await page.textContent('#rmsg')).includes('正かい'), 'よむ: 漢字だけの語は 語全体の読み（悪人 → あくにん）');
 await page.click('#next');
 await page.fill('#yomi', 'あああ'); await page.keyboard.press('Enter');
 check((await page.textContent('#rmsg')).includes('もう一度'), 'よむ: 1回目のまちがいは打ち直せる');
@@ -371,6 +371,22 @@ await checkFonts('かな（書く）');
 await page.click('#back');
 await page.goto(URL0 + '?teacher=1'); await page.waitForSelector('#d-grades');
 check((await page.textContent('#d-grades-now')).startsWith('ひらがな・カタカナ・1年') && !!(await page.$('.gchecks input[data-g="h"]')), '先生: 見せる学年に ひらがな・カタカナ');
+
+// ---- 読む: 答えが一つに決まる問い方（かなを含む句は その字の読みだけ、字＋送り仮名は送り仮名を後ろに）
+await page.evaluate(() => { localStorage.clear(); });
+await page.goto(URL0); await page.waitForSelector('#go-read');
+await page.evaluate(() => { for (const c of ['港', '悪']) { KanziState.p.read[c] = [1, 99999, 1, 0, 0]; Sched.setSel(KanziState.p, c, true, 1); } });
+await page.click('#go-read'); await page.click('.chooser [data-id="sel"]'); await page.waitForSelector('#yomi');
+check((await cur()) === '港' && (await page.textContent('.card .word')) === '港に船が入る' && (await page.$('.card.part')) && (await page.textContent('label.q')).includes('線を引いた字') && !(await page.$('.okuri-after')), 'よむ: かなを含む句は 線を引いた字の読みだけを問う（港に船が入る）');
+check(await page.evaluate(() => getComputedStyle(document.querySelector('.card .tg')).textDecorationLine.includes('underline')), 'よむ: 問う字に下線');
+await shot('5-read-part');
+await page.fill('#yomi', 'みなと'); await page.keyboard.press('Enter'); await page.waitForSelector('#next');
+check((await page.textContent('#rmsg')).includes('正かい'), 'よむ: 句の答えは その字の読み（みなと）');
+await page.click('#next'); await page.waitForSelector('#yomi');
+check((await cur()) === '悪' && (await page.textContent('.okuri-after')) === 'い', 'よむ: 字＋送り仮名（悪い）は 送り仮名を入力欄の後ろに');
+await page.fill('#yomi', 'わる'); await page.keyboard.press('Enter'); await page.waitForSelector('#next');
+check((await page.textContent('#rmsg')).includes('正かい'), 'よむ: 「悪い」の答えは「わる」');
+await page.click('#next'); await page.waitForSelector('.endlist'); await page.click('#menu');
 
 // ---- わからない（スキップ）・途中でやめる・書く判定の強さ
 await page.evaluate(() => localStorage.clear());

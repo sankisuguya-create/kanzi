@@ -321,14 +321,19 @@
   // 1回目で正解した時だけ「できた」。間違えたら1回だけ打ち直せ、2回目も違えば答えを見せる。
   function readCard(c) {
     var e = S.p.read[c], w = wordFor(c, e && e[2]);
-    var okuri = (w[0].match(/[ぁ-ゖ]+$/) || [''])[0];
-    function strip(k) { return okuri && k.slice(-okuri.length) === okuri ? k.slice(0, -okuri.length) : k; }
-    var full = [w[1]].concat(w[4] || []), answers = full.map(strip).concat(full); // 送り仮名まで書いても正解にする
-    var shown = strip(w[1]);
+    // 答えが一つに決まるように問う（例語は2字以上。data-src の書式を参照）:
+    //   漢字だけの語（空港）は語全体の読み。かなを含む語は その字の読みだけ（港に船が入る → みなと）。
+    //   その字＋送り仮名だけの語（悪い・始める）は、送り仮名を入力欄の後ろに出す（送り仮名まで書いても正解）
+    var kanjiOnly = /^[\u4e00-\u9fff々]+$/.test(w[0]);
+    var okuri = kanjiOnly ? '' : (w[0].slice(w[0].indexOf(c) + 1).match(/^[ぁ-ゖ]+/) || [''])[0];
+    var inflect = !kanjiOnly && w[0] === c + okuri, part = !kanjiOnly && !inflect;
+    var answers = kanjiOnly ? [w[1]] : [w[2], w[2] + okuri];
+    var shown = kanjiOnly ? w[1] : w[2];
+    if (!inflect) okuri = '';
     app.innerHTML = bar() +
       '<main class="read">' +
-      '<div class="card" id="card"><span class="kana" id="kana">' + esc(w[1]) + '</span><span class="word">' + wordHtml(w, c) + '</span></div>' +
-      '<form class="answer" id="form" autocomplete="off"><label class="q" for="yomi">' + K('[読|よ]みを ひらがなで [書|か]こう') + (okuri ? K('（[送|おく]りがなは [書|か]かない）') : '') + '</label>' +
+      '<div class="card' + (part ? ' part' : '') + '" id="card"><span class="kana" id="kana">' + esc(w[1]) + '</span><span class="word">' + wordHtml(w, c) + '</span></div>' +
+      '<form class="answer" id="form" autocomplete="off"><label class="q" for="yomi">' + (part ? K('[線|せん]を[引|ひ]いた[字|じ]の [読|よ]みだけを ひらがなで [書|か]こう') : K('[読|よ]みを ひらがなで [書|か]こう') + (okuri ? K('（[送|おく]りがなは [書|か]かない）') : '')) + '</label>' +
       '<div class="answer-row"><input id="yomi" lang="ja" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">' +
       (okuri ? '<span class="okuri-after" aria-label="おくりがな">' + esc(okuri) + '</span>' : '') +
       K('<button class="btn-ok" id="ok" type="submit">[答|こた]える</button></div></form>') +

@@ -382,3 +382,6 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
   body.menu-screen .two .big { height: 100%; }
   body.menu-screen .demo-note { flex: none; margin: 4px 0 0; font-size: 13px; }
 }
+
+/* 読む: かなを含む句では、読みを問う字に下線（大きさだけに頼らない） */
+.card.part .word .tg { text-decoration: underline; text-decoration-thickness: .06em; text-underline-offset: .12em; }
