@@ -114,7 +114,7 @@ await page.waitForTimeout(2500);
 await shot('2-view');
 await checkFonts('見る');
 await page.keyboard.press('ArrowRight');
-check((await page.textContent('.bar .prog')).startsWith('97 /'), '見る: → で つぎの字');
+check((await page.textContent('.bar .prog')).startsWith((await page.evaluate(() => KANZI_DATA.grades[3].order.indexOf('悪'))) + 2 + ' /'), '見る: → で つぎの字');
 await page.click('#back');
 
 // ---- 漢字を ぜんぶ見る: えらぶ
