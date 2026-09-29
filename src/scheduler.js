@@ -18,7 +18,7 @@
 
   // 進捗1件 = [box, due, reps, last, miss]（last = 最後に答えた時刻 ms。端末間の統合に使う。miss = まちがえた回数）
   // sel: 児童が選んだ漢字 { 字: [1=選んでいる|0=外した, 時刻] }（時刻の新しい方で統合）
-  // done: 最後まで終えた回 { 開始時刻: 問題数 }（木の成長。途中でやめた回は入らない）
+  // done: 最後まで終えた回 { 開始時刻: 問題数 }（全モードの学習集計。途中でやめた回は入らない）
   // old: [境目の時刻, 回数, 問題数] … 境目より前に終えた回の合計（サーバーが compact でまとめる。done が際限なく増えないように）
   function newProgress() {
     return { v: 2, read: {}, write: {}, sel: {}, done: {}, old: [0, 0, 0] };
@@ -104,58 +104,113 @@
     return out.map(function (x) { return x.c; });
   }
 
-  // 木の成長 = 最後まで終えた回の問題数の合計
+  // 全モードの学習量。木の成長は forestActivity で別に計算する。
   function activity(p) {
     var n = p.old ? p.old[2] : 0;
     for (var k in p.done) n += p.done[k];
     return n;
   }
-  // 森の色は完了した回に結び付ける。旧記録（モード不明）は緑。
-  function forestMode(kind) { return ({ read: 'r', write: 'w', fk: 'k', fy: 'y' })[kind] || 'p'; }
-  // 森は27本（1本36問）まで。色の記録もこの問題数（972字）で打ち切る。学習の記録（done・old）は打ち切らない
+  // 新しいカード・モード不明の回は学習集計には残し、森には加算しない。
+  function forestMode(kind) { return ({ read: 'r', write: 'w' })[kind] || 'x'; }
+  // 27本ごとに次の森。速度は森ごとに3/4倍。CAPは1画面分であり成長の上限ではない。
   var FOREST_TREES = 27, FOREST_STEP = 36, FOREST_CAP = FOREST_TREES * FOREST_STEP;
-  // 色の列は同じ色の続きをまとめて持つ（例 'rrrww' → 'r3w2'）。1回の問題はすべて同じ色なので短くなる
-  function rle(str) { return String(str).replace(/(.)\1*/g, function (run, c) { return c + run.length; }); }
-  function unrle(str) {
-    return String(str || '').replace(/([a-z])(\d+)/g, function (_, c, n) { return c.repeat(Math.min(Number(n), FOREST_CAP)); });
+  var FOREST_COLORS = 'prwk';
+  function emptyForest() { return { legacy: 0, completed: [], log: '', fraction: 0 }; }
+  function copyForest(s) { return { legacy: s.legacy, completed: s.completed.map(function (c) { return c.slice(); }), log: s.log, fraction: s.fraction }; }
+  // 完成した森は4色の個数だけ保存。問題ごとの文字列や画像を積み上げない。
+  function closeForest(s) {
+    var counts = [0, 0, 0, 0];
+    for (var i = 0; i < s.log.length; i++) counts[FOREST_COLORS.indexOf(s.log[i])]++;
+    s.completed.push(counts); s.log = '';
+  }
+  function growForest(s, count, mode) {
+    count = Number(count);
+    if (!Number.isFinite(count) || count <= 0) return;
+    if (/^[PRWKY]$/.test(mode)) {
+      // 移行前の木はカード分も含めて残す。ただし旧版の上限を超える過去分は復活させない。
+      count = Math.min(Math.floor(count), FOREST_CAP - s.legacy);
+      s.legacy += count;
+      mode = mode.toLowerCase().replace('y', 'k');
+    } else if (!/^[rw]$/.test(mode)) return;
+    while (count > 0) {
+      var rate = Math.pow(0.75, s.completed.length);
+      var needed = (FOREST_CAP - s.log.length - s.fraction) / rate;
+      var used = Math.min(count, needed);
+      var amount = s.fraction + used * rate;
+      var whole = Math.min(FOREST_CAP - s.log.length, Math.floor(amount + 1e-9));
+      s.log += mode.repeat(whole);
+      s.fraction = Math.max(0, amount - whole);
+      count = Math.max(0, count - used);
+      if (s.log.length === FOREST_CAP) { closeForest(s); s.fraction = 0; }
+      else break;
+    }
+  }
+  function validArchive(s) {
+    return s && Number.isInteger(s.legacy) && s.legacy >= 0 && s.legacy <= FOREST_CAP &&
+      typeof s.log === 'string' && s.log.length < FOREST_CAP && /^[prwk]*$/.test(s.log) &&
+      Number.isFinite(s.fraction) && s.fraction >= 0 && s.fraction < 1 &&
+      Array.isArray(s.completed) && s.completed.every(function (c) {
+        return Array.isArray(c) && c.length === 4 && c.every(function (n) { return Number.isInteger(n) && n >= 0; }) &&
+          c.reduce(function (a, b) { return a + b; }, 0) === FOREST_CAP;
+      });
+  }
+  // 旧RLEは972字までしか展開しない（大きな過去記録も描画量に比例させない）。
+  function legacyLog(f, n) {
+    var s = '', match, re = /([prwky])(\d+)/g;
+    if (typeof f.rle === 'string') {
+      while (s.length < n && (match = re.exec(f.rle))) s += match[1].repeat(Math.min(Number(match[2]), n - s.length));
+    } else s = String(f.base || '').slice(0, n).replace(/[^prwky]/g, 'p');
+    return (s + 'p'.repeat(Math.max(0, n - s.length))).replace(/y/g, 'k');
   }
   function forestState(p) {
-    var f = p.forest;
-    return f && typeof f === 'object' ? f : { rle: '', modes: {} };
-  }
-  // 過去の色（旧版の base＝1問1字 も読める）
-  function forestStored(f) { return typeof f.rle === 'string' ? unrle(f.rle) : String(f.base || ''); }
-  function forestBase(p) {
-    var s = forestStored(forestState(p)), n = Math.min(p.old ? p.old[2] : 0, FOREST_CAP);
-    return s.slice(0, n) + 'p'.repeat(Math.max(0, n - s.length));
+    var f = p.forest || {};
+    if (f.v === 2 && validArchive(f.archive)) return f;
+    var archive = emptyForest(), modes = {};
+    var base = legacyLog(f, Math.min(p.old ? p.old[2] : 0, FOREST_CAP));
+    archive.legacy = base.length; archive.log = base;
+    if (base.length === FOREST_CAP) closeForest(archive);
+    sessionKeys(p).forEach(function (d) {
+      var m = (f.modes || {})[d];
+      modes[d] = /^[rwky]$/.test(m) ? m.toUpperCase() : 'P';
+    });
+    return { v: 2, archive: archive, modes: modes };
   }
   function sessionKeys(p) { return Object.keys(p.done || {}).sort(function (a, b) { return Number(a) - Number(b); }); }
-  function knownForestMode(mode) { return /^[rwky]$/.test(mode); }
-  function forestRun(modes, key, count) { return (knownForestMode(modes[key]) ? modes[key] : 'p').repeat(count); }
-  function forestLog(p) {
-    var f = forestState(p), modes = f.modes || {}, parts = [forestBase(p)];
-    var len = parts[0].length;
+  function knownForestMode(mode) { return /^[rwxPRWKY]$/.test(mode); }
+  function forestGrowth(p) {
+    var f = forestState(p), s = copyForest(f.archive), modes = f.modes || {};
     sessionKeys(p).forEach(function (d) {
-      if (len >= FOREST_CAP) return;
-      var run = forestRun(modes, d, Math.min(p.done[d], FOREST_CAP - len));
-      parts.push(run); len += run.length;
+      growForest(s, p.done[d], modes[d]);
     });
-    return parts.join('').slice(0, FOREST_CAP);
+    return s;
+  }
+  function forestActivity(p) {
+    var s = forestGrowth(p);
+    return s.completed.length * FOREST_CAP + s.log.length + s.fraction;
+  }
+  function forestRegionLog(s, region) {
+    if (region === s.completed.length) return s.log;
+    var counts = s.completed[region];
+    return counts ? counts.map(function (n, i) { return FOREST_COLORS[i].repeat(n); }).join('') : '';
+  }
+  function forestLog(p) {
+    var s = forestGrowth(p);
+    return forestRegionLog(s, s.log.length || s.fraction || !s.completed.length ? s.completed.length : s.completed.length - 1);
   }
   // 境目より前の回を old にまとめる（何回呼んでも同じ結果。境目は前に進むだけ）
   function compact(p, before) {
     norm(p);
     if (!(before > p.old[0])) return p;
-    var f = forestState(p), modes = Object.assign({}, f.modes), base = forestBase(p);
+    var f = forestState(p), modes = Object.assign({}, f.modes), archive = copyForest(f.archive);
     var o = [before, p.old[1], p.old[2]];
     sessionKeys(p).forEach(function (d) {
       if (Number(d) < before) {
-        if (base.length < FOREST_CAP) base += forestRun(modes, d, Math.min(p.done[d], FOREST_CAP - base.length));
+        growForest(archive, p.done[d], modes[d]);
         o[1]++; o[2] += p.done[d];
         delete modes[d]; delete p.done[d];
       }
     });
-    p.forest = { rle: rle(base.slice(0, FOREST_CAP)), modes: modes };
+    p.forest = { v: 2, archive: archive, modes: modes };
     p.old = o;
     return p;
   }
@@ -163,9 +218,11 @@
   function compactBefore(now) { return new Date(now.getFullYear(), now.getMonth() - 3, 1).getTime(); }
   function finishSession(p, startedAt, count, kind) {
     if (count > 0) {
-      p.done[String(startedAt)] = count;
+      // 先に移行して既存の回と新しい回を区別する。再送や圧縮済みの回は変更しない。
+      if (Number(startedAt) < p.old[0] || Object.prototype.hasOwnProperty.call(p.done, String(startedAt))) return;
       var f = forestState(p);
-      p.forest = { rle: typeof f.rle === 'string' ? f.rle : rle(String(f.base || '')), modes: Object.assign({}, f.modes) };
+      p.done[String(startedAt)] = count;
+      p.forest = { v: 2, archive: copyForest(f.archive), modes: Object.assign({}, f.modes) };
       p.forest.modes[String(startedAt)] = forestMode(kind);
     }
   }
@@ -205,15 +262,25 @@
     for (d in out.done) {
       // 同じ回の再送は一度だけ。旧クライアントに色がなくても既存の色を残す。
       var ma = (fa.modes || {})[d], mb = (fb.modes || {})[d];
-      modes[d] = knownForestMode(mb) ? mb : knownForestMode(ma) ? ma : 'p';
+      // 更新前から開いていた画面で新たに完了した回も、読む・書くだけを加算する。
+      if (a.forest?.v === 2 && b.forest?.v !== 2 && !knownForestMode(ma)) mb = /^[RW]$/.test(mb) ? mb.toLowerCase() : 'x';
+      if (b.forest?.v === 2 && a.forest?.v !== 2 && !knownForestMode(mb)) ma = /^[RW]$/.test(ma) ? ma.toLowerCase() : 'x';
+      // 新旧クライアントが同じ回を返してもv2の対象・対象外の区別を優先する。
+      if (a.forest?.v === 2 && b.forest?.v !== 2 && knownForestMode(ma)) modes[d] = ma;
+      else modes[d] = knownForestMode(mb) ? mb : knownForestMode(ma) ? ma : 'x';
     }
     var archived = archiveSource;
     if (a.old.every(function (v, i) { return v === b.old[i]; })) {
       // 旧クライアントが同じ集計値だけ返した場合、色のある控えを優先。
-      var ba = forestBase(a), bb = forestBase(b);
-      archived = bb.replace(/p/g, '').length > ba.replace(/p/g, '').length ? b : a;
+      if (a.forest?.v === 2 && b.forest?.v !== 2) archived = a;
+      else if (b.forest?.v === 2 && a.forest?.v !== 2) archived = b;
+      else {
+        var ba = fa.archive, bb = fb.archive;
+        var known = function (s) { return s.completed.reduce(function (n, c) { return n + c[1] + c[2] + c[3]; }, 0) + s.log.replace(/p/g, '').length; };
+        archived = known(bb) > known(ba) ? b : a;
+      }
     }
-    return { rle: rle(forestBase(archived)), modes: modes };
+    return { v: 2, archive: copyForest(forestState(archived).archive), modes: modes };
   }
 
   // 不変条件の検査（I3）。違反の説明の配列を返す
@@ -229,7 +296,8 @@
     day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite, undo: undo,
     dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList,
     FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
-    activity: activity, forestLog: forestLog, compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check
+    activity: activity, forestLog: forestLog, forestGrowth: forestGrowth, forestActivity: forestActivity, forestRegionLog: forestRegionLog,
+    compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sched = api;

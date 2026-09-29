@@ -110,8 +110,8 @@
   function menu() {
     clearScreen();
     var p = S.p, g = S.grade;
-    var act = Sched.activity(p);
-    var pk = 'kanzi.prevAct.' + (S.trial ? 'trial.' : '') + S.info.email, prev = Platform.store.get(pk);
+    var act = Sched.forestActivity(p);
+    var pk = 'kanzi.prevGrowth.' + (S.trial ? 'trial.' : '') + S.info.email, prev = Platform.store.get(pk);
     Platform.store.set(pk, act);
     var nSel = Sched.selected(p, orderOf(g)).length;
     var kana = isKana(g), noun = kana ? KANA_NAME[g] : K('[漢|かん][字|じ]');
@@ -143,8 +143,31 @@
     on('#go-write', function () { chooser('write'); });
     on('#go-fk', function () { chooser('fk'); });
     on('#go-fy', function () { chooser('fy'); });
-    on('#go-test', function () { viewChars(testChars(), 0, menu); });
+    on('#go-test', testOverview);
     on('#go-seen', function () { var l = Sched.selected(S.p, orderOf(S.grade)); if (l.length) viewChars(l, 0, menu); });
+  }
+
+  // テスト範囲は全字を先生の指定順で一覧。練習の30問上限・学年タブでは切り詰めない。
+  function testOverview(focusChar, scroll) {
+    clearScreen();
+    var chars = testChars();
+    app.innerHTML = '<header class="bar"><button class="back" id="back">もどる</button>' +
+      '<span class="prog">' + K('[次|つぎ]の[漢|かん][字|じ]テストの はんい') + '</span><span></span></header>' +
+      '<main class="test-overview"><h2>' + esc(S.test && S.test.label || K('[漢|かん][字|じ]テスト')) +
+      ' <span class="test-count">' + chars.length + K('[字|じ]') + '</span></h2>' +
+      '<p class="browse-hint">' + (chars.length ? K('[字|じ]を おすと、[読|よ]みと [書|か]き[順|じゅん]が [見|み]られるよ') : 'まだ はんいが きまっていないよ') + '</p>' +
+      '<div class="kgrid" id="test-grid">' + chars.map(function (c) {
+        return '<button class="kc" data-c="' + esc(c) + '">' + esc(c) + '</button>';
+      }).join('') + '</div></main>';
+    on('#back', menu);
+    app.querySelectorAll('#test-grid .kc').forEach(function (b, i) {
+      if (b.dataset.c === focusChar) b.focus({ preventScroll: true });
+      b.addEventListener('click', function () {
+        var y = window.scrollY;
+        viewChars(chars, i, function () { testOverview(b.dataset.c, y); });
+      });
+    });
+    window.scrollTo(0, scroll || 0);
   }
 
   // ================= 児童: 漢字を ぜんぶ見る（見る／えらぶ）
@@ -474,10 +497,10 @@
     onKey(function (ev) { if (ev.key === ' ' || ev.key === 'Enter' || ev.key === 'ArrowRight') { ev.preventDefault(); step(); } });
   }
 
-  // 最後まで終えた時: 木を育て、出た字の一覧（○×）と「えらぶ」のチェックを出す
+  // 最後まで終えた時: 学習を記録（読む・書くなら木も育つ）し、出た字の一覧とチェックを出す
   function sessionDone() {
     var s = S.session, graded = s.kind === 'read' || s.kind === 'write';
-    // 木が育つのは、最後まで終えた回の「わからない」以外の問題数（全部わからないなら育たない）
+    // 読む・書くの「わからない」以外の問題数が成長対象。カードは集計だけ残す。
     var nSkip = s.items.filter(function (c) { return s.skipped[c]; }).length;
     Sched.finishSession(S.p, s.startedAt, s.items.length - nSkip, s.kind);
     Platform.save(S.p);
@@ -778,7 +801,7 @@
     bar.querySelector('#tb-day').addEventListener('click', function () { S.dayOffset = (S.dayOffset || 0) + 1; trialBar(); menu(); });
     bar.querySelector('#tb-reset').addEventListener('click', function () {
       Platform.resetTrial(); S.p = Sched.newProgress(); S.dayOffset = 0;
-      Platform.store.set('kanzi.prevAct.trial.' + S.info.email, 0);
+      Platform.store.set('kanzi.prevGrowth.trial.' + S.info.email, 0);
       trialBar(); menu();
     });
     bar.querySelector('#tb-back').addEventListener('click', endTrial);
