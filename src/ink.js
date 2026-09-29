@@ -28,6 +28,21 @@
     return L;
   }
 
+  // ぐちゃぐちゃ書き込み: パッド（109四方）を何往復もするほど長い線・鋭いきり返しの多い線は
+  // 「どの画を書こうとしたか」が分からないので、判定を続けても合わない。すぐ答えを見せるきっかけにする。
+  function scribble(pts, dlen) {
+    if (dlen > 380) return true;
+    var turns = 0;
+    for (var i = 2; i < pts.length; i++) {
+      var ax = pts[i - 1].x - pts[i - 2].x, ay = pts[i - 1].y - pts[i - 2].y;
+      var bx = pts[i].x - pts[i - 1].x, by = pts[i].y - pts[i - 1].y;
+      var la = ax * ax + ay * ay, lb = bx * bx + by * by;
+      if (la < 2.25 || lb < 2.25) continue; // 1.5未満の区間は手ぶれ（数えない）
+      if (ax * bx + ay * by < -0.5 * Math.sqrt(la * lb)) turns++; // 120度を超えるきり返し
+    }
+    return turns >= 6;
+  }
+
   // 折れ線を弧長で N 点に取り直す
   function resample(pts) {
     if (pts.length === 1) pts = [pts[0], { x: pts[0].x + 0.01, y: pts[0].y }];
@@ -143,7 +158,7 @@
   Pad.prototype.bind = function () {
     var self = this, cur = null, pid = null;
     function pt(ev) {
-      var r = self.svg.getBoundingClientRect();
+      var r = self.rect || self.svg.getBoundingClientRect();
       return { x: (ev.clientX - r.left) / r.width * 109, y: (ev.clientY - r.top) / r.height * 109 };
     }
     this.svg.addEventListener('pointerdown', function (ev) {
@@ -153,7 +168,10 @@
       if (pid !== null) return;
       pid = ev.pointerId;
       self.svg.setPointerCapture(pid);
-      cur = { pts: [pt(ev)], line: el('polyline', { class: 'stroke-live' }, self.ink) };
+      self.rect = self.svg.getBoundingClientRect(); // 線を引いている間は同じ（イベントごとに取り直すと遅い）
+      var q = pt(ev);
+      cur = { pts: [q], str: q.x.toFixed(1) + ',' + q.y.toFixed(1), line: el('polyline', { class: 'stroke-live' }, self.ink) };
+      cur.line.setAttribute('points', cur.str);
       ev.preventDefault();
     });
     this.svg.addEventListener('pointermove', function (ev) {
@@ -161,7 +179,8 @@
       var p = pt(ev), last = cur.pts[cur.pts.length - 1];
       if (Math.hypot(p.x - last.x, p.y - last.y) < 0.8) return;
       cur.pts.push(p);
-      cur.line.setAttribute('points', cur.pts.map(function (q) { return q.x.toFixed(1) + ',' + q.y.toFixed(1); }).join(' '));
+      cur.str += ' ' + p.x.toFixed(1) + ',' + p.y.toFixed(1);
+      cur.line.setAttribute('points', cur.str);
     });
     function end(ev) {
       if (ev.pointerId !== pid || !cur) return;
@@ -198,12 +217,14 @@
       setTimeout(function () { if (c.line.parentNode) c.line.parentNode.removeChild(c.line); }, 450);
       this.result.misses++;
       this.streak++;
-      if (this.mode === 'free' && this.streak >= L.stuckAfter && !this.hintOn) {
+      // ぐちゃぐちゃ書き込みなら待たずに知らせる（呼び出し側は「わからない」と同じ扱いで答えを見せる）
+      var messy = scribble(c.pts, dlen);
+      if (messy) this.result.scribble = true;
+      if (this.mode === 'free' && !this.stuck && (messy || (this.streak >= L.stuckAfter && !this.hintOn))) {
         this.result.assisted = true;
         // onStuck があれば、ヒントを出さずに知らせる（呼び出し側が正解の書き順を見せて次へ進む）
         if (this.opts.onStuck) { this.stuck = true; this.opts.onStuck(this.result); return; }
-        this.hintOn = true;
-        this.renderGuide();
+        if (!this.hintOn) { this.hintOn = true; this.renderGuide(); }
       }
       if (this.opts.onMiss) this.opts.onMiss(reversed ? 'reverse' : 'shape');
       return;
@@ -234,5 +255,5 @@
     });
   };
 
-  root.Ink = { LEVELS: LEVELS, Pad: Pad, animate: animate, _resample: resample };
+  root.Ink = { LEVELS: LEVELS, Pad: Pad, animate: animate, _resample: resample, _scribble: scribble };
 })(this);

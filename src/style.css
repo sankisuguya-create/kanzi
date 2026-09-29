@@ -122,17 +122,17 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 /* ---- かく */
 .write { display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: start; }
 .wl { display: grid; gap: 10px; align-content: start; }
-.prompt { margin: 0; font-size: 56px; font-family: var(--font-kanji); }
+.prompt { margin: 0; font-size: 80px; font-family: var(--font-kanji); }
 .prompt .box { display: inline-block; width: 1em; height: 1em; border: 3px solid var(--ink); vertical-align: -0.1em; background: var(--fill-b); }
-.prompt rt { font-size: 24px; font-family: var(--font-sans); letter-spacing: .1em; }
-.prompt-kana { margin: 0; color: var(--ink-sub); font-size: 22px; letter-spacing: .1em; }
+.prompt rt { font-size: 30px; font-family: var(--font-sans); letter-spacing: .1em; }
+.prompt-kana { margin: 0; color: var(--ink-sub); font-size: 30px; letter-spacing: .1em; }
 .stages { display: flex; gap: 8px; list-style: none; padding: 0; margin: 4px 0; flex-wrap: wrap; }
 .stages li { padding: 4px 12px; border: 2px solid var(--line); border-radius: 999px; color: var(--ink-sub); font-size: 18px; }
 .stages li.cur { border-color: var(--ink); color: var(--ink); font-weight: 700; background: var(--fill-a); }
 .stages li.past::after { content: " ✓"; }
-.msg { min-height: 1.6em; margin: 0; font-size: 22px; font-weight: 700; }
-.tools { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.tools button { min-height: var(--tap); padding: 0 20px; font-size: 20px; background: var(--card); border: 2px solid var(--ink); border-radius: 12px; }
+.msg { min-height: 1.6em; margin: 0; font-size: 26px; font-weight: 700; }
+.tools { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.tools button { min-height: 90px; padding: 0 30px; font-size: 26px; background: var(--card); border: 3px solid var(--ink); border-radius: 16px; }
 .result { display: grid; gap: 10px; }
 .res { margin: 0; font-size: 34px; font-weight: 700; }
 .res.good { color: var(--cat-1); }
@@ -168,7 +168,9 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .teacher .hint { color: var(--ink-sub); font-size: 16px; margin: 0 0 8px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 4px; }
 .cell { min-height: 46px; font-size: 22px; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
+.cell.learned { box-shadow: inset 0 -6px 0 #79B473; } /* 習った字: みどりの線 */
 .cell.taught { background: var(--fill-a); border: 2px solid var(--cat-1); font-weight: 700; }
+.learned-mark { color: #4B7D3A; font-weight: 700; border-bottom: 4px solid #79B473; }
 .hard { columns: 2; font-size: 18px; }
 .hard .hc { font-size: 26px; margin-right: 8px; }
 .teacher textarea { width: 100%; font-size: 20px; }
@@ -253,6 +255,11 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .kc { position: relative; min-height: 64px; font-size: 34px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; font-family: var(--font-kanji); }
 .kc.sel { background: var(--fill-b); border: 3px solid var(--cat-3); }
 .kc.sel::after { content: "✓"; position: absolute; top: 1px; right: 5px; font-size: 16px; font-family: var(--font-sans); font-weight: 700; color: var(--cat-3); }
+/* テスト範囲の一覧: 2倍の大きさ。あかい わく＝自分が まちがいの おおい字 */
+.test-overview .kgrid { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 12px; }
+.test-overview .kc { min-height: 128px; font-size: 68px; border-radius: 16px; }
+.kc.kmiss { box-shadow: inset 0 0 0 4px var(--ink-alert); }
+.miss-mark { color: var(--ink-alert); font-weight: 700; border: 3px solid var(--ink-alert); border-radius: 8px; padding: 0 8px; white-space: nowrap; }
 
 .bar .nav { display: flex; gap: 8px; }
 .view { display: grid; grid-template-columns: minmax(260px, 1fr) auto; gap: 18px; align-items: start; }
@@ -331,10 +338,13 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .title .mori .tree3 path { stroke: #B5541B; } /* 紅葉 */
 .title .title-extra { margin-left: .4em; }
 
-/* 先生: 次の漢字テストの範囲 */
+/* 先生: 漢字テストの範囲（テストごとに管理。あかい わく＝学級で まちがいの おおい字） */
 .tcell { position: relative; min-height: 46px; font-size: 22px; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
 .tcell.tsel { background: var(--fill-b); border: 2px solid var(--cat-3); font-weight: 700; }
 .tcell.tsel::after { content: "✓"; position: absolute; top: 0; right: 3px; font-size: 12px; color: var(--cat-3); }
+.tcell.tfail { box-shadow: inset 0 0 0 3px var(--ink-alert); }
+.tmgr { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 8px; }
+.tmgr select { font-size: 18px; min-height: 44px; max-width: 16em; }
 .teacher input#test-label { font-size: 18px; min-height: 44px; padding: 0 10px; width: min(100%, 360px); }
 .picked .tlist { font-size: 26px; letter-spacing: .15em; font-family: var(--font-kanji); }
 

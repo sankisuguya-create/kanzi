@@ -227,6 +227,32 @@
     }
   }
 
+  // ---- 漢字テストの範囲（学級ごとに複数、児童に見せるのは1つ）
+  // { active: 見せているテストの id（見せない時は null）, list: [{ id, label, chars }] }
+  // 旧形式 { label, chars } は1個だけのテストとして読む（見せていたので active も復元する）
+  function normTests(v) {
+    var out = { active: null, list: [] };
+    if (v && typeof v === 'object') {
+      var list = Array.isArray(v.list) ? v.list : (typeof v.chars === 'string' && v.chars ? [{ id: 't1', label: v.label, chars: v.chars }] : []);
+      var seen = {};
+      list.forEach(function (t, i) {
+        if (!t || typeof t !== 'object') return;
+        var id = String(t.id || 't' + (i + 1)).slice(0, 24);
+        if (seen[id]) return;
+        seen[id] = true;
+        out.list.push({ id: id, label: String(t.label || '').slice(0, 40), chars: String(t.chars || '') });
+      });
+      var active = v.active !== undefined ? v.active : (out.list.length === 1 && !Array.isArray(v.list) ? out.list[0].id : null);
+      if (out.list.some(function (t) { return t.id === active; })) out.active = String(active);
+    }
+    return out;
+  }
+  // 児童に見せるテスト（旧来の { label, chars } の形で返す）
+  function activeTest(tests) {
+    var t = normTests(tests), hit = t.list.filter(function (x) { return x.id === t.active; })[0];
+    return hit && hit.chars ? { label: hit.label, chars: hit.chars } : null;
+  }
+
   // おぼえた字 = よむが箱3以上（chars を渡すとその中だけ数える）
   function learned(p, chars) {
     var n = 0;
@@ -297,7 +323,8 @@
     dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList,
     FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, forestGrowth: forestGrowth, forestActivity: forestActivity, forestRegionLog: forestRegionLog,
-    compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check
+    compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check,
+    normTests: normTests, activeTest: activeTest
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sched = api;

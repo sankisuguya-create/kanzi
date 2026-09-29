@@ -56,6 +56,13 @@ async function scribble() {
   await page.mouse.move(box.x + 10, box.y + box.height - 10); await page.mouse.down();
   await page.mouse.move(box.x + box.width - 10, box.y + 10, { steps: 5 }); await page.mouse.up();
 }
+// ジグザグの往復（ぐちゃぐちゃ書き込み）
+async function zigzag() {
+  const box = await page.locator('.pad').boundingBox();
+  await page.mouse.move(box.x + 12, box.y + 12); await page.mouse.down();
+  for (let i = 1; i <= 8; i++) await page.mouse.move(box.x + 12 + (box.width - 24) * (i % 2), box.y + 12 + i * 11, { steps: 3 });
+  await page.mouse.up();
+}
 const activity = () => page.evaluate(() => Sched.activity(KanziState.p));
 
 // ---- 中国語フォントを出さない: 画面の全要素について、実際に描画に使われたフォントを調べる（Chrome DevTools Protocol）
@@ -174,9 +181,10 @@ await drawChar();
 await page.waitForSelector('.res');
 check((await page.textContent('.res')).includes('できた'), 'かく: 正しく書くと「できた」');
 await page.waitForSelector('.res', { state: 'detached' });
-await scribble(); await scribble();
+const q2 = await cur();
+await zigzag();
 await page.waitForSelector('.res', { timeout: 60000 });
-check((await page.textContent('.res')).includes('また 今度'), 'かく: 2回続けてまちがえると 正しい書き順を見せて「まちがい」');
+check((await page.textContent('.res')).includes('また 今度') && (await page.evaluate((c) => KanziState.session.skipped[c], q2)) === true, 'かく: ぐちゃぐちゃ書き込みは すぐ答えを見せて「まちがい」（わからないと同じ）');
 await shot('8-write-stuck');
 await page.waitForSelector('.endlist', { timeout: 10000 });
 await page.click('#menu');
@@ -239,14 +247,29 @@ check((await page.textContent('.teacher')).includes('下の学年なので'), '�
 await shot('10-teacher');
 await checkFonts('先生画面');
 
-// ---- 次の漢字テストの範囲（先生が指定）
+// ---- 漢字テストの範囲: テストごとに管理し、児童に見せるのは1つ（先生が指定）
 await page.click('#d-test summary');
+check(await page.evaluate(() => document.getElementById('test-editor').hidden), '先生: テストが無い時は 作る案内だけ');
+await page.click('#test-new'); // 最初のテストは そのまま児童に見せる
 await page.fill('#test-label', '9月の漢字テスト'); await page.press('#test-label', 'Tab');
 await page.click('.tcell[data-c="引"]'); await page.click('.tcell[data-c="羽"]');
 await page.click('.ttab[data-g="3"]');
 await page.click('.tcell[data-c="悪"]'); await page.click('.tcell[data-c="安"]');
-check((await page.textContent('#test-picked')).includes('4字') && (await page.textContent('#test-msg')).includes('保存') && (await page.textContent('#d-test-now')).startsWith('4字'), '先生: テストの範囲を 学年をまたいで4字（押すたびに保存）');
+check((await page.textContent('#test-picked')).includes('4字') && (await page.textContent('#test-msg')).includes('保存') &&
+  (await page.textContent('#d-test-now')).includes('見せている') && (await page.textContent('#d-test-now')).includes('9月の漢字テスト') && (await page.textContent('#d-test-now')).includes('4字'),
+  '先生: テストを作り、学年をまたいで4字（押すたびに保存・見せている）');
+check(await page.evaluate(() => document.querySelectorAll('.tcell.tfail').length > 0), '先生: 学級で まちがいの おおい字に あかい わく');
 await shot('14-teacher-test');
+// 2つめを作っても 見せているのは1つめのまま。選び直して 見せるテストを切り替える
+await page.click('#test-new');
+await page.fill('#test-label', '10月の漢字テスト'); await page.press('#test-label', 'Tab');
+await page.click('.tcell[data-c="感"]');
+check((await page.textContent('#d-test-now')).includes('2テスト') && (await page.textContent('#d-test-now')).includes('9月の漢字テスト'), '先生: 2つめを作っても 見せているのは1つめのまま');
+await page.check('#test-show');
+check((await page.textContent('#d-test-now')).includes('10月の漢字テスト'), '先生: 「このテストを 児童に見せる」で切り替え');
+await page.selectOption('#test-sel', { index: 0 }); await page.check('#test-show');
+check((await page.textContent('#d-test-now')).includes('9月の漢字テスト'), '先生: 9月のテストを 見せる状態にもどす');
+await shot('14-teacher-tests');
 
 // ---- 書き順を大きく見せる（学年タブ・全画面）
 await page.click('#show');

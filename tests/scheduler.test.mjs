@@ -158,3 +158,15 @@ test('終えた回のまとめ: 6年間 毎日10回やっても meta は5万文�
   assert.ok(JSON.stringify({ sel: p.sel, done: p.done, old: p.old }).length < 50000);
   assert.equal(S.activity(p), 6 * 365 * 100);
 });
+
+test('漢字テストの範囲: 複数管理と 見せる1つ（旧形式も読める）', () => {
+  assert.deepEqual(S.normTests(null), { active: null, list: [] });
+  assert.deepEqual(S.normTests({ label: '9月', chars: '悪安' }), { active: 't1', list: [{ id: 't1', label: '9月', chars: '悪安' }] }); // 旧形式
+  const multi = { active: 'b', list: [{ id: 'a', label: 'x', chars: '悪' }, { id: 'b', label: 'y', chars: '安' }] };
+  assert.deepEqual(S.normTests(multi), multi);
+  assert.deepEqual(S.activeTest(multi), { label: 'y', chars: '安' });
+  assert.deepEqual(S.activeTest({ label: '9月', chars: '悪安' }), { label: '9月', chars: '悪安' });
+  assert.equal(S.activeTest({ active: 'x', list: [{ id: 'a', label: 'x', chars: '悪' }] }), null); // 見せるidが消えている
+  assert.equal(S.activeTest({ active: 'a', list: [{ id: 'a', label: '', chars: '' }] }), null); // 範囲が空
+  assert.deepEqual(S.normTests({ active: 'x', list: [] }), { active: null, list: [] });
+});

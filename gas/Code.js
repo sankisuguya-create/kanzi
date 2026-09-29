@@ -133,9 +133,10 @@ function pointers_(klass) {
   for (var g = 1; g <= 6; g++) { var v = Number(setting_('pointer:' + klass + ':' + g)) || 0; if (v) out[g] = v; }
   return out;
 }
-// 次の漢字テストの範囲 { label, chars }（設定のキー test:<学級>）
-function test_(klass) {
-  try { var t = JSON.parse(setting_('test:' + klass) || 'null'); return t && t.chars ? t : null; } catch (e) { return null; }
+// 漢字テストの範囲（設定のキー test:<学級>）。テストごとに複数管理し、児童に見せるのは1つ。
+// { active: id|null, list: [{ id, label, chars }] }。旧形式 { label, chars } も読める（見せている1個のテストとして）
+function tests_(klass) {
+  try { return Sched.normTests(JSON.parse(setting_('test:' + klass) || 'null')); } catch (e) { return Sched.normTests(null); }
 }
 function orders_() {
   var out = {};
@@ -195,7 +196,7 @@ function api_init() {
   var me = begin_(), orders = orders_();
   if (me.role === 'student') {
     var klass = classOf_(me.email);
-    return { role: 'student', email: me.email, klass: klass, progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders, test: test_(klass), writeLevel: writeLevel_(klass) };
+    return { role: 'student', email: me.email, klass: klass, progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders, test: Sched.activeTest(tests_(klass)), writeLevel: writeLevel_(klass) };
   }
   if (me.role === 'teacher') return { role: 'teacher', email: me.email, classes: teacherClasses_(me.email), orders: orders };
   return { role: 'unknown', email: me.email };
@@ -261,7 +262,8 @@ function api_teacherView(klass) {
     out.miss = miss.sort(function (a, b) { return b.r - a.r; }).map(function (x) { return x.c; }).filter(function (x) { return seen[x] ? false : (seen[x] = true); }).slice(0, 3);
     return out;
   }).sort(function (a, b) { return (Number(a.no) || 999) - (Number(b.no) || 999); });
-  return { grades: grades_(klass), pointers: pointers_(klass), test: test_(klass), writeLevel: writeLevel_(klass), students: students, stats: { students: kids.length, perChar: per } };
+  var tests = tests_(klass);
+  return { grades: grades_(klass), pointers: pointers_(klass), tests: tests, test: Sched.activeTest(tests), writeLevel: writeLevel_(klass), students: students, stats: { students: kids.length, perChar: per } };
 }
 
 function api_setGrades(klass, list) {
@@ -271,13 +273,19 @@ function api_setGrades(klass, list) {
   setSetting_('grades:' + klass, list.join(','));
   return list;
 }
-function api_setTest(klass, json) {
+function validChars_(s) {
+  var seen = {};
+  return Array.from(String(s || '')).filter(function (c) { return /[\u4e00-\u9fff]/.test(c) && !seen[c] && (seen[c] = true); }).slice(0, 300).join('');
+}
+// テスト範囲の一式 { active, list: [{ id, label, chars }] } をまるごと保存（先生の編集は押すたびに全体を送る）
+function api_setTests(klass, json) {
   requireClass_(klass);
-  var t = JSON.parse(json || 'null') || {};
-  var seen = {}, chars = Array.from(String(t.chars || '')).filter(function (c) { return /[\u4e00-\u9fff]/.test(c) && !seen[c] && (seen[c] = true); }).slice(0, 300).join('');
-  var v = chars ? { label: String(t.label || '').slice(0, 40), chars: chars } : null;
+  var t = Sched.normTests(JSON.parse(json || 'null'));
+  t.list.forEach(function (x) { x.chars = validChars_(x.chars); });
+  if (!t.list.some(function (x) { return x.id === t.active; })) t.active = null;
+  var v = t.list.length ? t : null;
   setSetting_('test:' + klass, v ? JSON.stringify(v) : '');
-  return v;
+  return v || t; // 消えた時も { active: null, list: [] } を返して画面の状態とそろえる
 }
 // 書く問題の判定の強さ（設定のキー write:<学級>）: '' ＝ふつう、'easy' ＝やさしい
 function writeLevel_(klass) { return String(setting_('write:' + klass)) === 'easy' ? 'easy' : ''; }
