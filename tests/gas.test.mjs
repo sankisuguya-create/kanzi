@@ -48,7 +48,7 @@ const base = () => ({
   設定: [['キー', '値']]
 });
 
-test('森: 色は27本（972問）までを1列に保存し、旧5列・別児童・再送・先生の集計を保つ', () => {
+test('森: 完成森を集約して1列に保存し、旧5列・別児童・再送・先生の集計を保つ', () => {
   const env = makeEnv(base(), K2), p = env.Sched.newProgress();
   p.old = [1, 10000, 100000];
   p.forest = { base: 'rwky'.repeat(25000), modes: {} }; // 旧版の形（1問1字）で送られても読める
@@ -56,7 +56,7 @@ test('森: 色は27本（972問）までを1列に保存し、旧5列・別児�
   const row = env.book['進捗'].find(r => r[0] === K2);
   assert.equal(row.length, 6);
   assert.ok(row[5].length < 2100, '森の列 ' + row[5].length + '字'); // 1問ごとに色が変わる最悪の場合でも 972×2字ほど
-  const want = 'rwky'.repeat(25000).slice(0, 972);
+  const want = 'r'.repeat(243) + 'w'.repeat(243) + 'k'.repeat(486);
   assert.equal(env.Sched.forestLog(env.api_init().progress), want);
   assert.equal(env.Sched.forestLog(JSON.parse(env.api_save(JSON.stringify(saved)))), want);
   assert.equal(env.book['進捗'].find(r => r[0] === K1).length, 5);
@@ -72,6 +72,23 @@ test('森: 色の列が壊れていても、その児童は開けて保存もで
   const info = env.api_init();
   assert.equal(env.Sched.activity(info.progress), 10);
   assert.doesNotThrow(() => env.api_save(JSON.stringify(info.progress)));
+});
+
+test('森v2: 成長・カード除外・3/4の端数をGAS保存と再送で維持', () => {
+  const env = makeEnv(base(), K2), p = env.Sched.newProgress();
+  const now = Date.now();
+  env.Sched.finishSession(p, now - 3, 972, 'read');
+  env.Sched.finishSession(p, now - 2, 1, 'write');
+  env.Sched.finishSession(p, now - 1, 30, 'fk');
+  env.Sched.finishSession(p, now, 30, 'fy');
+  const saved = JSON.parse(env.api_save(JSON.stringify(p)));
+  assert.equal(env.Sched.forestActivity(saved), 972.75);
+  assert.equal(env.Sched.activity(saved), 1033);
+  assert.equal(env.Sched.forestActivity(env.api_init().progress), 972.75);
+  assert.equal(env.Sched.forestActivity(JSON.parse(env.api_save(JSON.stringify(p)))), 972.75);
+  const row = env.book['進捗'].find(r => r[0] === K2);
+  assert.equal(row.length, 6);
+  assert.ok(row[5].length < 1000);
 });
 
 test('担当学級: 教師シートの 学年・組。組が空なら その学年の全学級', () => {

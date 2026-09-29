@@ -354,7 +354,13 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .forest-w { background: var(--forest-write); transform: rotate(45deg); }
 .forest-k { background: var(--forest-card-k); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .forest-colors { margin: 0; padding: 0 4px; font-size: 16px; }
+.forest-colors:not([open]) > :not(summary) { display: none; }
 .forest-colors summary { min-height: 56px; padding: 14px 6px; cursor: pointer; }
+.forest-note { margin: 0 0 8px; font-size: 14px; }
+.forest-progress { display: block; flex: none; width: 100%; height: 6px; accent-color: var(--forest-read); }
+.forest-progress[hidden] { display: none; }
+.test-overview h2 { margin: 20px 0 8px; font-size: 22px; overflow-wrap: anywhere; }
+.test-count { white-space: nowrap; font-size: 18px; font-weight: normal; }
 /* 先生画面: 書く問題の判定（ふつう／やさしい） */
 .wlevel .opt { display: block; margin: 10px 0; }
 .wlevel .opt .hint { display: block; margin: 2px 0 0 28px; }

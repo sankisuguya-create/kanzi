@@ -1,5 +1,5 @@
 // 本人の学習履歴から育つ森。通信・乱数・時刻に依存せず同じ記録は同じ形と色になる。
-// 36回で1本、27本で森が完成（上限。それ以上は育たない）。表示する木だけ描画する。
+// 36段階で1本、27本ごとに次の森。表示する森だけ描画する。
 // 完成木の画像は画面をまたいで再利用（LRU、RGBA換算12MiBまで）。静止時のRAFは0。
 (function (root) {
   'use strict';
@@ -42,32 +42,39 @@
     return c;
   }
   function mount(host, options) {
-    const log = root.Sched.forestLog(options.progress),
-      n = log.length;
-    const active = Math.max(0, Math.floor((n - 1) / STEP)),
-      local = n === 0 ? 0 : ((n - 1) % STEP) + 1;
+    const growth = root.Sched.forestGrowth(options.progress),
+      n = growth.completed.length * AREA * STEP + growth.log.length + growth.fraction;
+    const active = Math.max(0, Math.ceil(n / STEP) - 1),
+      local = Math.floor(n - active * STEP);
     const currentRegion = Math.floor(active / AREA);
     const state = { focus: false, region: currentRegion };
     const records = new Map();
+    let regionLog = '', logRegion = -1;
     function record(id) {
+      const region = Math.floor(id / AREA);
+      if (region !== logRegion) {
+        regionLog = root.Sched.forestRegionLog(growth, region);
+        logRegion = region;
+      }
       if (!records.has(id))
         records.set(id, {
           type: id % 5,
-          modes: log
-            .slice(id * STEP, (id + 1) * STEP)
+          modes: regionLog
+            .slice((id % AREA) * STEP, (id % AREA + 1) * STEP)
             .replace(/[prwky]/g, (c) => ({ p: '0', r: '1', w: '2', k: '3', y: '3' })[c]) // カードは2種類とも同じ色
         });
       return records.get(id);
     }
     host.innerHTML =
       '<canvas class="tree" role="img"></canvas>' +
+      '<progress class="forest-progress" max="36" aria-label="今の木の成長"></progress>' +
       '<div class="forest-tools"><p class="forest-status" aria-live="polite"></p>' +
       '<button type="button" class="forest-focus" aria-pressed="false">育てている場所へ</button></div>' +
       '<div class="forest-regions" hidden><button type="button" class="forest-prev">前の森</button>' +
       '<span class="forest-region-name"></span><button type="button" class="forest-next">次の森</button></div>' +
-      '<details class="forest-colors"><summary>葉の色</summary><div class="forest-legend" aria-label="学習モードと葉の色"><span><i class="forest-p" aria-hidden="true"></i>これまで</span>' +
+      '<details class="forest-colors"><summary>葉の色</summary><div class="forest-legend" aria-label="学習モードと葉の色">' +
       '<span><i class="forest-r" aria-hidden="true"></i>よむ</span><span><i class="forest-w" aria-hidden="true"></i>かく</span>' +
-      '<span><i class="forest-k" aria-hidden="true"></i>カード</span></div></details>';
+      '</div><p class="forest-note">読む・書くで 育つよ。カードでは 育たないよ。</p></details>';
     const canvas = host.querySelector('canvas'),
       ctx = canvas.getContext('2d', { alpha: false });
     const status = host.querySelector('.forest-status'),
@@ -84,6 +91,9 @@
       transition = null,
       currentCamera = null,
       background = null,
+      completedImage = null,
+      completedKey = '',
+      completedPaints = 0,
       bgKey = '',
       lastFrame = -Infinity,
       frames = 0;
@@ -156,12 +166,23 @@
         canvas.height = ph;
         bgKey = '';
       }
+      const d = data();
+      const isCompleted = !state.focus && d.region < growth.completed.length;
+      const imageKey = [d.region, pw, ph].join(':');
+      // 完成した森は一枚の画像として再利用。待機中の描画もアニメーションもない。
+      if (isCompleted && completedImage && completedKey === imageKey) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(completedImage, 0, 0);
+        currentCamera = camera(w, h, d.count);
+        transition = null;
+        frames++;
+        return;
+      }
       paintBackground(w, h, dpr);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.drawImage(background, 0, 0);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const d = data(),
-        target = camera(w, h, d.count);
+      const target = camera(w, h, d.count);
       let t = 1,
         cam = target;
       // 初回のResizeObserver通知後、実際に見える最初の描画で成長を始める。
@@ -169,9 +190,10 @@
         frames === 0 &&
         Number.isFinite(options.prevActivity) &&
         options.prevActivity < n &&
+        !isCompleted &&
         !reduced.matches
       ) {
-        const oldId = Math.max(0, Math.floor((options.prevActivity - 1) / STEP));
+        const oldId = Math.max(0, Math.ceil(options.prevActivity / STEP) - 1);
         const count =
           Math.floor(oldId / AREA) === currentRegion ? Math.min(d.count, (oldId % AREA) + 1) : d.count;
         transition = { start: now, from: camera(w, h, count), grow: true };
@@ -219,6 +241,12 @@
       ctx.restore();
       frames++;
       if (transition && t >= 1) transition = null;
+      if (isCompleted && !transition) {
+        completedImage = makeCanvas(pw, ph);
+        completedImage.getContext('2d').drawImage(canvas, 0, 0);
+        completedKey = imageKey;
+        completedPaints++;
+      }
     }
     function tick(now) {
       raf = 0;
@@ -252,13 +280,16 @@
       status.textContent =
         n === 0
           ? '小さな たねから はじまる'
-          : n >= AREA * STEP
-            ? AREA + '本の 森が できたよ'
+          : !state.focus && d.region < growth.completed.length
+            ? d.region + 1 + '番目の 森が できたよ（27本）'
           : active +
             1 +
             '本目の ' +
             NAMES[active % 5] +
             (local === 36 ? 'が 育ったよ' : local === 1 ? 'の 新芽が 出たよ' : 'が 育っているよ');
+      const progress = host.querySelector('.forest-progress');
+      progress.value = n - active * STEP;
+      progress.hidden = !state.focus && d.region < growth.completed.length;
       focus.textContent = state.focus ? '森全体へ' : '育てている場所へ';
       focus.setAttribute('aria-pressed', String(state.focus));
       regions.hidden = state.focus || currentRegion === 0;
@@ -270,10 +301,10 @@
         n === 0
           ? '土からのぞく種'
           : state.focus
-            ? NAMES[active % 5] + '一本、学習 ' + n + '回'
-            : d.region + 1 + '番目の森、' + d.count + '本、学習 ' + n + '回'
+            ? NAMES[active % 5] + '一本、' + (active + 1) + '本目'
+            : d.region + 1 + '番目の森、' + d.count + '本'
       );
-      if (animate && from && !reduced.matches && visible && !document.hidden)
+      if (animate && from && !reduced.matches && visible && !document.hidden && (state.focus || d.region >= growth.completed.length))
         transition = { start: performance.now(), from, grow: false };
       schedule();
     }
@@ -325,6 +356,7 @@
       intersection.disconnect();
       abort.abort();
       background = null;
+      completedImage = null;
       records.clear();
     }
     render(false);
@@ -337,6 +369,8 @@
         cachedImages: cache.size,
         visibleTrees: state.focus ? 1 : data().count,
         animating: !!transition,
+        completedPaints,
+        completedImagePixels: completedImage ? completedImage.width * completedImage.height : 0,
         disposed
       })
     };
