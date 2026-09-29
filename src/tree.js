@@ -42,7 +42,7 @@
     return c;
   }
   function mount(host, options) {
-    const growth = root.Sched.forestGrowth(options.progress),
+    const growth = options.growth || root.Sched.forestGrowth(options.progress),
       n = growth.completed.length * AREA * STEP + growth.log.length + growth.fraction;
     const active = Math.max(0, Math.ceil(n / STEP) - 1),
       local = Math.floor(n - active * STEP);

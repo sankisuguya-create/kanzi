@@ -110,7 +110,8 @@
   function menu() {
     clearScreen();
     var p = S.p, g = S.grade;
-    var act = Sched.forestActivity(p);
+    // 森の成長は mount にも使うので1回だけ計算する（記録が増えるほど重いので）
+    var growth = Sched.forestGrowth(p), act = growth.completed.length * Sched.FOREST_CAP + growth.log.length + growth.fraction;
     var pk = 'kanzi.prevGrowth.' + (S.trial ? 'trial.' : '') + S.info.email, prev = Platform.store.get(pk);
     Platform.store.set(pk, act);
     var nSel = Sched.selected(p, orderOf(g)).length;
@@ -134,7 +135,7 @@
     // メニューは画面の高さに収める（スクロールしない）。ほかの画面に移る時に外す
     document.body.classList.add('menu-screen');
     cleanup.push(function () { document.body.classList.remove('menu-screen'); });
-    var forestView = Tree.mount($('#forest'), { progress: p, prevActivity: prev });
+    var forestView = Tree.mount($('#forest'), { progress: p, prevActivity: prev, growth: growth });
     S.treeView = forestView;
     cleanup.push(function () { forestView.destroy(); });
     bindTabs(function (ng) { S.grade = ng; menu(); });
@@ -150,14 +151,18 @@
   // テスト範囲は全字を先生の指定順で一覧。練習の30問上限・学年タブでは切り詰めない。
   function testOverview(focusChar, scroll) {
     clearScreen();
-    var chars = testChars();
+    var chars = testChars(), miss = {};
+    chars.forEach(function (c) { // 自分が まちがいの おおい字（よむ・かくの まちがいが あわせて2回以上）→ あかい わく
+      var n = (S.p.read[c] ? S.p.read[c][4] || 0 : 0) + (S.p.write[c] ? S.p.write[c][4] || 0 : 0);
+      if (n >= 2) miss[c] = true;
+    });
     app.innerHTML = '<header class="bar"><button class="back" id="back">もどる</button>' +
       '<span class="prog">' + K('[次|つぎ]の[漢|かん][字|じ]テストの はんい') + '</span><span></span></header>' +
       '<main class="test-overview"><h2>' + esc(S.test && S.test.label || K('[漢|かん][字|じ]テスト')) +
       ' <span class="test-count">' + chars.length + K('[字|じ]') + '</span></h2>' +
-      '<p class="browse-hint">' + (chars.length ? K('[字|じ]を おすと、[読|よ]みと [書|か]き[順|じゅん]が [見|み]られるよ') : 'まだ はんいが きまっていないよ') + '</p>' +
+      '<p class="browse-hint">' + (chars.length ? K('[字|じ]を おすと、[読|よ]みと [書|か]き[順|じゅん]が [見|み]られるよ') + (Object.keys(miss).length ? K('。<span class="miss-mark">あかい わく</span>は まちがいが おおい字 だよ') : '') : 'まだ はんいが きまっていないよ') + '</p>' +
       '<div class="kgrid" id="test-grid">' + chars.map(function (c) {
-        return '<button class="kc" data-c="' + esc(c) + '">' + esc(c) + '</button>';
+        return '<button class="kc' + (miss[c] ? ' kmiss' : '') + '" data-c="' + esc(c) + '">' + esc(c) + '</button>';
       }).join('') + '</div></main>';
     on('#back', menu);
     app.querySelectorAll('#test-grid .kc').forEach(function (b, i) {
@@ -445,7 +450,8 @@
       strokes: ST[c], mode: 'free', level: S.writeLevel === 'easy' ? 'easy' : 'normal', // 判定の強さは先生が学級ごとに選ぶ
       onMiss: function (kind) { say(kind === 'reverse' ? K('[書|か]く [向|む]きが ちがうよ。もう[一|いち][度|ど]') : K('もう[一|いち][度|ど] [書|か]いてみよう')); },
       onStroke: function () { say(''); },
-      onStuck: showAnswer,
+      // ぐちゃぐちゃ書き込みは「わからない」を押したのと同じ: すぐ答えを見せる（森には数えない）
+      onStuck: function (res) { if (res && res.scribble) S.session.skipped[c] = true; showAnswer(); },
       onDone: function (res) {
         var ok = !res.assisted;
         record(ok);
@@ -549,7 +555,7 @@
     var cached = reuse && S.view && S.view.klass === klass;
     (cached ? Promise.resolve(S.view) : Platform.teacherView(klass)).then(function (view) {
       view.klass = klass; view.pointers = view.pointers || {}; S.view = view;
-      var kids = view.students || [], test = view.test || { label: '', chars: '' }, st = view.stats || { students: 0, perChar: {} };
+      var kids = view.students || [], tests = Sched.normTests(view.tests !== undefined ? view.tests : view.test), st = view.stats || { students: 0, perChar: {} };
       // view.grades は見せるタブ全部（かなを含む）。学年タブ・進度・出題順は漢字の学年だけ
       var shown = view.grades, grades = shown.filter(function (g) { return !isKana(g); }).map(Number), pointers = view.pointers;
       tgrade = tgrade && grades.indexOf(tgrade) >= 0 ? tgrade : Math.max.apply(null, grades);
@@ -589,12 +595,15 @@
               return '<label class="opt"><input type="radio" name="wlevel" value="' + o[0] + '"' + ((view.writeLevel || '') === o[0] ? ' checked' : '') + '> <b>' + o[1] + '</b> <span class="hint">' + o[2] + '</span></label>';
             }).join('') + '</div><p class="hint" id="wmsg" aria-live="polite"></p>') +
           '</section><section class="tsets"><h2>' + tgrade + '年</h2>' + gradeTabs +
-          fold('d-test', '次の漢字テストの範囲', '',
-            '<p class="hint">字を押すと範囲に入る／外れる（押すたびに自動で保存）。上の学年タブを切り替えると、ほかの学年の字も足せます。児童の「読む・書く・カード」の はじめかたに「次の漢字テストの はんい」として出ます。</p>' +
-            '<p><label>テストの名前 <input id="test-label" maxlength="40" value="' + esc(test.label || '') + '" placeholder="例: 9月の50問テスト"></label></p>' +
+          fold('d-test', '漢字テストの範囲', '',
+            '<p class="hint">テストごとに 範囲を 作り、児童に見せるテストを 1つ えらびます（押すたびに自動で保存）。上の学年タブを切り替えると、ほかの学年の字も足せます。見せているテストは、児童の「読む・書く・カード」の はじめかたと メニューに出ます。</p>' +
+            '<div id="test-mgr"></div>' +
+            '<div id="test-editor">' +
+            '<p><label>テストの名前 <input id="test-label" maxlength="40" placeholder="例: 9月の50問テスト"></label></p>' +
             '<p class="picked" id="test-picked"></p>' +
             '<div class="grid">' + Array.from(order).map(function (c) { return '<button class="tcell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
-            '<p><button id="test-clear">範囲を ぜんぶ はずす</button> <span id="test-msg" aria-live="polite"></span></p>') +
+            '<p class="hint">あかい わくは、学級で まちがいの おおい字です（よむで3人以上が答え、まちがいが3割以上）</p>' +
+            '<p><button id="test-clear">このテストの範囲を ぜんぶ はずす</button> <span id="test-msg" aria-live="polite"></span></p></div>') +
           fold('d-ptr', tgrade + '年の 授業の進度', isTop ? (pointer ? pointer + '字目まで' : '未設定（全部）') : '全部（下の学年）',
             '<p class="hint">' + (isTop
               ? '授業で習った最後の字を押すと、そこまでが「習った漢字」になります（「ならった漢字から ランダム」の出題範囲）。設定しないと ' + tgrade + '年の字は全部が対象です。いまは <b id="ptr">' + (pointer || '未設定') + '</b>' + (pointer ? ' 字目まで' : '') + '。'
@@ -609,27 +618,66 @@
           '</section>' + kidsHtml;
         app.querySelectorAll('details.tset').forEach(function (d) { d.addEventListener('toggle', function () { S.open[d.id] = d.open; }); });
         var sel = $('#klass'); if (sel) sel.addEventListener('change', function () { teacher(sel.value); });
-        // 次の漢字テストの範囲: 押すたびに保存（自動保存）
-        var tchars = Array.from(test.chars || '');
+        // 漢字テストの範囲: テストごとに管理。編集・見せる切替とも押すたびに保存（自動保存）
+        // 学級で まちがいの おおい字（よむ: 3人以上が答え、最後の答えがまちがいの人が3割以上）→ あかい わく
+        var fails = {};
+        Object.keys(st.perChar).forEach(function (c) { var v = st.perChar[c]; if (v[0] >= 3 && v[1] * 10 >= v[0] * 3) fails[c] = true; });
+        var testCur = (S.testCur && tests.list.some(function (t) { return t.id === S.testCur; }) ? S.testCur : null) || tests.active || (tests.list[0] && tests.list[0].id) || null;
+        function curTest() { return tests.list.filter(function (t) { return t.id === testCur; })[0] || null; }
         function paintTest() {
-          $('#d-test-now').textContent = tchars.length ? tchars.length + '字' + ($('#test-label').value.trim() ? '（' + $('#test-label').value.trim() + '）' : '') : 'なし';
+          var cur = curTest(), tchars = cur ? Array.from(cur.chars) : [];
+          var at = tests.list.filter(function (t) { return t.id === tests.active; })[0];
+          $('#d-test-now').textContent = tests.list.length
+            ? tests.list.length + 'テスト・' + (at ? '見せている: ' + (at.label || 'なまえなし') + ' ' + Array.from(at.chars).length + '字' : '見せていない')
+            : 'なし';
+          $('#test-mgr').innerHTML =
+            '<p class="tmgr"><label>テスト <select id="test-sel">' +
+              tests.list.map(function (t) { return '<option value="' + esc(t.id) + '"' + (t.id === testCur ? ' selected' : '') + '>' + esc(t.label || 'なまえなし'); }).join('') + '</select></label>' +
+              ' <button id="test-new" type="button">＋ 新しいテスト</button>' +
+              (cur ? ' <button id="test-del" type="button">このテストを 消す</button>' : '') + '</p>' +
+            (cur ? '<p><label class="opt"><input type="checkbox" id="test-show"' + (tests.active === testCur ? ' checked' : '') + '> このテストを 児童に見せる</label></p>' : '<p class="hint">「＋ 新しいテスト」で作ります。</p>');
+          $('#test-editor').hidden = !cur;
+          $('#test-label').value = cur ? cur.label : '';
           $('#test-picked').innerHTML = tchars.length ? '<b>' + tchars.length + '字</b> <span class="tlist">' + tchars.map(esc).join(' ') + '</span>' : '<span class="hint">まだ ありません</span>';
-          app.querySelectorAll('.tcell').forEach(function (b) { var on = tchars.indexOf(b.dataset.c) >= 0; b.classList.toggle('tsel', on); b.setAttribute('aria-pressed', on); });
+          app.querySelectorAll('.tcell').forEach(function (b) { var on = tchars.indexOf(b.dataset.c) >= 0; b.classList.toggle('tsel', on); b.classList.toggle('tfail', !!fails[b.dataset.c]); b.setAttribute('aria-pressed', on); });
+          // #test-mgr を 描き直したので 中の操作を 付け直す
+          var sel = $('#test-sel'); if (sel) sel.addEventListener('change', function () { testCur = S.testCur = sel.value; paintTest(); });
+          var show = $('#test-show'); if (show) show.addEventListener('change', function () {
+            tests.active = show.checked ? testCur : (tests.active === testCur ? null : tests.active);
+            paintTest(); saveTests();
+          });
+          on('#test-new', function () {
+            var id = 't' + Date.now().toString(36) + Math.floor(Math.random() * 36).toString(36);
+            tests.list.push({ id: id, label: '', chars: '' });
+            if (tests.list.length === 1 && !tests.active) tests.active = id; // 最初のテストは そのまま見せる
+            testCur = S.testCur = id;
+            paintTest(); saveTests();
+          });
+          on('#test-del', function () {
+            tests.list = tests.list.filter(function (t) { return t.id !== testCur; });
+            if (tests.active === testCur) tests.active = null;
+            testCur = S.testCur = tests.active || (tests.list[0] && tests.list[0].id) || null;
+            paintTest(); saveTests();
+          });
         }
-        function saveTest() {
-          var t = { label: $('#test-label').value.trim(), chars: tchars.join('') };
-          view.test = t.chars ? t : null;
-          Platform.setTest(klass, t).then(function () { $('#test-msg').textContent = '✓ 保存しました'; }, function () { $('#test-msg').textContent = '× 保存できませんでした'; });
+        function saveTests() {
+          $('#test-msg').textContent = '保存中…';
+          Platform.setTests(klass, tests).then(function (v) {
+            view.tests = tests = Sched.normTests(v); view.test = Sched.activeTest(tests);
+            $('#test-msg').textContent = '✓ 保存しました';
+          }, function () { $('#test-msg').textContent = '× 保存できませんでした'; });
         }
         app.querySelectorAll('.tcell').forEach(function (b) {
           b.addEventListener('click', function () {
-            var i = tchars.indexOf(b.dataset.c);
-            if (i >= 0) tchars.splice(i, 1); else tchars.push(b.dataset.c);
-            paintTest(); saveTest();
+            var cur = curTest(); if (!cur) return;
+            var arr = Array.from(cur.chars), i = arr.indexOf(b.dataset.c);
+            if (i >= 0) arr.splice(i, 1); else arr.push(b.dataset.c);
+            cur.chars = arr.join('');
+            paintTest(); saveTests();
           });
         });
-        $('#test-label').addEventListener('change', function () { paintTest(); saveTest(); });
-        on('#test-clear', function () { tchars = []; paintTest(); saveTest(); });
+        $('#test-label').addEventListener('change', function () { var cur = curTest(); if (cur) { cur.label = $('#test-label').value.trim().slice(0, 40); } paintTest(); saveTests(); });
+        on('#test-clear', function () { var cur = curTest(); if (cur) { cur.chars = ''; } paintTest(); saveTests(); });
         paintTest();
         app.querySelectorAll('.gchecks input').forEach(function (cb) {
           cb.addEventListener('change', function () {
@@ -682,6 +730,18 @@
     clearScreen();
     picked = picked || [];
     pg = pg || 3;
+    // 学級が 習った字（下の学年は全部、いちばん上の学年は進度まで、かなは全部）を みどりの線で示す
+    var view = S.view || null, hasView = !!view, learned = {};
+    if (view) {
+      if (isKana(pg)) orderOf(pg).split('').forEach(function (c) { learned[c] = true; });
+      else {
+        var gs = (view.grades || []).filter(function (g) { return !isKana(g); }).map(Number), top = gs.length ? Math.max.apply(null, gs) : 0;
+        if (pg <= top) {
+          var o = orderOf(pg), ptr = (view.pointers || {})[pg] || 0;
+          Array.from(pg < top || !ptr ? o : o.slice(0, ptr)).forEach(function (c) { learned[c] = true; });
+        }
+      }
+    }
     app.innerHTML = '<header class="top t"><h1>書き順を 大きく見せる</h1><p class="sub">見せる字を 順に押す（1〜' + SHOW_MAX + '字）</p></header>' +
       '<main class="teacher"><p class="picked" id="picked"></p>' +
       '<p><label class="opt"><input type="checkbox" id="opt-base"' + (showOpts().base ? ' checked' : '') + '> 完成した字を うすく表示して、その上に書き順を黒で重ねる</label></p>' +
@@ -689,7 +749,8 @@
         ['青', '橙', '茶', '緑'].map(function (n, i) { return '<span class="cswatch s' + (i + 1) + '">' + (i + 1) + n + '</span>'; }).join('') + '）</label></p>' +
       '<p><button class="big primary" id="go" disabled>はじめる</button></p>' +
       '<nav class="tabs t" role="tablist">' + ALL_TABS.map(function (g) { return '<button role="tab" class="ptab" data-g="' + g + '" aria-selected="' + (g === pg) + '">' + gName(g) + '</button>'; }).join('') + '</nav>' +
-      '<div class="grid">' + Array.from(orderOf(pg)).map(function (c) { return '<button class="cell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
+      '<p class="hint">' + (hasView ? '<span class="learned-mark">みどり</span>の 線が ある字は この学級が 習った字' : '習った漢字は 出せません（学級の設定を開くと出ます）') + '</p>' +
+      '<div class="grid">' + Array.from(orderOf(pg)).map(function (c) { return '<button class="cell' + (learned[c] ? ' learned' : '') + '" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
       '<p><button id="cancel">先生画面にもどる</button></p></main>';
     function paint() {
       $('#picked').innerHTML = picked.length ? picked.map(function (c, i) { return '<span class="pk-item">' + (i + 1) + ' <b>' + esc(c) + '</b></span>'; }).join('') : '<span class="hint">まだ えらんでいません</span>';

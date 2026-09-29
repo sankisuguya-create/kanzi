@@ -51,7 +51,7 @@
     if (!isGas) {
       var role = /teacher/.test(location.search) ? 'teacher' : 'student', s = demoSettings(), klass = '3-1';
       return Promise.resolve({ role: role, demo: true, email: 'demo', klass: klass, progress: Sched.norm(store.get(key)),
-        grades: demoGrades(klass), pointers: demoPointers(klass), orders: s.orders, test: s.tests[klass] || null, writeLevel: s.writeLevels[klass] || '', classes: [klass] });
+        grades: demoGrades(klass), pointers: demoPointers(klass), orders: s.orders, test: Sched.activeTest(s.tests[klass]), writeLevel: s.writeLevels[klass] || '', classes: [klass] });
     }
     return gas('api_init').then(function (info) {
       key = 'kanzi.progress.' + info.email;
@@ -94,7 +94,8 @@
   function teacherView(klass) {
     if (isGas) return gas('api_teacherView', klass);
     var s = demoSettings();
-    return Promise.resolve({ grades: demoGrades(klass), pointers: demoPointers(klass), test: s.tests[klass] || null, writeLevel: s.writeLevels[klass] || '', students: demoStudents(), stats: demoStats() });
+    var tests = Sched.normTests(s.tests[klass]);
+    return Promise.resolve({ grades: demoGrades(klass), pointers: demoPointers(klass), tests: tests, test: Sched.activeTest(tests), writeLevel: s.writeLevels[klass] || '', students: demoStudents(), stats: demoStats() });
   }
   function demoStats() {
     var seed = 7, out = {}, g, i;
@@ -118,10 +119,11 @@
     }
     return out;
   }
-  // 次の漢字テストの範囲 { label, chars }（学級ごと。先生が決める）
-  function setTest(klass, t) {
-    if (isGas) return gas('api_setTest', klass, JSON.stringify(t));
-    var s = demoSettings(); s.tests[klass] = t && t.chars ? t : null; saveDemo(s); return Promise.resolve(s.tests[klass]);
+  // 漢字テストの範囲（学級ごとに複数 { active, list: [{ id, label, chars }] }。児童に見せるのは active の1つ）
+  function setTests(klass, t) {
+    var v = Sched.normTests(t);
+    if (isGas) return gas('api_setTests', klass, JSON.stringify(v));
+    var s = demoSettings(); s.tests[klass] = v.list.length ? v : null; saveDemo(s); return Promise.resolve(Sched.normTests(s.tests[klass]));
   }
   // 書く問題の判定の強さ（学級ごと）: '' ＝ふつう、'easy' ＝やさしい
   function setWriteLevel(klass, level) {
@@ -143,5 +145,5 @@
   }
 
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
-    teacherView: teacherView, setTest: setTest, setWriteLevel: setWriteLevel, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder, store: store };
+    teacherView: teacherView, setTests: setTests, setWriteLevel: setWriteLevel, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder, store: store };
 })(this);

@@ -139,16 +139,37 @@ test('保存: 本人の行だけを更新し、meta に えらんだ漢字・終
   assert.throws(() => makeEnv(base(), T).api_save('{}'), /児童のアカウントではありません/);
 });
 
-test('次の漢字テストの範囲: 担当の先生が決め、その学級の児童に届く', () => {
+test('漢字テストの範囲: テストごとに管理し、児童に見せるのは1つ（担当の先生だけ）', () => {
   const env = makeEnv(base(), T);
-  const t = env.api_setTest('3-1', JSON.stringify({ label: '9月テスト', chars: '悪安悪abc暗' }));
-  assert.equal(t.chars, '悪安暗'); // 漢字以外と重複は捨てる
-  assert.equal(env.api_teacherView('3-1').test.label, '9月テスト');
-  assert.throws(() => env.api_setTest('3-2', JSON.stringify({ chars: '悪' })), /担当学級ではありません/);
+  const t = env.api_setTests('3-1', JSON.stringify({ active: 't2', list: [
+    { id: 't1', label: '9月テスト', chars: '悪安悪abc暗' },
+    { id: 't2', label: '10月テスト', chars: '悪悪悪' }] }));
+  assert.equal(t.list[0].chars, '悪安暗'); // 漢字以外と重複は捨てる
+  assert.equal(t.active, 't2');
+  const view = env.api_teacherView('3-1');
+  assert.equal(view.tests.list.length, 2);
+  assert.equal(view.test.chars, '悪'); // 見せているテストだけが 児童に届く
+  assert.equal(view.test.label, '10月テスト');
+  assert.throws(() => env.api_setTests('3-2', JSON.stringify({ active: null, list: [] })), /担当学級ではありません/);
   const kid = makeEnv(env.book, K1).api_init();
-  assert.equal(kid.test.chars, '悪安暗');
+  assert.equal(kid.test.chars, '悪');
   assert.equal(makeEnv(env.book, K3).api_init().test, null); // 3年2組には届かない
-  assert.equal(env.api_setTest('3-1', JSON.stringify({ chars: '' })), null);
+  env.api_setTests('3-1', JSON.stringify({ active: null, list: t.list })); // 見せるのをやめる
+  assert.equal(makeEnv(env.book, K1).api_init().test, null);
+  const cleared = env.api_setTests('3-1', JSON.stringify({ active: 'x', list: [] })); // 全部消す
+  assert.equal(JSON.stringify(cleared), '{"active":null,"list":[]}');
+  assert.equal(env.api_teacherView('3-1').tests.list.length, 0);
+});
+
+test('漢字テストの範囲: 旧形式 {label,chars} は 見せている1つのテストとして読める', () => {
+  const s = base();
+  s.設定.push(['test:3-1', JSON.stringify({ label: '旧テスト', chars: '悪安' })]);
+  const kid = makeEnv(s, K1).api_init();
+  assert.equal(kid.test.chars, '悪安');
+  assert.equal(kid.test.label, '旧テスト');
+  const view = makeEnv(s, T).api_teacherView('3-1');
+  assert.equal(view.tests.list.length, 1);
+  assert.equal(view.tests.active, view.tests.list[0].id);
 });
 
 
