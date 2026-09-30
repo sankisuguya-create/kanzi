@@ -299,6 +299,16 @@
 
   // ================= 児童: 問題の始め方（どの字で やるか）
   var KIND_NAME = { read: '[読|よ]む', write: '[書|か]く', fk: 'カード（[漢|かん][字|じ] → [読|よ]み）', fy: 'カード（[読|よ]み → [漢|かん][字|じ]）' };
+  // 学級の集計から まちがいのおおい字（先生のおためし用。3人以上が答え、最後の答えがまちがいの人がいる字を割合の高い順）
+  function classMissList(order) {
+    var perChar = (S.view && S.view.stats && S.view.stats.perChar) || {}, out = [];
+    for (var i = 0; i < order.length; i++) {
+      var c = order.charAt(i), v = perChar[c];
+      if (v && v[0] >= 3 && v[1] > 0) out.push({ c: c, r: v[1] / v[0], m: v[1] });
+    }
+    out.sort(function (a, b) { return (b.r - a.r) || (b.m - a.m); });
+    return out.map(function (x) { return x.c; });
+  }
   function sources(kind) {
     var g = S.grade, order = orderOf(g), n = SIZE[kind], tbl = kind === 'write' ? 'write' : 'read';
     var due = Sched.dueList(S.p, today(), order)[tbl];
@@ -308,12 +318,15 @@
       { id: 'due', label: 'おすすめ', sub: '[忘|わす]れそうな[字|じ]', list: due.slice(0, n) },
       { id: 'sel', label: '[選|えら]んだ' + noun, sub: '[自|じ][分|ぶん]で [選|えら]んだ[字|じ]', list: Sched.selected(S.p, order).slice(0, SEL_MAX) },
       { id: 'rnd', label: kana ? noun + 'から ランダム' : '[習|なら]った[漢|かん][字|じ]から ランダム', sub: '', list: shuffle(learnedChars(g).slice()).slice(0, n) },
-      { id: 'miss', label: 'まちがいの [多|おお]い' + noun, sub: '', list: Sched.missList(S.p, tbl, order).slice(0, n) }
+      { id: 'miss', label: 'まちがいの [多|おお]い' + noun, sub: S.trial ? '[学|がく][級|きゅう]で おおい' : '', list: (S.trial ? classMissList(order) : Sched.missList(S.p, tbl, order)).slice(0, n) }
     ]);
   }
   function chooser(kind) {
     clearScreen();
     var src = sources(kind);
+    // 横長の画面ではスクロールせずに全部の選択肢が見える（メニューと同じ仕組み）
+    document.body.classList.add('chooser-screen');
+    cleanup.push(function () { document.body.classList.remove('chooser-screen'); });
     app.innerHTML =
       '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + K(KIND_NAME[kind]) + '・' + gName(S.grade) + '</span><span></span></header>' +
       K('<main class="chooser"><h2>どの[字|じ]で やる？</h2>') + src.map(function (s) {
