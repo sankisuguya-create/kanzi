@@ -332,7 +332,16 @@ check((await page.textContent('.bar .prog')) === '1 / 4', 'おためし: 一覧�
 await page.click('#back'); await page.waitForSelector('#test-grid');
 check(await page.locator('#test-grid .kc').first().evaluate(e => e === document.activeElement), '一覧に戻ると押した字にフォーカス');
 await page.click('#back');
+// おためしの「まちがいの多い漢字」は その子ではなく学級の集計から出す
 await page.click('#go-read');
+check((await page.textContent('.chooser [data-id="miss"]')).includes('学級'), 'おためし: まちがいは学級の集計から（ボタンに案内）');
+const missExp = await page.evaluate(() => {
+  const o = KanziState.orders[4] || KANZI_DATA.grades[4].order, pc = KanziState.view.stats.perChar, l = [];
+  for (let i = 0; i < o.length; i++) { const c = o.charAt(i), v = pc[c]; if (v && v[0] >= 3 && v[1] > 0) l.push({ c, r: v[1] / v[0], m: v[1] }); }
+  return l.sort((a, b) => (b.r - a.r) || (b.m - a.m)).map((x) => x.c).slice(0, 10);
+});
+await page.click('.chooser [data-id="miss"]'); await page.waitForSelector('#yomi');
+check(await page.evaluate((exp) => JSON.stringify(KanziState.session.items) === JSON.stringify(exp), missExp), `おためし: まちがいは学級の集計順（${missExp.slice(0, 3).join('')}…）`);
 await page.click('#back');
 await shot('11-trial');
 await page.click('#tb-back');
@@ -504,6 +513,12 @@ for (const [w, h] of [[1366, 630], [1024, 600]]) {
   check(await fit() && minBtn >= 60, `メニュー: ${w}×${h} でスクロールなし（ボタンがいちばん多い時。いちばん低いボタン ${Math.round(minBtn)}px）`);
   await page.click('.forest-colors summary'); await page.waitForTimeout(200);
   check(await fit(), `メニュー: ${w}×${h} で「葉の色」を開いても はみ出さない`);
+  await page.click('#go-read'); await page.waitForSelector('.chooser'); await page.waitForTimeout(150);
+  const cb = await page.evaluate(() => ({ n: document.querySelectorAll('.chooser .big').length, min: Math.min(...[...document.querySelectorAll('.chooser .big')].map((b) => b.getBoundingClientRect().height)) }));
+  check(await fit() && cb.n === 5 && cb.min >= 56, `「どの字でやる？」: ${w}×${h} でスクロールなし・全部の選択肢が見える（${cb.n}件・いちばん低いボタン ${Math.round(cb.min)}px）`);
+  if (w === 1366) await shot('20-chooser-fit');
+  await page.click('#back'); await page.waitForSelector('.menu');
+  check(await page.evaluate(() => !document.body.classList.contains('chooser-screen')), '「どの字でやる？」: もどると 高さ固定は外れる');
   if (w === 1366) await shot('19-menu-fit');
 }
 await page.click('#go-browse');
