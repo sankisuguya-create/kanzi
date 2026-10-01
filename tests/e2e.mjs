@@ -231,6 +231,7 @@ await page.goto(URL0 + '?teacher=1');
 await page.waitForSelector('#d-grades');
 check((await page.textContent('.top .sub')).startsWith('3年1組'), '先生: 担当学級（3年1組）で開く');
 check((await page.$$('.kids tbody tr')).length === 30 && (await page.textContent('.kids thead')).includes('おぼえた字'), '先生: 担当学級の子どもごとの記録（30人）');
+check(await page.evaluate(() => document.querySelector('.kids').getBoundingClientRect().top < document.querySelector('.tsets').getBoundingClientRect().top), '先生: いまの進捗（記録）は設定より上');
 check(await page.evaluate(() => [...document.querySelectorAll('details.tset')].every((d) => !d.open) && document.querySelectorAll('details.tset').length === 5), '先生: 設定5つは はじめ たたんである');
 check((await page.textContent('#d-grades-now')) === '1〜3年' && (await page.textContent('#d-test-now')) === 'なし', '先生: たたんでも いまの値が見出しに出る');
 await shot('10-teacher-folded');
@@ -273,7 +274,9 @@ await shot('14-teacher-tests');
 
 // ---- 書き順を大きく見せる（学年タブ・全画面）
 await page.click('#show');
+check(await page.evaluate(() => { const t = document.querySelector('.grid').getBoundingClientRect().top; return t > 0 && t <= 200; }), '提示: 漢字一覧は最初から最上部');
 await page.click('.ptab[data-g="5"]');
+check(await page.evaluate(() => { const t = document.querySelector('.grid').getBoundingClientRect().top; return t > 0 && t <= 200; }), '提示: 学年を切り替えても一覧は最上部');
 await page.click('.cell[data-c="確"]'); await page.click('.ptab[data-g="3"]'); await page.click('.cell[data-c="悪"]');
 await page.click('#go');
 await page.waitForSelector('#stage.single');
