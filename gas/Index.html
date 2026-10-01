@@ -2542,7 +2542,8 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
           var gl = gs.length > 1 && gs[gs.length - 1] - gs[0] === gs.length - 1 ? gs[0] + '〜' + gs[gs.length - 1] + '年' : gs.map(function (g) { return g + '年'; }).join('・');
           return ks.concat([gl]).join('・');
         }
-        $('.teacher').innerHTML = classes +
+        // いまの進捗（子どもごとの記録）をいちばん上に。設定はその下
+        $('.teacher').innerHTML = classes + kidsHtml +
           '<section class="tsets"><h2>設定</h2>' +
           fold('d-grades', '児童に見せる学年', esc(gradesNow(shown)),
             '<p class="hint">児童のメニューは、いちばん上の学年のタブで開きます。ひらがな・カタカナは「見る」と「書く」だけです（1年向け）。</p>' +
@@ -2575,7 +2576,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
             '<textarea id="order" rows="5">' + esc(order) + '</textarea><p><button id="save-order">この順番にする</button> <span id="order-msg" aria-live="polite"></span></p>') +
           '<h3>学級でつまずいている字</h3><p class="hint">よむで答えたことのある児童のうち、最後の答えがまちがいだった児童の割合が高い字（' + st.students + '人中。児童名は出しません）。</p>' +
           (hard.length ? '<ol class="hard">' + hard.map(function (x) { return '<li><span class="hc">' + esc(x.c) + '</span>' + x.s + '人中 ' + x.b + '人（' + Math.round(x.r * 100) + '%）</li>'; }).join('') + '</ol>' : '<p>まだ データが ありません。</p>') +
-          '</section>' + kidsHtml;
+          '</section>';
         app.querySelectorAll('details.tset').forEach(function (d) { d.addEventListener('toggle', function () { S.open[d.id] = d.open; }); });
         var sel = $('#klass'); if (sel) sel.addEventListener('change', function () { teacher(sel.value); });
         // 漢字テストの範囲: テストごとに管理。編集・見せる切替とも押すたびに保存（自動保存）
@@ -2702,15 +2703,17 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
         }
       }
     }
+    // 学年タブと漢字一覧を上に置き、一覧が最初から最上部に見えるようにする
     app.innerHTML = '<header class="top t"><h1>書き順を 大きく見せる</h1><p class="sub">見せる字を 順に押す（1〜' + SHOW_MAX + '字）</p></header>' +
-      '<main class="teacher"><p class="picked" id="picked"></p>' +
+      '<main class="teacher">' +
+      '<nav class="tabs t" role="tablist">' + ALL_TABS.map(function (g) { return '<button role="tab" class="ptab" data-g="' + g + '" aria-selected="' + (g === pg) + '">' + gName(g) + '</button>'; }).join('') + '</nav>' +
+      '<p class="hint">' + (hasView ? '<span class="learned-mark">みどり</span>の 線が ある字は この学級が 習った字' : '習った漢字は 出せません（学級の設定を開くと出ます）') + '</p>' +
+      '<div class="grid">' + Array.from(orderOf(pg)).map(function (c) { return '<button class="cell' + (learned[c] ? ' learned' : '') + '" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
+      '<p class="picked" id="picked"></p>' +
       '<p><label class="opt"><input type="checkbox" id="opt-base"' + (showOpts().base ? ' checked' : '') + '> 完成した字を うすく表示して、その上に書き順を黒で重ねる</label></p>' +
       '<p><label class="opt"><input type="checkbox" id="opt-color"' + (showOpts().color ? ' checked' : '') + '> 一〜四画目に色をつける（' +
         ['青', '橙', '茶', '緑'].map(function (n, i) { return '<span class="cswatch s' + (i + 1) + '">' + (i + 1) + n + '</span>'; }).join('') + '）</label></p>' +
       '<p><button class="big primary" id="go" disabled>はじめる</button></p>' +
-      '<nav class="tabs t" role="tablist">' + ALL_TABS.map(function (g) { return '<button role="tab" class="ptab" data-g="' + g + '" aria-selected="' + (g === pg) + '">' + gName(g) + '</button>'; }).join('') + '</nav>' +
-      '<p class="hint">' + (hasView ? '<span class="learned-mark">みどり</span>の 線が ある字は この学級が 習った字' : '習った漢字は 出せません（学級の設定を開くと出ます）') + '</p>' +
-      '<div class="grid">' + Array.from(orderOf(pg)).map(function (c) { return '<button class="cell' + (learned[c] ? ' learned' : '') + '" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
       '<p><button id="cancel">先生画面にもどる</button></p></main>';
     function paint() {
       $('#picked').innerHTML = picked.length ? picked.map(function (c, i) { return '<span class="pk-item">' + (i + 1) + ' <b>' + esc(c) + '</b></span>'; }).join('') : '<span class="hint">まだ えらんでいません</span>';
@@ -2735,6 +2738,9 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     on('#go', function () { showStart(picked.slice(), function () { showPick(picked, pg); }); });
     on('#cancel', function () { teacher(S.klass); });
     paint();
+    // 学年タブ（その下に漢字一覧）が画面の最上部に来る位置に戻す
+    var pickTabs = $('nav.tabs');
+    if (pickTabs) pickTabs.scrollIntoView();
   }
 
   function showStart(list, back) {
