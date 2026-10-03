@@ -682,9 +682,10 @@
         wi.addEventListener('input', function () { btn.disabled = wi.value.trim() !== String(v.anonWord); });
         btn.addEventListener('click', function () {
           $('#arch-msg2').textContent = '消しています…';
-          Platform.archiveAnonymize(year, wi.value.trim()).then(function () {
+          Platform.archiveAnonymize(year, wi.value.trim()).then(function (r) {
             delete S.archV[year]; // 消した年度だけ控えを捨てて読み直す（一覧の消去済み表示も新しい値にする）
-            if (S.arch) S.arch.forEach(function (y) { if (y.year === String(year)) y.anonymized = true; });
+            // 残っている行があれば消去済みにしない（サーバーの remaining を見る。未完なら再開の案内が出る）
+            if (S.arch) S.arch.forEach(function (y) { if (y.year === String(year)) y.anonymized = !!(r && r.remaining === 0); });
             showArchYear(year);
           }, function () { $('#arch-msg2').textContent = '消せませんでした'; });
         });

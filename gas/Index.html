@@ -452,7 +452,7 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
   body.trial #trial-bar #tb-back { margin-top: auto; }
 }
 </style>
-<meta name="kanzi-ver" content="c73a1c5">
+<meta name="kanzi-ver" content="004e861">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -1030,7 +1030,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     a.anonymized = true; a.remaining = 0;
     a.anonLog = { year: String(year), at: new Date().toISOString(), count: a.classes.reduce(function (n, c) { return n + c.students; }, 0), by: 'demo' };
     saveDemo(s);
-    return Promise.resolve(true);
+    return Promise.resolve({ remaining: 0 }); // GAS版と同じ返り（画面は remaining を見て消去済みを出す）
   }
 
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
@@ -2764,9 +2764,10 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
         wi.addEventListener('input', function () { btn.disabled = wi.value.trim() !== String(v.anonWord); });
         btn.addEventListener('click', function () {
           $('#arch-msg2').textContent = '消しています…';
-          Platform.archiveAnonymize(year, wi.value.trim()).then(function () {
+          Platform.archiveAnonymize(year, wi.value.trim()).then(function (r) {
             delete S.archV[year]; // 消した年度だけ控えを捨てて読み直す（一覧の消去済み表示も新しい値にする）
-            if (S.arch) S.arch.forEach(function (y) { if (y.year === String(year)) y.anonymized = true; });
+            // 残っている行があれば消去済みにしない（サーバーの remaining を見る。未完なら再開の案内が出る）
+            if (S.arch) S.arch.forEach(function (y) { if (y.year === String(year)) y.anonymized = !!(r && r.remaining === 0); });
             showArchYear(year);
           }, function () { $('#arch-msg2').textContent = '消せませんでした'; });
         });

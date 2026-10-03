@@ -68,13 +68,16 @@ function settings_() {
 }
 function setting_(key) { var e = settings_()[key]; return e ? e.value : ''; }
 // 設定の書き込みはスクリプトロックで順番にする（先生が複数画面・複数人で同時に変えた時に古い値で上書きしない）
-function setSetting_(key, value) {
+function setSetting_(key, value, after) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    var sh = settingsSheet_(), all = settings_(), e = all[key];
-    if (e) sh.getRange(e.row, 2).setValue(value); else { sh.appendRow([key, value]); delete MEMO_.settings; }
-    if (e) e.value = value;
+    var sh = settingsSheet_();
+    delete MEMO_.settings; // ロックの中では必ず新しく読む（この実行がロック前に読んだ控えを使い回すと、同時保存で同じキーを二重に足す）
+    var all = settings_(), e = all[key];
+    if (e) sh.getRange(e.row, 2).setValue(value); else sh.appendRow([key, value]);
+    all[key] = { row: e ? e.row : sh.getLastRow(), value: value }; // この実行のあとの読み取りにも新しい値を返す
+    if (after) after(); // キャッシュの上書きなど、シートと同じ順番で行う処理はロックの中で（api_setGates）
   } finally {
     lock.releaseLock();
   }
@@ -452,23 +455,29 @@ function api_archiveAnonymize(year, confirmWord) {
     if (!(v in ids)) { n++; ids[v] = '児童' + ('00' + n).slice(-3); added.push([v, ids[v]]); }
     return ids[v];
   }
+  // 先に全メールの番号を確定して照合表に保存してから、名簿・進捗を書き換える。
+  // 書き換えの途中で止まっても、照合表が残っていれば再実行で同じ番号が付く（名簿と進捗の結合がずれない）
+  var vals = null, w = 0, m = 0;
   if (rs) {
-    var m = rs.getLastRow() - 1;
-    if (m > 0) {
-      var w = Math.min(5, rs.getLastColumn()), vals = rs.getRange(2, 1, m, w).getValues();
-      vals.forEach(function (r) { if (String(r[0]).indexOf('@') >= 0) { r[0] = anon(r[0]); if (w >= 5) r[4] = ''; } });
-      rs.getRange(2, 1, m, w).setValues(vals);
-    }
+    m = rs.getLastRow() - 1;
+    if (m > 0) { w = Math.min(5, rs.getLastColumn()); vals = rs.getRange(2, 1, m, w).getValues(); }
   }
+  var vals2 = null, m2 = 0;
   if (ps) {
-    var m2 = ps.getLastRow() - 1;
-    if (m2 > 0) {
-      var vals2 = ps.getRange(2, 1, m2, 1).getValues();
-      vals2.forEach(function (r) { r[0] = anon(r[0]); });
-      ps.getRange(2, 1, m2, 1).setValues(vals2);
-    }
+    m2 = ps.getLastRow() - 1;
+    if (m2 > 0) vals2 = ps.getRange(2, 1, m2, 1).getValues();
   }
+  if (vals) vals.forEach(function (r) { anon(r[0]); });
+  if (vals2) vals2.forEach(function (r) { anon(r[0]); });
   if (added.length) ms.getRange(m0 + 1, 1, added.length, 2).setValues(added);
+  if (vals) {
+    vals.forEach(function (r) { if (String(r[0]).indexOf('@') >= 0) { r[0] = anon(r[0]); if (w >= 5) r[4] = ''; } });
+    rs.getRange(2, 1, m, w).setValues(vals);
+  }
+  if (vals2) {
+    vals2.forEach(function (r) { r[0] = anon(r[0]); });
+    ps.getRange(2, 1, m2, 1).setValues(vals2);
+  }
   var remaining = archAnonRemaining_(year);
   if (remaining === 0) {
     ss.deleteSheet(ms); // 対応表は個人情報を含むため残せない
@@ -485,8 +494,10 @@ function gates_(klass) { return Sched.normGates(setting_('gates:' + klass)); }
 function api_setGates(klass, list) {
   requireClass_(klass);
   list = Sched.normGates(list);
-  setSetting_('gates:' + klass, list.join(','));
-  CacheService.getScriptCache().put('gates:' + klass, list.join(','), GATE_CACHE_SEC_);
+  setSetting_('gates:' + klass, list.join(','), function () {
+    // キャッシュの上書きもシート更新と同じ順番で（ロックの外に置くと、同時保存でキャッシュだけ逆順に残る）
+    CacheService.getScriptCache().put('gates:' + klass, list.join(','), GATE_CACHE_SEC_);
+  });
   return list;
 }
 function api_gates() {

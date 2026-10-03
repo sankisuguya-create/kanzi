@@ -199,7 +199,7 @@
     a.anonymized = true; a.remaining = 0;
     a.anonLog = { year: String(year), at: new Date().toISOString(), count: a.classes.reduce(function (n, c) { return n + c.students; }, 0), by: 'demo' };
     saveDemo(s);
-    return Promise.resolve(true);
+    return Promise.resolve({ remaining: 0 }); // GAS版と同じ返り（画面は remaining を見て消去済みを出す）
   }
 
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
