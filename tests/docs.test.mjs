@@ -24,6 +24,7 @@ test('森の定数は scheduler.js が正本で、forest.md の記述と一致�
   assert.deepEqual([Number(m[1]), Number(m[2])], [27, 36]); // CAP = 27×36 = 972
   const forest = read('docs/forest.md');
   assert.ok(/36段階/.test(forest) && /27本/.test(forest), 'forest.md に 36段階・27本 の記述がない');
-  // tree.js・tree-painter.js に 36 ベタ書きの段階数が残っていない（画の位置など座標の 36 は許す）
-  assert.ok(!/"36"|=== 36|\/ 36\b|max="36"/.test(read('src/tree.js')), 'tree.js に段階数36のベタ書きが残っている');
+  // tree.js に 36 ベタ書きの段階数が残っていない（行コメントを除いて検査する）
+  const code = read('src/tree.js').split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+  assert.ok(!/\b36\b/.test(code), 'tree.js に段階数36のベタ書きが残っている');
 });
