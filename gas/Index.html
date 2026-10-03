@@ -39,6 +39,9 @@ body {
 button { font: inherit; color: inherit; cursor: pointer; }
 input, select, textarea { font-family: inherit; } /* フォーム部品も同じ日本語フォントを引き継ぐ */
 button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
+/* キーボードで進める要素にも同じ太い枠を出す（ブラウザ既定の細い outline との混在を避ける。
+   先生の校務PCと児童のChromebookの両方で Tab 操作をするため。WCAG 2.4.7） */
+summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 
 /* ---- 見出し */
 .top { display: flex; align-items: baseline; gap: 14px; padding: 4px 4px 8px; }
@@ -55,9 +58,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 }
 .big.primary { background: var(--solid-on); border-color: var(--solid-on); color: #fff; }
 .big .meta { font-size: 18px; font-weight: 400; letter-spacing: 0; }
-.big .next-chars { font-size: 22px; letter-spacing: .3em; }
 .big:active { transform: translateY(2px); }
-.done-note { font-size: 22px; font-weight: 400; border-style: dashed; border-color: var(--line); color: var(--ink-sub); }
 
 /* ---- メニュー */
 .menu { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; align-items: center; }
@@ -85,8 +86,6 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .card .ot { font-size: clamp(56px, 12vmin, 110px); }
 .card .kana { font-size: 40px; letter-spacing: .15em; visibility: hidden; min-height: 1.3em; }
 .card.flipped .kana { visibility: visible; }
-.card .tap-hint { position: absolute; bottom: 12px; color: var(--ink-sub); font-size: 18px; }
-.card.flipped .tap-hint { visibility: hidden; }
 .answer { display: grid; gap: 8px; width: min(100%, 720px); }
 .answer .q { font-size: 20px; font-weight: 700; }
 .answer-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; }
@@ -100,16 +99,16 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .after { display: flex; gap: 14px; align-items: center; width: min(100%, 720px); justify-content: flex-end; }
 .after .big { width: auto; min-width: 240px; min-height: 76px; }
 .after .btn-mada { min-height: 60px; padding: 0 22px; font-size: 20px; border-radius: 12px; }
-.judge { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; width: min(100%, 720px); visibility: hidden; }
-.judge.show { visibility: visible; }
-.judge button { min-height: 92px; font-size: 30px; font-weight: 700; border-radius: 18px; letter-spacing: .1em; }
 .btn-mada { background: var(--card); border: 3px solid var(--ink); }
 .btn-ok { background: var(--solid-on); border: 3px solid var(--solid-on); color: #fff; }
+/* もどせない操作（過年度のまとめて消す）: 注意色の枠と文字だけ。主操作の強調（塗り）はしない */
+.btn-danger { background: var(--card); border: 3px solid var(--ink-alert); color: var(--ink-alert); font-weight: 700; min-height: 52px; padding: 4px 14px; font-size: 18px; border-radius: 10px; }
+.btn-danger[disabled] { opacity: .45; cursor: default; }
 .speak { min-height: 56px; padding: 0 22px; font-size: 20px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; }
+.say { min-width: var(--tap); min-height: var(--tap); font-size: 26px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; }
 
 /* ---- 書字パッド */
 .padbox { width: min(62vh, 520px, calc(100vw - 32px)); aspect-ratio: 1; margin: 0 auto; }
-.pv-pad .padbox { width: min(52vh, 440px, calc(100vw - 32px)); }
 .pad { width: 100%; height: 100%; display: block; touch-action: none; user-select: none; background: var(--card); border-radius: 12px; }
 .pad-frame { fill: none; stroke: var(--ink); stroke-width: 1; }
 .pad-grid { stroke: var(--line); stroke-width: .6; stroke-dasharray: 2 2; }
@@ -130,10 +129,6 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .prompt .box { display: inline-block; width: 1em; height: 1em; border: 3px solid var(--ink); vertical-align: -0.1em; background: var(--fill-b); }
 .prompt rt { font-size: 30px; font-family: var(--font-sans); letter-spacing: .1em; }
 .prompt-kana { margin: 0; color: var(--ink-sub); font-size: 30px; letter-spacing: .1em; }
-.stages { display: flex; gap: 8px; list-style: none; padding: 0; margin: 4px 0; flex-wrap: wrap; }
-.stages li { padding: 4px 12px; border: 2px solid var(--line); border-radius: 999px; color: var(--ink-sub); font-size: 18px; }
-.stages li.cur { border-color: var(--ink); color: var(--ink); font-weight: 700; background: var(--fill-a); }
-.stages li.past::after { content: " ✓"; }
 .msg { min-height: 1.6em; margin: 0; font-size: 26px; font-weight: 700; }
 .tools { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .tools button { min-height: 90px; padding: 0 30px; font-size: 26px; background: var(--card); border: 3px solid var(--ink); border-radius: 16px; }
@@ -143,20 +138,8 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .res.again { color: var(--ink); }
 .res-note { margin: 0; color: var(--ink-sub); }
 
-/* ---- よしゅう */
-.preview { display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: start; }
-.pv-pad { display: grid; gap: 10px; }
-.pv-pad .strokes { color: var(--ink-sub); }
-.pv-info { display: grid; gap: 14px; align-content: start; }
-.words { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.words li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px 14px; }
-.pw { font-size: 44px; font-family: var(--font-kanji); }
-.pw b { font-weight: 400; text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
-.pk { font-size: 24px; letter-spacing: .1em; }
-.say { min-width: var(--tap); min-height: var(--tap); font-size: 26px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; }
-.pv-guide { margin: 0; font-size: 22px; font-weight: 700; }
-
 /* ---- おわり */
+
 .done { display: grid; gap: 18px; justify-items: center; text-align: center; padding-top: 10vh; max-width: 560px; margin: 0 auto; }
 .done-big { font-size: 40px; font-weight: 700; margin: 0; }
 
@@ -164,6 +147,10 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .top.t { flex-wrap: wrap; }
 .try { margin-left: auto; min-height: 52px; padding: 0 18px; font-size: 18px; background: var(--card); border: 2px solid var(--cat-1); color: var(--ink-link); border-radius: 12px; }
 #trial-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 16px; background: var(--fill-b); border-bottom: 2px solid var(--cat-3); font-size: 16px; }
+/* GAS版ずれの警告: どの画面でも一番上に重ねて出す（内容を押さないよう fixed） */
+.ver-warn { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 10px 14px; background: #FFE0B2; border-bottom: 3px solid var(--warn, #E65100); text-align: center; font-size: 20px; font-weight: 700; }
+.ver-warn p { margin: 0 0 8px; }
+.ver-warn button { min-height: 44px; padding: 0 18px; font-size: 18px; }
 #trial-bar .tb-label { font-weight: 700; margin-right: auto; }
 #trial-bar button { min-height: 44px; padding: 0 14px; font-size: 16px; background: var(--card); border: 2px solid var(--ink); border-radius: 10px; }
 .top.t h1 { font-size: 26px; }
@@ -191,8 +178,8 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 
 /* ---- 縦長（タブレット持ち）・狭い画面 */
 @media (max-aspect-ratio: 1/1), (max-width: 760px) {
-  .menu, .write, .preview { grid-template-columns: 1fr; }
-  .padbox, .pv-pad .padbox { width: min(calc(100vw - 32px), 52vh); }
+  .menu, .write { grid-template-columns: 1fr; }
+  .padbox { width: min(calc(100vw - 32px), 52vh); }
   .card { min-height: 38vh; }
   .tree { max-height: 42vh; }
 }
@@ -215,7 +202,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 #stage .show-svg .ink path.s3 { stroke: var(--stroke-3); }
 #stage .show-svg .ink path.s4 { stroke: var(--stroke-4); }
 .cswatch.s1 { color: var(--stroke-1); }
-.cswatch.s2 { color: #A85800; }
+.cswatch.s2 { color: #A85800; } /* 文字として読むために 2画目の画線色（--stroke-2、下線に使う実色）より一段濃い茶にする。薄い橙の文字は読みにくいため意図して別値 */
 .cswatch.s3 { color: var(--stroke-3); }
 .cswatch.s4 { color: var(--stroke-4); }
 .cswatch { font-weight: 700; margin: 0 .25em; border-bottom: 4px solid currentColor; }
@@ -350,9 +337,9 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .tmgr { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 8px; }
 .tmgr select { font-size: 18px; min-height: 44px; max-width: 16em; }
 .teacher input#test-label { font-size: 18px; min-height: 44px; padding: 0 10px; width: min(100%, 360px); }
+.teacher input#arch-word { font-size: 18px; min-height: 44px; padding: 0 10px; width: 7em; }
 .picked .tlist { font-size: 26px; letter-spacing: .15em; font-family: var(--font-kanji); }
 
-:root { --forest-preview:#3F7D3A; --forest-read:#0F5EA8; --forest-write:#C86A00; --forest-card-k:#6E4310; }
 .tree { height:340px; border-radius:12px; }
 .forest-tools { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 8px 4px; }
 .forest-status { flex: 1 1 150px; margin: 0; font-size: 17px; }
@@ -363,15 +350,14 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .forest-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 16px; padding: 4px; font-size: 16px; }
 .forest-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .forest-legend i { display: inline-block; width: 12px; height: 12px; }
-.forest-p { background: var(--forest-preview); border-radius: 75% 0 75% 0; }
-.forest-r { background: var(--forest-read); border-radius: 50%; }
-.forest-w { background: var(--forest-write); transform: rotate(45deg); }
-.forest-k { background: var(--forest-card-k); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+/* 葉の色（背景色）は tree-painter.js の COLORS が正本で、tree.js がインラインで当てる。ここでは形だけ */
+.forest-r { border-radius: 50%; }
+.forest-w { transform: rotate(45deg); }
 .forest-colors { margin: 0; padding: 0 4px; font-size: 16px; }
 .forest-colors:not([open]) > :not(summary) { display: none; }
 .forest-colors summary { min-height: 56px; padding: 14px 6px; cursor: pointer; }
 .forest-note { margin: 0 0 8px; font-size: 14px; }
-.forest-progress { display: block; flex: none; width: 100%; height: 6px; accent-color: var(--forest-read); }
+.forest-progress { display: block; flex: none; width: 100%; height: 6px; } /* バーの色（accent-color）も tree.js が COLORS から当てる */
 .forest-progress[hidden] { display: none; }
 .test-overview h2 { margin: 20px 0 8px; font-size: 22px; overflow-wrap: anywhere; }
 .test-count { white-space: nowrap; font-size: 18px; font-weight: normal; }
@@ -466,6 +452,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
   body.trial #trial-bar #tb-back { margin-top: auto; }
 }
 </style>
+<meta name="kanzi-ver" content="c73a1c5">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -534,16 +521,6 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     return { kind: 'write', c: c, before: before };
   }
 
-  // 直前の1回を取り消す
-  function undo(p, rec) {
-    if (!rec) return;
-    var tbl = rec.kind === 'read' ? p.read : p.write;
-    if (rec.before) tbl[rec.c] = rec.before; else delete tbl[rec.c];
-    if (rec.kind === 'read') {
-      if (rec.beforeW) p.write[rec.c] = rec.beforeW; else delete p.write[rec.c];
-    }
-  }
-
   function answeredToday(tbl, today) {
     var n = 0;
     for (var c in tbl) if (tbl[c][2] > 0 && tbl[c][3] && day(new Date(tbl[c][3])) === today) n++;
@@ -575,7 +552,8 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     return out;
   }
 
-  // まちがいの多い字: 答えたことがあり、まちがいが1回以上ある字を、まちがいの割合が高い順に
+  // まちがいの多い字（児童個人）: 答えたことがあり、まちがいが1回以上ある字を、累積まちがい率 e[4]/e[2] の高い順に
+  // 「まちがいの多い字」は2系統ある（design.md §13）。こちらは児童個人の累積まちがい率。学級の集計は classMissTop
   function missList(p, kind, order) {
     var tbl = kind === 'write' ? p.write : p.read, out = [];
     for (var i = 0; i < order.length; i++) {
@@ -584,6 +562,27 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     }
     out.sort(function (a, b) { return (b.r - a.r) || (b.m - a.m); });
     return out.map(function (x) { return x.c; });
+  }
+
+  // まちがいの多い字（学級の集計。先生・おためし・過年度データで共通の唯一の実装）:
+  // perChar = { 字: [答えた人数, 最後の答えがまちがい（よむ箱1）の人数] } → 割合の高い順の上位。
+  // 児童個人の missList（累積まちがい率）とは別の指標なので、同じ「まちがいの多い字」でも結果は違うことに注意
+  // opts: { minStudents=3 （答えた人数の下限）, minRate=0 （割合の下限）, chars=対象の字（文字列|配列。無ければ全部）, top=10 （0なら全部） }
+  function classMissTop(perChar, opts) {
+    opts = opts || {};
+    var minS = opts.minStudents === undefined ? 3 : opts.minStudents;
+    var minR = opts.minRate || 0, out = [], i, c;
+    var chars = opts.chars === undefined || opts.chars === null ? null : (typeof opts.chars === 'string' ? Array.from(opts.chars) : opts.chars);
+    function add(ch) {
+      var v = perChar[ch];
+      if (v && v[0] >= minS && v[1] > 0 && v[1] / v[0] >= minR) out.push({ c: ch, s: v[0], b: v[1], r: v[1] / v[0] });
+    }
+    if (chars) for (i = 0; i < chars.length; i++) add(chars[i]);
+    else for (c in perChar) add(c);
+    // 割合 → まちがいの人数 → 字（決定的な並びにするため、同率は人数が多い方・さらに字順で決める）
+    out.sort(function (a, b) { return (b.r - a.r) || (b.b - a.b) || (a.c < b.c ? -1 : a.c > b.c ? 1 : 0); });
+    var top = opts.top === undefined ? 10 : opts.top;
+    return top ? out.slice(0, top) : out;
   }
 
   // 全モードの学習量。木の成長は forestActivity で別に計算する。
@@ -801,21 +800,28 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     return { v: 2, archive: copyForest(forestState(archived).archive), modes: modes };
   }
 
-  // 不変条件の検査（I3）。違反の説明の配列を返す
+  // 字エントリ1件が形を保っているか: [箱, 期限, 回数, 最後の時刻, まちがい回数] の5要素の数値で、
+  // 箱が範囲内（lo=読む1〜・書く0〜 MAX_BOX）、期限・回数・時刻・まちがい回数が非負
+  function checkEntry(e, lo) {
+    return Array.isArray(e) && e.length === 5 && e.every(function (x) { return Number.isFinite(x); }) &&
+      e[0] >= lo && e[0] <= MAX_BOX && e[1] >= 0 && e[2] >= 0 && e[3] >= 0 && e[4] >= 0;
+  }
+  // 不変条件の検査（I3）。違反の説明の配列を返す（空なら健全）
   function check(p) {
     var bad = [], c;
-    for (c in p.read) if (!(p.read[c][0] >= 1 && p.read[c][0] <= MAX_BOX)) bad.push('read box ' + c);
-    for (c in p.write) if (!(p.write[c][0] >= 0 && p.write[c][0] <= MAX_BOX)) bad.push('write box ' + c);
+    for (c in p.read) if (!checkEntry(p.read[c], 1)) bad.push('read ' + c);
+    for (c in p.write) if (!checkEntry(p.write[c], 0)) bad.push('write ' + c);
+    if (p.v !== undefined && p.v !== 2) bad.push('v');
     return bad;
   }
 
   var api = {
     INTERVALS: INTERVALS, LIMIT: LIMIT, WRITE_UNLOCK_BOX: WRITE_UNLOCK_BOX, MAX_BOX: MAX_BOX,
-    day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite, undo: undo,
-    dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList,
+    day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite,
+    dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList, classMissTop: classMissTop,
     FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, forestGrowth: forestGrowth, forestActivity: forestActivity, forestRegionLog: forestRegionLog,
-    compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check,
+    compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check, checkEntry: checkEntry,
     normTests: normTests, activeTest: activeTest, GATE_KEYS: GATE_KEYS, normGates: normGates
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
@@ -985,19 +991,19 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   function archiveYears() { return isGas ? gas('api_archiveYears') : Promise.resolve(demoArchiveYears()); }
   function archiveView(year) { return isGas ? gas('api_archiveView', year) : Promise.resolve(demoArchive(year)); }
   function archiveSave(year) { return isGas ? gas('api_archiveSave', year) : demoArchiveSave(year); }
-  function archiveAnonymize(year) { return isGas ? gas('api_archiveAnonymize', year) : demoArchiveAnonymize(year); }
+  function archiveAnonymize(year, word) { return isGas ? gas('api_archiveAnonymize', year, word) : demoArchiveAnonymize(year, word); }
   // デモでは この端末だけに年度ごとの集計を持つ。はじめて開いた時に 前年度ぶんを作る
   function demoArchives() { var s = demoSettings(); s.archives = s.archives || {}; return s; }
   function demoClassStats(klass, grade, topSkip) {
-    var st = demoStats(), order = KANZI_DATA.grades[grade].order, missTop = [], learned = 0;
-    for (var i = 0; i < order.length; i++) {
-      var c = order.charAt(i), v = st.perChar[c];
-      if (!v) continue;
-      learned += v[0];
-      if (v[0] >= 3 && v[1] > 0) missTop.push({ c: c, s: v[0], b: v[1], r: v[1] / v[0] });
-    }
-    missTop.sort(function (a, b) { return b.r - a.r || b.b - a.b; });
-    return { klass: klass, grade: grade, students: 30, learned: learned, missTop: missTop.slice(topSkip, (topSkip || 0) + 10) };
+    var st = demoStats(), order = KANZI_DATA.grades[grade].order;
+    // 「おぼえた字」は児童×字の合計（よむが箱3以上の字の数。gas/Code.js の learned と同じ意味）。
+    // perChar の v[0] は「その字を答えた人数」で意味が違うので、別に学級ごとの数として生成する
+    var seed = 13, learned = 0, i;
+    for (i = 0; i < klass.length; i++) seed = seed * 31 + klass.charCodeAt(i);
+    function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    for (i = 0; i < 30; i++) learned += Math.floor(rnd() * order.length * 0.6);
+    var missTop = Sched.classMissTop(st.perChar, { chars: order, top: (topSkip || 0) + 10 }).slice(topSkip || 0);
+    return { klass: klass, grade: grade, students: 30, learned: learned, missTop: missTop };
   }
   function demoArchiveYears() {
     var s = demoArchives(), d = new Date(), prev = String((d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1) - 1);
@@ -1007,7 +1013,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   function demoArchive(year) {
     var a = demoArchives().archives[year];
     if (!a) throw new Error(year + '年度のデータは ありません');
-    return { year: year, anonymized: !!a.anonymized, classes: a.classes };
+    return { year: year, anonymized: !!a.anonymized, remaining: a.anonymized ? 0 : (a.remaining || 0), anonWord: String(year), anonLog: a.anonLog || null, classes: a.classes };
   }
   function demoArchiveSave(year) {
     var s = demoArchives();
@@ -1017,10 +1023,13 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     saveDemo(s);
     return Promise.resolve(year);
   }
-  function demoArchiveAnonymize(year) {
+  function demoArchiveAnonymize(year, word) {
     var s = demoArchives(), a = s.archives[year];
     if (!a) return Promise.reject(new Error(year + '年度のデータは ありません'));
-    a.anonymized = true; saveDemo(s);
+    if (String(word) !== String(year)) return Promise.reject(new Error('消す年度の名前が違います'));
+    a.anonymized = true; a.remaining = 0;
+    a.anonLog = { year: String(year), at: new Date().toISOString(), count: a.classes.reduce(function (n, c) { return n + c.students; }, 0), by: 'demo' };
+    saveDemo(s);
     return Promise.resolve(true);
   }
 
@@ -1213,7 +1222,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   }
 
   // 書字パッド
-  // opts: { strokes: [d...], mode: 'trace'|'hint'|'free'|'show', onDone(result), onMiss(kind), onStroke(i) }
+  // opts: { strokes: [d...], mode: 'free'|'show', onDone(result), onMiss(kind), onStroke(i), onStuck(result) }
   function Pad(container, opts) {
     var self = this;
     this.opts = opts;
@@ -1264,16 +1273,16 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     return -1;
   };
 
-  // ガイド: なぞる＝全画を薄く、ヒント＝次の1画だけ、じぶんで＝なし（外れが続いたら次の1画を出す）
+  // ガイド: 見本＝全画を薄く表示、じぶんで＝なし（外れが続いたら次の1画だけ出す）
   Pad.prototype.renderGuide = function () {
     var m = this.mode, nx = this.expected(), hint = this.hintOn;
     this.tplPaths.forEach(function (p, i) {
-      var show = m === 'show' || (m === 'trace' && !this.done[i]) || ((m === 'hint' || hint) && i === nx);
+      var show = m === 'show' || (hint && i === nx);
       p.setAttribute('class', show ? (i === nx && m !== 'show' ? 'g-next' : 'g-all') : 'g-hide');
       p.style.strokeDasharray = ''; p.style.strokeDashoffset = '';
     }, this);
     this.marks.innerHTML = '';
-    if (nx >= 0 && (m === 'trace' || m === 'hint' || hint)) {
+    if (nx >= 0 && hint) {
       var s = this.tpl[nx].pts[0];
       el('circle', { cx: s.x, cy: s.y, r: 3.2, class: 'start-dot' }, this.marks);
     }
@@ -1387,14 +1396,27 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
 // tree = {type: 樹種番号, modes: パーツごとの色番号文字列}。同じ入力は同じ画像になる。
 (function (root) {
   'use strict';
-  // 葉の色（これまで・よむ・かく・カード）。背景・色覚の型をまたいで見分けられる4色（color-coding の check-palette で確認）
-  // 緑 #3F7D3A・青 #0F5EA8・橙 #C86A00・茶 #6E4310
-  const MODE_COLORS = [
-    { h: 115, s: 37, l: 36 },
-    { h: 209, s: 84, l: 36 },
-    { h: 32, s: 100, l: 39 },
-    { h: 33, s: 75, l: 25 }
-  ];
+  // 葉の色（これまで・よむ・かく・カード）。背景・色覚の型をまたいで見分けられる4色（color-coding の check-palette で確認）。
+  // この16進表記が正本（凡例・プログレスバーの色もここから取る）。canvas の hsl() 指定向けに MODE_HSL へ換算して使う
+  const MODE_COLORS = ['#3F7D3A', '#0F5EA8', '#C86A00', '#6E4310'];
+  const MODE_HSL = MODE_COLORS.map((hex) => {
+    const n = parseInt(hex.slice(1), 16),
+      r = ((n >> 16) & 255) / 255,
+      g2 = ((n >> 8) & 255) / 255,
+      b = (n & 255) / 255,
+      max = Math.max(r, g2, b),
+      min = Math.min(r, g2, b),
+      l = (max + min) / 2,
+      d = max - min;
+    let h = 0;
+    if (d) {
+      h = max === r ? ((g2 - b) / d) % 6 : max === g2 ? (b - r) / d + 2 : (r - g2) / d + 4;
+      h *= 60;
+      if (h < 0) h += 360;
+    }
+    return { h, s: d ? (d / (1 - Math.abs(2 * l - 1))) * 100 : 0, l: l * 100 };
+  });
+  // 擬似乱数（tree.js の森の配置と共用するので TreePainter.seed として外へ出す）
   const seed = (x) => {
     const y = Math.sin(x * 127.1 + 311.7) * 43758.5453;
     return y - Math.floor(y);
@@ -1442,10 +1464,10 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     g.fill();
     g.restore();
   }
-  function points(id, type) {
-    return Array.from({ length: 36 }, (_, i) => {
+  function points(id, type, step) {
+    return Array.from({ length: step }, (_, i) => {
       const a = i * 2.399963 + seed(id + 4) * 0.4,
-        r = Math.sqrt((i + 0.5) / 36);
+        r = Math.sqrt((i + 0.5) / step);
       let x, y;
       if (type === 4) {
         const row = Math.floor(i / 3),
@@ -1463,9 +1485,9 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     });
   }
   function cluster(g, pt, type, mode, detail, id) {
-    const hue = MODE_COLORS[mode].h,
-      sat = MODE_COLORS[mode].s,
-      light = MODE_COLORS[mode].l + (type === 1 ? 7 : 0) + (-pt.y - 120) * 0.04;
+    const hue = MODE_HSL[mode].h,
+      sat = MODE_HSL[mode].s,
+      light = MODE_HSL[mode].l + (type === 1 ? 7 : 0) + (-pt.y - 120) * 0.04;
     g.save();
     g.translate(pt.x, pt.y);
     const rw = type === 4 ? pt.r * 1.4 : pt.r,
@@ -1542,7 +1564,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       for (let j = 0; j < pairs; j++) {
         if ((layer === 'last' && j !== pairs - 1) || (layer === 'base' && j === pairs - 1)) continue;
         const y = -h + j * 13,
-          color = MODE_COLORS[modeAt(tree, j)];
+          color = MODE_HSL[modeAt(tree, j)];
         for (const side of [-1, 1])
           leaf(g, side * 9, y - 3, side * 0.9, 11 - j * 0.7, 0, `hsl(${color.h} ${color.s}% ${color.l}%)`);
       }
@@ -1550,7 +1572,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     g.restore();
     return { x: 160, y: 292 - h + (n - 1) * 13 };
   }
-  function paintBranches(g, type, p, pts, n) {
+  function paintBranches(g, type, p, pts, n, step) {
     ellipse(g, 0, 1, type === 4 ? 65 : 96, 13, 'rgba(68,100,48,.12)');
     g.strokeStyle = p.stem;
     g.lineCap = 'round';
@@ -1605,7 +1627,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       const pt = pts[i],
         hub = hubs[type === 4 ? 0 : pt.x < -20 ? 0 : pt.x > 20 ? 2 : 1];
       g.strokeStyle = p.stem;
-      g.lineWidth = 1.2 + (1 - i / 36) * 1.1;
+      g.lineWidth = 1.2 + (1 - i / step) * 1.1;
       g.beginPath();
       if (type === 4) {
         g.moveTo(0, pt.y + 12);
@@ -1634,7 +1656,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
         const y = -263 + row * 16,
           top = row * 6.5,
           bottom = (row + 1.7) * 6.5;
-        const color = MODE_COLORS[modeAt(tree, Math.min(n - 1, row * 3))];
+        const color = MODE_HSL[modeAt(tree, Math.min(n - 1, row * 3))];
         const fill = g.createLinearGradient(-bottom, y, bottom, y + 32);
         fill.addColorStop(0, `hsl(${color.h} ${color.s}% ${color.l + 3}%)`);
         fill.addColorStop(1, `hsl(${color.h} ${color.s}% ${color.l - 10}%)`);
@@ -1653,18 +1675,18 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       }
     }
   }
-  function paintTree(g, id, tree, n, res, layer) {
+  function paintTree(g, id, tree, n, res, layer, step) {
     const type = tree.type,
       p = colors(type),
-      pts = points(id, type),
-      growth = 0.26 + 0.74 * Math.pow(n / 36, 0.46),
+      pts = points(id, type, step),
+      growth = 0.26 + 0.74 * Math.pow(n / step, 0.46),
       detail = res >= 320;
     if (n <= 3) return paintSprout(g, tree, n, res, layer);
     g.save();
     g.scale(res / 320, res / 320);
     g.translate(160, 292);
     g.scale(growth, growth);
-    if (layer !== 'last') paintBranches(g, type, p, pts, n);
+    if (layer !== 'last') paintBranches(g, type, p, pts, n, step);
     paintCedarMantle(g, tree, n, p, layer);
     const indexes = Array.from({ length: n }, (_, i) => i)
       .filter((i) => (layer === 'last' ? i === n - 1 : layer === 'base' ? i !== n - 1 : true))
@@ -1674,7 +1696,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     return { x: 160 + pts[n - 1].x * growth, y: 292 + pts[n - 1].y * growth };
   }
 
-  root.TreePainter = { paint: paintTree };
+  root.TreePainter = { paint: paintTree, COLORS: MODE_COLORS, seed: seed };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 </script>
 <script>
@@ -1689,10 +1711,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   const NAMES = ['ケヤキ', 'サクラ', 'カエデ', 'シラカバ', 'スギ'];
   const cache = new Map();
   let cachePixels = 0;
-  const seed = (x) => {
-    const y = Math.sin(x * 127.1 + 311.7) * 43758.5453;
-    return y - Math.floor(y);
-  };
+  const seed = root.TreePainter.seed; // 擬似乱数は tree-painter.js の正本を共用
   const lots = [[0, 0]],
     dirs = [
       [1, 0],
@@ -1747,13 +1766,14 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     }
     host.innerHTML =
       '<canvas class="tree" role="img"></canvas>' +
-      '<progress class="forest-progress" max="36" aria-label="今の木の成長"></progress>' +
+      '<progress class="forest-progress" max="' + STEP + '" aria-label="今の木の成長"></progress>' +
       '<div class="forest-tools"><p class="forest-status" aria-live="polite"></p>' +
       '<button type="button" class="forest-focus" aria-pressed="false">育てている場所へ</button></div>' +
       '<div class="forest-regions" hidden><button type="button" class="forest-prev">前の森</button>' +
       '<span class="forest-region-name"></span><button type="button" class="forest-next">次の森</button></div>' +
       '<details class="forest-colors"><summary>葉の色</summary><div class="forest-legend" aria-label="学習モードと葉の色">' +
-      '<span><i class="forest-r" aria-hidden="true"></i>よむ</span><span><i class="forest-w" aria-hidden="true"></i>かく</span>' +
+      '<span><i class="forest-r" style="background:' + root.TreePainter.COLORS[1] + '" aria-hidden="true"></i>よむ</span>' +
+      '<span><i class="forest-w" style="background:' + root.TreePainter.COLORS[2] + '" aria-hidden="true"></i>かく</span>' +
       '</div><p class="forest-note">読む・書くで 育つよ。カードでは 育たないよ。</p></details>';
     const canvas = host.querySelector('canvas'),
       ctx = canvas.getContext('2d', { alpha: false });
@@ -1787,7 +1807,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
         return hit;
       }
       const image = makeCanvas(res, res);
-      const anchor = root.TreePainter.paint(image.getContext('2d'), id, r, n, res, layer);
+      const anchor = root.TreePainter.paint(image.getContext('2d'), id, r, n, res, layer, STEP);
       const result = { image, anchor };
       cache.set(key, result);
       cachePixels += res * res;
@@ -1966,8 +1986,9 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
             1 +
             '本目の ' +
             NAMES[active % 5] +
-            (local === 36 ? 'が 育ったよ' : local === 1 ? 'の 新芽が 出たよ' : 'が 育っているよ');
+            (local === STEP ? 'が 育ったよ' : local === 1 ? 'の 新芽が 出たよ' : 'が 育っているよ');
       const progress = host.querySelector('.forest-progress');
+      progress.style.accentColor = root.TreePainter.COLORS[1]; // プログレスの色も葉の色の正本から
       progress.value = n - active * STEP;
       progress.hidden = !state.focus && d.region < growth.completed.length;
       focus.textContent = state.focus ? '森全体へ' : '育てている場所へ';
@@ -2068,7 +2089,8 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   var app = document.getElementById('app');
   // 日本語の字形を使わせる（中国語フォント・中国語の字形を出さない）。GAS の埋め込みでも確実にするため JS でも付ける
   document.documentElement.lang = 'ja'; document.body.lang = 'ja';
-  var S = { info: null, p: null, grades: [3], kana: [], grade: 3, pointers: {}, orders: {}, sinceFlush: 0, session: null, open: {}, gates: [] };
+  var S = { info: null, p: null, grades: [3], kana: [], grade: 3, pointers: {}, orders: {}, sinceFlush: 0, session: null, open: {}, gates: [],
+    view: null, arch: null, archV: {}, archY: '' }; // view/arch/archV は先生画面の読み結果の控え（学年タブの切り替えで読み直さない）
   var FLUSH_EVERY = 10;
   var SIZE = { read: 10, write: 5, fk: 10, fy: 10 }; // 1回の問題数（えらんだ漢字は全部。上限 SEL_MAX）
   var SEL_MAX = 30;
@@ -2444,15 +2466,10 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
 
   // ================= 児童: 問題の始め方（どの字で やるか）
   var KIND_NAME = { read: '[読|よ]む', write: '[書|か]く', fk: 'カード（[漢|かん][字|じ] → [読|よ]み）', fy: 'カード（[読|よ]み → [漢|かん][字|じ]）' };
-  // 学級の集計から まちがいのおおい字（先生のおためし用。3人以上が答え、最後の答えがまちがいの人がいる字を割合の高い順）
+  // 学級の集計から まちがいのおおい字（先生のおためし用。Sched.classMissTop＝学級まちがい判定の唯一の実装）
   function classMissList(order) {
-    var perChar = (S.view && S.view.stats && S.view.stats.perChar) || {}, out = [];
-    for (var i = 0; i < order.length; i++) {
-      var c = order.charAt(i), v = perChar[c];
-      if (v && v[0] >= 3 && v[1] > 0) out.push({ c: c, r: v[1] / v[0], m: v[1] });
-    }
-    out.sort(function (a, b) { return (b.r - a.r) || (b.m - a.m); });
-    return out.map(function (x) { return x.c; });
+    var perChar = (S.view && S.view.stats && S.view.stats.perChar) || {};
+    return Sched.classMissTop(perChar, { chars: order, top: 0 }).map(function (x) { return x.c; });
   }
   function sources(kind) {
     var g = S.grade, order = orderOf(g), n = SIZE[kind], tbl = kind === 'write' ? 'write' : 'read';
@@ -2701,7 +2718,9 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   function loadArch() {
     var el = $('#arch');
     if (!el) return;
-    Platform.archiveYears().then(function (years) { renderArch(el, years); }, function () { el.innerHTML = '<p class="hint">よめませんでした。</p>'; });
+    // 残した年度の一覧・各年度の集計は控えておき、タブ切り替え・先生画面の再描画では読み直さない（§16「0往復」）
+    if (S.arch) renderArch(el, S.arch);
+    else Platform.archiveYears().then(function (years) { S.arch = years; renderArch(el, years); }, function () { el.innerHTML = '<p class="hint">よめませんでした。</p>'; });
   }
   function renderArch(el, years) {
     el.innerHTML = '<p class="hint">年度の終わりに「残す」を押すと、いまの名簿と進捗が「名簿2025」「進捗2025」のような別シートに写されます（いまのシートはそのまま残ります）。残した年度ごとに、クラスで まちがいの おおかった字が見られます。</p>' +
@@ -2709,28 +2728,53 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       (years.length ? '<nav class="tabs t" id="arch-tabs">' + years.map(function (y) { return '<button class="atab" role="tab" data-y="' + y.year + '" aria-selected="false">' + y.year + '年度</button>'; }).join('') + '</nav><div id="arch-body"></div>' : '<p>まだ 過年度のデータは ありません。</p>');
     $('#arch-save').addEventListener('click', function () {
       $('#arch-msg').textContent = '残しています…';
-      Platform.archiveSave($('#arch-year').value.trim()).then(function () { loadArch(); }, function (e) { $('#arch-msg').textContent = (e && e.message) || '残せませんでした'; });
+      var year = $('#arch-year').value.trim();
+      Platform.archiveSave(year).then(function () { S.arch = null; S.archV = {}; S.archY = String(year); loadArch(); }, function (e) { $('#arch-msg').textContent = (e && e.message) || '残せませんでした'; });
     });
     el.querySelectorAll('.atab').forEach(function (b) { b.addEventListener('click', function () { showArchYear(b.dataset.y); }); });
-    if (years.length) showArchYear(years[years.length - 1].year);
+    if (years.length) showArchYear(years.some(function (y) { return y.year === S.archY; }) ? S.archY : years[years.length - 1].year);
+  }
+  // 消した記録 { year, at, count, by } を1行で読める文にする（先生だけが見るのでプレーンな日本語）
+  function anonLogText(l) {
+    var d = new Date(l.at);
+    var when = isNaN(d) ? String(l.at) : d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    return when + '・' + l.count + '人分・' + l.by;
   }
   function showArchYear(year) {
     var body = $('#arch-body');
     if (!body) return;
     body.parentNode.querySelectorAll('.atab').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.y === String(year))); });
-    body.innerHTML = '<p class="hint">よみこみ中…</p>';
-    Platform.archiveView(year).then(function (v) {
+    S.archY = String(year);
+    var show = function (v) {
+      // 「まとめて消す」は消す年度名の入力で確定する（入力する語はサーバーが返す anonWord）。消すと もどせないため注意色で出す
+      var anon = v.anonymized
+        ? '<span class="hint">' + year + '年度の メール・名前は 消してあります。' + (v.anonLog ? ' 消した記録: ' + esc(anonLogText(v.anonLog)) : '') + '</span>'
+        : '<label for="arch-word">「' + esc(v.anonWord) + '」と 入力してください</label> <input id="arch-word" size="10" autocomplete="off"> ' +
+          '<button id="arch-anon" class="btn-danger" disabled>' + year + '年度の メール・名前をまとめて消す</button>' +
+          (v.remaining ? ' <span class="hint">前回は 途中で止まりました（メールが残る行: ' + v.remaining + '）。続きを消せます。</span>' : '') +
+          ' <span class="hint">消すと もどせません（学年・組・番号・答えの記録は残ります）</span>';
       body.innerHTML = v.classes.map(function (cl) {
         return '<h3>' + esc(klassLabel(cl.klass)) + '（' + cl.students + '人・おぼえた字 ' + cl.learned + '字）</h3>' +
           (cl.missTop.length ? '<ol class="hard">' + cl.missTop.map(function (x) { return '<li><span class="hc">' + esc(x.c) + '</span>' + x.s + '人中 ' + x.b + '人（' + Math.round(x.r * 100) + '%）</li>'; }).join('') + '</ol>' : '<p>まちがいのデータは ありません。</p>');
       }).join('') +
-      '<p>' + (v.anonymized ? '<span class="hint">' + year + '年度の メール・名前は 消してあります。</span>' : '<button id="arch-anon">' + year + '年度の メール・名前をまとめて消す</button>') + ' <span id="arch-msg2" class="hint" aria-live="polite"></span></p>';
-      var btn = $('#arch-anon');
-      if (btn) btn.addEventListener('click', function () {
-        $('#arch-msg2').textContent = '消しています…';
-        Platform.archiveAnonymize(year).then(function () { showArchYear(year); }, function () { $('#arch-msg2').textContent = '消せませんでした'; });
-      });
-    }, function (e) { body.innerHTML = '<p class="hint">' + esc((e && e.message) || 'よめませんでした') + '</p>'; });
+      '<p>' + anon + ' <span id="arch-msg2" class="hint" aria-live="polite"></span></p>' +
+      '<p class="hint">なお、スプレッドシートの版履歴（変更履歴）には 消す前の値が残ります。</p>';
+      var btn = $('#arch-anon'), wi = $('#arch-word');
+      if (btn && wi) {
+        wi.addEventListener('input', function () { btn.disabled = wi.value.trim() !== String(v.anonWord); });
+        btn.addEventListener('click', function () {
+          $('#arch-msg2').textContent = '消しています…';
+          Platform.archiveAnonymize(year, wi.value.trim()).then(function () {
+            delete S.archV[year]; // 消した年度だけ控えを捨てて読み直す（一覧の消去済み表示も新しい値にする）
+            if (S.arch) S.arch.forEach(function (y) { if (y.year === String(year)) y.anonymized = true; });
+            showArchYear(year);
+          }, function () { $('#arch-msg2').textContent = '消せませんでした'; });
+        });
+      }
+    };
+    if (S.archV[year]) { show(S.archV[year]); return; }
+    body.innerHTML = '<p class="hint">よみこみ中…</p>';
+    Platform.archiveView(year).then(function (v) { S.archV[year] = v; show(v); }, function (e) { body.innerHTML = '<p class="hint">' + esc((e && e.message) || 'よめませんでした') + '</p>'; });
   }
   // 先生画面のデータは学級ごとに1回の通信で読み、学年タブの切り替えでは読み直さない（reuse）。
   // 学級を変えた時・おためしから戻った時は読み直す
@@ -2765,9 +2809,8 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
               return '<tr' + (idle ? ' class="idle"' : '') + '><td>' + esc(k.no) + '</td><td>' + esc(k.name) + '</td><td>' + (idle ? '▲ ' : '') + esc(dateLabel(k.last)) + '</td>' +
                 '<td>' + k.sessions + '（' + k.items + '）</td><td>' + k.learned + '</td><td class="kmiss">' + esc((k.miss || []).join(' ')) + '</td></tr>';
             }).join('') + '</tbody></table></div><p class="hint">▲＝7日以上 使っていない</p>' : '<p>名簿に この学級の子どもが いません（「名簿」シートの 学年・組 を確認してください）。</p>') + '</section>';
-        var hard = Object.keys(st.perChar).filter(function (c) { return D.kanji[c] && D.kanji[c].g === tgrade; })
-          .map(function (c) { var v = st.perChar[c]; return { c: c, s: v[0], b: v[1], r: v[0] ? v[1] / v[0] : 0 }; })
-          .filter(function (x) { return x.s >= 3 && x.b > 0; }).sort(function (a, b) { return b.r - a.r; }).slice(0, 20);
+        // 学級で まちがいのおおい字（その学年の字。上位20字）
+        var hard = Sched.classMissTop(st.perChar, { chars: Object.keys(st.perChar).filter(function (c) { return D.kanji[c] && D.kanji[c].g === tgrade; }), top: 20 });
         var gradeTabs = grades.length > 1 ? '<nav class="tabs t" role="tablist">' + grades.map(function (g) { return '<button role="tab" class="ttab" data-g="' + g + '" aria-selected="' + (g === tgrade) + '">' + g + '年</button>'; }).join('') + '</nav>' : '';
         // 設定は開閉式（押すと開く）。見出しの右に いまの値を出すので、開かなくても状態がわかる。開いた・閉じたは画面を描き直しても保つ
         function fold(id, title, now, body) {
@@ -2823,7 +2866,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
         // 漢字テストの範囲: テストごとに管理。編集・見せる切替とも押すたびに保存（自動保存）
         // 学級で まちがいの おおい字（よむ: 3人以上が答え、最後の答えがまちがいの人が3割以上）→ あかい わく
         var fails = {};
-        Object.keys(st.perChar).forEach(function (c) { var v = st.perChar[c]; if (v[0] >= 3 && v[1] * 10 >= v[0] * 3) fails[c] = true; });
+        Sched.classMissTop(st.perChar, { minRate: 0.3, top: 0 }).forEach(function (x) { fails[x.c] = true; });
         var testCur = (S.testCur && tests.list.some(function (t) { return t.id === S.testCur; }) ? S.testCur : null) || tests.active || (tests.list[0] && tests.list[0].id) || null;
         function curTest() { return tests.list.filter(function (t) { return t.id === testCur; })[0] || null; }
         function paintTest() {
@@ -3104,6 +3147,14 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
 
   // ================= 起動
   Platform.init().then(function (info) {
+    // 開いている HTML とサーバーの Scheduler.js の版が違う時は、古いまま使わせず開き直してもらう（§24）
+    var ver = document.querySelector('meta[name="kanzi-ver"]');
+    if (ver && info.ver && ver.content !== info.ver) {
+      var warn = document.createElement('div');
+      warn.className = 'ver-warn';
+      warn.innerHTML = '<p>バージョンが古いので ひらきなおしてね</p><button class="big primary" onclick="location.reload()">ひらきなおす</button>';
+      document.body.insertBefore(warn, document.body.firstChild);
+    }
     S.info = info;
     S.orders = info.orders || {};
     S.pointers = info.pointers || {};

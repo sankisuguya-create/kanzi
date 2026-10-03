@@ -6,6 +6,7 @@
 // 児童への応答には本人の進捗以外を含めない（不変条件 I7）。先生は担当学級のものだけ読み書きできる。
 var STUDENT_RE = /@kyoiku\.edu\.nishi\.or\.jp$/;
 var TEACHER_RE = /@edu\.nishi\.or\.jp$/;
+// 学年ごとの字数（各学年の字の割り振りに使う）。正本は src/data.js の配当データ。tests/data.test.mjs で照合する
 var GRADE_LEN = { 1: 80, 2: 160, 3: 200, 4: 202, 5: 193, 6: 191 };
 
 function doGet() {
@@ -66,10 +67,17 @@ function settings_() {
   });
 }
 function setting_(key) { var e = settings_()[key]; return e ? e.value : ''; }
+// 設定の書き込みはスクリプトロックで順番にする（先生が複数画面・複数人で同時に変えた時に古い値で上書きしない）
 function setSetting_(key, value) {
-  var sh = settingsSheet_(), all = settings_(), e = all[key];
-  if (e) sh.getRange(e.row, 2).setValue(value); else { sh.appendRow([key, value]); delete MEMO_.settings; }
-  if (e) e.value = value;
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sh = settingsSheet_(), all = settings_(), e = all[key];
+    if (e) sh.getRange(e.row, 2).setValue(value); else { sh.appendRow([key, value]); delete MEMO_.settings; }
+    if (e) e.value = value;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // 見出しの名前で列を探して読む（列の順番が変わっても、旧版の[メール, 組]の名簿でも読める）
@@ -169,6 +177,15 @@ function loadForest_(sh, row) {
   // 壊れていても（列を消した・手で書きかえた等）開けなくならないようにする。失うのは葉の色だけ（成長量は D列の done・old）
   try { return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
 }
+// 形の違う字エントリを取り除く（api_save で統合する前の下ごしらえ）。
+// まちがい回数の無い旧形式（4要素の数値）は 0 で補って残す。それ以外の不正（非数値・範囲外・負）は字単位で落とす
+function dropBadEntries_(tbl, lo) {
+  for (var c in tbl) {
+    var e = tbl[c];
+    if (Array.isArray(e) && e.length === 4 && e.every(function (x) { return Number.isFinite(x); })) tbl[c] = e.concat(0);
+    if (!Sched.checkEntry(tbl[c], lo)) delete tbl[c];
+  }
+}
 function writeProgress_(sh, rowNumber, row, forest) {
   var json = JSON.stringify(forest), chunks = [];
   for (var i = 0; i < json.length; i += FOREST_CHUNK_SIZE_) chunks.push(json.slice(i, i + FOREST_CHUNK_SIZE_));
@@ -194,13 +211,13 @@ function parseProgress_(read, write, meta) {
 }
 
 function api_init() {
-  var me = begin_(), orders = orders_();
+  var me = begin_(), orders = orders_(), ver = Sched.VER || '';
   if (me.role === 'student') {
     var klass = classOf_(me.email);
-    return { role: 'student', email: me.email, klass: klass, progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders, test: Sched.activeTest(tests_(klass)), writeLevel: writeLevel_(klass), gates: gates_(klass) };
+    return { role: 'student', email: me.email, klass: klass, progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders, test: Sched.activeTest(tests_(klass)), writeLevel: writeLevel_(klass), gates: gates_(klass), ver: ver };
   }
-  if (me.role === 'teacher') return { role: 'teacher', email: me.email, classes: teacherClasses_(me.email), orders: orders };
-  return { role: 'unknown', email: me.email };
+  if (me.role === 'teacher') return { role: 'teacher', email: me.email, classes: teacherClasses_(me.email), orders: orders, ver: ver };
+  return { role: 'unknown', email: me.email, ver: ver };
 }
 
 // 児童の進捗を受け取り、保存済みのものと統合して返す。
@@ -209,6 +226,9 @@ function api_save(json) {
   var me = begin_();
   if (me.role !== 'student') throw new Error('児童のアカウントではありません');
   var incoming = Sched.norm(JSON.parse(json));
+  // 形の違う字エントリは字単位で直す（旧形式は補完）・落としてから統合する。
+  // 全体を拒否すると、一部だけ壊れた端末の進捗が永遠に保存できなくなる
+  dropBadEntries_(incoming.read, 1); dropBadEntries_(incoming.write, 0);
   // 同じ児童の2台からの同時保存だけを順番にする（別の児童の行は独立。appendRow は1回で行を足すので競合しない）。
   // ユーザー単位のロックにして、学級の30人が同時に終えても互いを待たせない
   var lock = LockService.getUserLock();
@@ -331,11 +351,22 @@ function archSheets_() {
   });
   return out;
 }
-// 過年度の名簿は個人情報を消したか（先頭行のメール欄に@が無ければ消去済みとみなす）
-function archAnonymized_(year) {
-  var sh = sheetByName_('名簿' + year);
-  return !sh || sh.getLastRow() < 2 || String(sh.getRange(2, 1).getValue()).indexOf('@') < 0;
+// 過年度データでメールが残っている行の数（名簿・進捗の両方のA列）。0 なら消去済み。
+// 途中で止まった時は 残っている行数が返るので、画面で続きを実行できる（済んだ行はメールが無いので自然に飛ばされる）
+function archAnonRemaining_(year) {
+  var n = 0;
+  ['名簿', '進捗'].forEach(function (name) {
+    var sh = sheetByName_(name + year);
+    if (!sh) return;
+    var m = sh.getLastRow() - 1;
+    if (m <= 0) return;
+    sh.getRange(2, 1, m, 1).getValues().forEach(function (r) { if (String(r[0]).indexOf('@') >= 0) n++; });
+  });
+  return n;
 }
+function archAnonymized_(year) { return archAnonRemaining_(year) === 0; }
+// 「まとめて消す」の確定語（画面は api_archiveView の anonWord を受け取って出し、サーバーでも照合する）
+function archAnonWord_(year) { return String(year); }
 // 見出しの名前で列を探して読む（過年度のシート用。シートを新しく作らない読み取り専用）
 function rowsOf_(sh, header) {
   var n = sh.getLastRow() - 1, w = sh.getLastColumn();
@@ -369,11 +400,15 @@ function api_archiveView(year) {
   year = archYear_(year);
   var rs = sheetByName_('名簿' + year), ps = sheetByName_('進捗' + year);
   if (!rs) throw new Error(year + '年度のデータは ありません');
-  var roster = rowsOf_(rs, ['メール', '学年', '組']).map(function (o) {
+  var rosterRaw = rowsOf_(rs, ['メール', '学年', '組']);
+  var roster = rosterRaw.map(function (o) {
     return { email: String(o['メール']).toLowerCase(), klass: klassKey_(Number(o['学年']), String(o['組'])), grade: Number(o['学年']) || 0 };
   }).filter(function (x) { return x.email && x.klass; });
   var rows = {};
   if (ps) { var m = ps.getLastRow() - 1; if (m > 0) ps.getRange(2, 1, m, 4).getValues().forEach(function (r) { rows[String(r[0]).toLowerCase()] = r; }); }
+  // メールが残っている行数（名簿・進捗の両方）。読んだデータから数えるのでシートの読み直しはしない
+  var remaining = rosterRaw.filter(function (o) { return String(o['メール']).indexOf('@') >= 0; }).length +
+    Object.keys(rows).filter(function (k) { return k.indexOf('@') >= 0; }).length;
   var classes = {};
   roster.forEach(function (k) {
     var cl = classes[k.klass] || (classes[k.klass] = { grade: k.grade, students: 0, learned: 0, perChar: {} });
@@ -387,26 +422,41 @@ function api_archiveView(year) {
       if (e[2] > 0) { var v = cl.perChar[c] || (cl.perChar[c] = [0, 0]); v[0]++; if (e[0] === 1) v[1]++; }
     }
   });
-  return { year: year, anonymized: archAnonymized_(year), classes: Object.keys(classes).map(function (k) {
+  var anonLog = null;
+  try { var l = setting_('archLog:' + year); if (l) anonLog = JSON.parse(l); } catch (e) {}
+  return { year: year, anonymized: remaining === 0, remaining: remaining, anonWord: archAnonWord_(year), anonLog: anonLog, classes: Object.keys(classes).map(function (k) {
     var cl = classes[k];
-    var missTop = Object.keys(cl.perChar).map(function (c) { var v = cl.perChar[c]; return { c: c, s: v[0], b: v[1], r: v[0] ? v[1] / v[0] : 0 }; })
-      .filter(function (x) { return x.s >= 3 && x.b > 0; }).sort(function (a, b) { return b.r - a.r || b.b - a.b; }).slice(0, 10);
+    // 学級まちがい判定は Sched.classMissTop（3人以上が答え・最後の答えがまちがいの人がいる字を割合順に上位10件）
+    var missTop = Sched.classMissTop(cl.perChar, { top: 10 });
     return { klass: k, grade: cl.grade, students: cl.students, learned: cl.learned, missTop: missTop };
   }).sort(function (a, b) { return a.grade - b.grade || (a.klass < b.klass ? -1 : 1); }) };
 }
-// 過年度の個人情報をまとめて消す: メール → 児童001・002…、名前 → 空。学年・組・番号・答えの記録は残るので集計は見られる
-function api_archiveAnonymize(year) {
-  requireTeacher_();
+// 過年度の個人情報をまとめて消す: メール → 児童001・002…、名前 → 空。学年・組・番号・答えの記録は残るので集計は見られる。
+// 誤操作を防ぐため、画面が受け取った確定語（anonWord＝年度名）を confirmWord としてサーバーでも照合する。
+// メール→番号の対応は一時シート「照合YYYY」に残し、途中で止まった時の再実行は同じ番号で続きを消す（全部消えたら対応表ごと消す。
+// 対応表にはメールが残るので、消し残しには出来ない）。消し終わったら実行記録を設定シートに残す（個人情報は入れない）
+function api_archiveAnonymize(year, confirmWord) {
+  var me = requireTeacher_();
   year = archYear_(year);
+  if (String(confirmWord || '') !== archAnonWord_(year)) throw new Error('消す年度の名前が違います。画面の案内どおりに入れてください');
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var rs = sheetByName_('名簿' + year), ps = sheetByName_('進捗' + year);
   if (!rs && !ps) throw new Error(year + '年度のデータは ありません');
-  var ids = {}, n = 0;
-  function anon(v) { v = String(v); if (!v) return v; if (!(v in ids)) { n++; ids[v] = '児童' + ('00' + n).slice(-3); } return ids[v]; }
+  var mapName = '照合' + year, ms = sheetByName_(mapName) || ss.insertSheet(mapName);
+  var ids = {}, m0 = ms.getLastRow(), added = [];
+  if (m0 > 0) ms.getRange(1, 1, m0, 2).getValues().forEach(function (r) { var k = String(r[0]); if (k && !(k in ids)) ids[k] = String(r[1]); });
+  var n = Object.keys(ids).length;
+  function anon(v) {
+    v = String(v);
+    if (v.indexOf('@') < 0) return v; // 消えた行（児童NNN）や空は飛ばす — 再実行で自然に続きになる
+    if (!(v in ids)) { n++; ids[v] = '児童' + ('00' + n).slice(-3); added.push([v, ids[v]]); }
+    return ids[v];
+  }
   if (rs) {
     var m = rs.getLastRow() - 1;
     if (m > 0) {
       var w = Math.min(5, rs.getLastColumn()), vals = rs.getRange(2, 1, m, w).getValues();
-      vals.forEach(function (r) { r[0] = anon(r[0]); if (w >= 5) r[4] = ''; });
+      vals.forEach(function (r) { if (String(r[0]).indexOf('@') >= 0) { r[0] = anon(r[0]); if (w >= 5) r[4] = ''; } });
       rs.getRange(2, 1, m, w).setValues(vals);
     }
   }
@@ -418,7 +468,13 @@ function api_archiveAnonymize(year) {
       ps.getRange(2, 1, m2, 1).setValues(vals2);
     }
   }
-  return true;
+  if (added.length) ms.getRange(m0 + 1, 1, added.length, 2).setValues(added);
+  var remaining = archAnonRemaining_(year);
+  if (remaining === 0) {
+    ss.deleteSheet(ms); // 対応表は個人情報を含むため残せない
+    setSetting_('archLog:' + year, JSON.stringify({ year: year, at: new Date().toISOString(), count: n, by: me.email }));
+  }
+  return { remaining: remaining };
 }
 
 // 児童画面のボタンのオン・オフ（設定のキー gates:<学級>。オフにしたボタンのキーを「,」で並べる）。

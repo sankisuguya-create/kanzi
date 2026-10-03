@@ -32,8 +32,8 @@ test('よむ: おぼえた→箱+1（上限5）、まだ→箱1。箱3で かく
 
 test('かく: 箱0は失敗で0のまま、成功で1。箱1以上の失敗は1', () => {
   const p = S.newProgress();
-  p.read['か'] = [3, 0, 2, 0];
-  p.write['か'] = [0, 0, 0, 0];
+  p.read['か'] = [3, 0, 2, 0, 0];
+  p.write['か'] = [0, 0, 0, 0, 0];
   S.answerWrite(p, 'か', false, 5);
   assert.deepEqual(p.write['か'].slice(0, 2), [0, 6]);
   S.answerWrite(p, 'か', true, 6);
@@ -44,19 +44,6 @@ test('かく: 箱0は失敗で0のまま、成功で1。箱1以上の失敗は1'
   assert.deepEqual(S.check(p), []);
 });
 
-test('取り消しで直前の状態に戻る（かくの追加も戻る）', () => {
-  const p = S.newProgress();
-  p.read['あ'] = [1, 0, 0, 0, 0];
-  S.answerRead(p, 'あ', true, 1);
-  const snap = JSON.stringify(p);
-  const rec = S.answerRead(p, 'あ', true, 3);
-  assert.ok(p.write['あ']);
-  S.undo(p, rec);
-  assert.equal(JSON.stringify(p), snap);
-  const rec2 = S.answerRead(p, 'い', true, 3);
-  S.undo(p, rec2);
-  assert.equal(p.read['い'], undefined);
-});
 
 test('1日の復習は上限まで、期限切れが古い順（I5：長期休み明け）', () => {
   const p = S.newProgress();
@@ -79,7 +66,25 @@ test('選んだ漢字: 選ぶ・外す、教科書順で返す', () => {
 test('まちがいの多い字: まちがいの割合が高い順（まちがい0は出さない）', () => {
   const p = S.newProgress();
   p.read['あ'] = [1, 0, 4, 0, 1]; p.read['い'] = [1, 0, 2, 0, 2]; p.read['う'] = [3, 0, 5, 0, 0];
+
   assert.deepEqual(S.missList(p, 'read', 'あいうえお'), ['い', 'あ']);
+});
+
+test('学級のまちがいの多い字: 3人以上・まちがいの人がいる字を割合順（上位・下限・対象の字）', () => {
+  // perChar = {字: [答えた人数, 最後の答えがまちがいの人数]}
+  const pc = { あ: [5, 5], い: [4, 2], う: [3, 1], え: [2, 2], お: [10, 0], か: [6, 1] };
+  const top = S.classMissTop(pc);
+  // えは2人だけ（3人未満）・おはまちがい0 で出ない。割合は あ1.0 > い0.5 > う0.33… > か0.166…
+  assert.deepEqual(top.map((x) => x.c), ['あ', 'い', 'う', 'か']);
+  assert.deepEqual([top[0].s, top[0].b], [5, 5]);
+  // top・minRate・minStudents・chars
+  assert.deepEqual(S.classMissTop(pc, { top: 2 }).map((x) => x.c), ['あ', 'い']);
+  assert.deepEqual(S.classMissTop(pc, { minRate: 0.4, top: 0 }).map((x) => x.c), ['あ', 'い']);
+  assert.deepEqual(S.classMissTop(pc, { minStudents: 4 }).map((x) => x.c), ['あ', 'い', 'か']);
+  assert.deepEqual(S.classMissTop(pc, { chars: 'うかき' }).map((x) => x.c), ['う', 'か']);
+  // 同率はまちがいの人数が多い方、それも同じなら字順で決まる（どの呼び出しでも同じ並び）
+  const tie = S.classMissTop({ さ: [4, 2], き: [4, 2], く: [4, 3] });
+  assert.deepEqual(tie.map((x) => x.c), ['く', 'き', 'さ']);
 });
 
 test('木: 最後まで終えた回の問題数だけ増える', () => {

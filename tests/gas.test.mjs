@@ -20,6 +20,7 @@ function makeEnv(sheets, email) {
       createTextFinder: (t) => ({ matchEntireCell: () => ({ findNext: tick(() => { const i = data.findIndex((row) => String(row[0]) === t); return i >= 0 ? { getRow: () => i + 1 } : null; }) }) })
     });
     return {
+      getName: () => name,
       getMaxColumns: () => Math.max(26, ...data.map((r) => r.length)), insertColumnsAfter: () => {},
       getLastRow: tick(() => data.length), getLastColumn: tick(() => Math.max(0, ...data.map((r) => r.length))),
       getRange: (a, c, nr, nc) => (typeof a === 'string' ? range(1, 1, data.length, 1) : range(a, c, nr, nc)),
@@ -28,9 +29,9 @@ function makeEnv(sheets, email) {
   }
   const ctx = {
     console, JSON, Date, Math, Number, String, Array, Object, Set,
-    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: tick((n) => (book[n] ? sheetObj(n) : null)), insertSheet: (n) => { book[n] = []; return sheetObj(n); }, getSheets: () => Object.keys(book).map((n) => ({ getName: () => n })) }) },
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: tick((n) => (book[n] ? sheetObj(n) : null)), insertSheet: (n) => { book[n] = []; return sheetObj(n); }, deleteSheet: (s) => { delete book[s.getName()]; }, getSheets: () => Object.keys(book).map((n) => ({ getName: () => n })) }) },
     Session: { getActiveUser: () => ({ getEmail: () => email }) },
-    LockService: { getUserLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) },
+    LockService: { getUserLock: () => ({ waitLock: () => {}, releaseLock: () => {} }), getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) },
     CacheService: { getScriptCache: () => ({ get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = String(v); } }) },
     HtmlService: {}
   };
@@ -140,6 +141,43 @@ test('保存: 本人の行だけを更新し、meta に えらんだ漢字・終
   assert.throws(() => makeEnv(base(), T).api_save('{}'), /児童のアカウントではありません/);
 });
 
+test('保存: 形の違う字エントリは字単位で落とし、残る分は正しく保存する', () => {
+  const env = makeEnv(base(), K2);
+  const p = {
+    read: { 暗: [2, 0, 1, 1, 0], 悪: [9, 0, 1, 0, 0], 安: '壊れ', 意: [1, 0, -3, 0, 0], 運: [1, 0, 2, 0] },
+    write: { 暗: [0, 0, 0, 0, 0], 悪: [1, 0, 1, 0, 0, 99] },
+    sel: {}, done: {}
+  };
+  const m = JSON.parse(env.api_save(JSON.stringify(p)));
+  assert.deepEqual(Object.keys(m.read).sort(), ['暗', '運']); // 悪(箱9)・安(文字列)・意(負)は落ちる
+  assert.deepEqual(m.read['運'], [1, 0, 2, 0, 0]); // 4要素の旧形式はまちがい回数0で補う
+  assert.deepEqual(Object.keys(m.write).sort(), ['暗']); // 悪(6要素)は落ちる
+  const row = env.book['進捗'].find((r) => r[0] === K2);
+  assert.deepEqual(JSON.parse(row[1]), { 暗: [2, 0, 1, 1, 0], 運: [1, 0, 2, 0, 0] });
+  assert.deepEqual(JSON.parse(JSON.stringify(env.Sched.check(m))), []);
+});
+
+test('不変条件の検査: エントリの形・箱の範囲・負の値・v を検査する', () => {
+  const p = makeEnv(base(), K2).Sched.newProgress();
+  p.read['あ'] = [1, 0, 1, 0, 0]; p.write['い'] = [0, 0, 0, 0, 0];
+  assert.deepEqual(JSON.parse(JSON.stringify(makeEnv(base(), K2).Sched.check(p))), []);
+  p.read['う'] = [6, 0, 1, 0, 0]; p.read['え'] = [1, 0, 1]; p.write['お'] = [1, 0, -1, 0, 0]; p.v = 1;
+  const bad = makeEnv(base(), K2).Sched.check(p);
+  assert.ok(bad.length === 4, bad.join(','));
+});
+
+test('GAS版ずれ検知: Index.html のメタと Scheduler.js の Sched.VER が一致し、api_init が ver を返す', () => {
+  const html = fs.readFileSync(new URL('../gas/Index.html', import.meta.url), 'utf8');
+  const meta = html.match(/<meta name="kanzi-ver" content="([^"]+)">/);
+  assert.ok(meta, 'gas/Index.html に kanzi-ver のメタタグがない（npm run build:gas を実行したか）');
+  const ctx = { console, JSON, Date, Math, Number, String, Array, Object, Set };
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(new URL('../gas/Scheduler.js', import.meta.url), 'utf8'), ctx);
+  assert.equal(ctx.Sched.VER, meta[1]);
+  // テスト環境は src/scheduler.js を読むので VER は空。GAS ではデプロイした Scheduler.js の VER が返る
+  assert.equal(makeEnv(base(), T).api_init().ver, '');
+});
+
 test('漢字テストの範囲: テストごとに管理し、児童に見せるのは1つ（担当の先生だけ）', () => {
   const env = makeEnv(base(), T);
   const t = env.api_setTests('3-1', JSON.stringify({ active: 't2', list: [
@@ -235,13 +273,36 @@ test('過年度データ: 残す→一覧→集計→個人情報をまとめて
   assert.equal(c1.students, 6); assert.equal(c1.learned, 1); // K1の 悪が箱3
   assert.equal(c1.missTop[0].c, '安'); assert.deepEqual([c1.missTop[0].s, c1.missTop[0].b], [5, 5]); // K1＋4人
   assert.equal(c2.students, 1);
-  env.api_archiveAnonymize('2025');
+  assert.throws(() => env.api_archiveAnonymize('2025', '2024'), /名前が違います/); // 確定語が違えば何もしない
+  const res = env.api_archiveAnonymize('2025', '2025');
+  assert.equal(res.remaining, 0);
   const arch = env.book['名簿2025'];
   assert.equal(arch[1][0], '児童001'); assert.equal(arch[1][4], ''); // メール・名前を消す
   assert.equal(env.book['進捗2025'][1][0], '児童001'); // 進捗側も同じIDにして集計を保つ
+  assert.equal(env.book['照合2025'], undefined); // 対応表は消えている（メールが残るため残せない）
+  const log = env.book['設定'].find((r) => r[0] === 'archLog:2025');
+  assert.ok(log && JSON.parse(log[1]).by === T, '消した記録が設定シートに残る');
   const v2 = env.api_archiveView('2025');
-  assert.equal(v2.anonymized, true);
+  assert.equal(v2.anonymized, true); assert.equal(v2.remaining, 0);
+  assert.equal(v2.anonLog.count, 7); // 名簿+進捗の重複しないメール数（7人）
   assert.equal(v2.classes.find((c) => c.klass === '3-1').missTop[0].c, '安'); // 消しても集計は読める
+});
+
+test('過年度の消去: 途中で止まったら残数を出し、同じ番号で続きを消せる', () => {
+  const s = base();
+  const env = makeEnv(s, T);
+  env.api_archiveSave('2025');
+  // 名簿だけ消えて 進捗が残っている状態（途中で止まった）を作る
+  const rs = env.book['名簿2025'];
+  for (let i = 1; i < rs.length; i++) { rs[i][0] = '児童' + ('00' + i).slice(-3); rs[i][4] = ''; }
+  env.book['照合2025'] = env.book['名簿2025'].slice(1).map((r, i) => [s.名簿[i + 1][0], '児童' + ('00' + (i + 1)).slice(-3)]);
+  const v = env.api_archiveView('2025');
+  assert.equal(v.anonymized, false); assert.equal(v.remaining, 1); // 進捗側にK1の1行だけ残っている
+  const res = env.api_archiveAnonymize('2025', '2025');
+  assert.equal(res.remaining, 0);
+  assert.equal(env.book['進捗2025'][1][0], '児童001'); // 名簿と同じ番号に引き継がれる
+  assert.equal(env.book['照合2025'], undefined);
+  assert.equal(env.api_archiveView('2025').anonymized, true);
 });
 
 test('書く問題の判定: 担当の先生が学級ごとに選び、その学級の児童に届く', () => {

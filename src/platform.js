@@ -160,19 +160,19 @@
   function archiveYears() { return isGas ? gas('api_archiveYears') : Promise.resolve(demoArchiveYears()); }
   function archiveView(year) { return isGas ? gas('api_archiveView', year) : Promise.resolve(demoArchive(year)); }
   function archiveSave(year) { return isGas ? gas('api_archiveSave', year) : demoArchiveSave(year); }
-  function archiveAnonymize(year) { return isGas ? gas('api_archiveAnonymize', year) : demoArchiveAnonymize(year); }
+  function archiveAnonymize(year, word) { return isGas ? gas('api_archiveAnonymize', year, word) : demoArchiveAnonymize(year, word); }
   // デモでは この端末だけに年度ごとの集計を持つ。はじめて開いた時に 前年度ぶんを作る
   function demoArchives() { var s = demoSettings(); s.archives = s.archives || {}; return s; }
   function demoClassStats(klass, grade, topSkip) {
-    var st = demoStats(), order = KANZI_DATA.grades[grade].order, missTop = [], learned = 0;
-    for (var i = 0; i < order.length; i++) {
-      var c = order.charAt(i), v = st.perChar[c];
-      if (!v) continue;
-      learned += v[0];
-      if (v[0] >= 3 && v[1] > 0) missTop.push({ c: c, s: v[0], b: v[1], r: v[1] / v[0] });
-    }
-    missTop.sort(function (a, b) { return b.r - a.r || b.b - a.b; });
-    return { klass: klass, grade: grade, students: 30, learned: learned, missTop: missTop.slice(topSkip, (topSkip || 0) + 10) };
+    var st = demoStats(), order = KANZI_DATA.grades[grade].order;
+    // 「おぼえた字」は児童×字の合計（よむが箱3以上の字の数。gas/Code.js の learned と同じ意味）。
+    // perChar の v[0] は「その字を答えた人数」で意味が違うので、別に学級ごとの数として生成する
+    var seed = 13, learned = 0, i;
+    for (i = 0; i < klass.length; i++) seed = seed * 31 + klass.charCodeAt(i);
+    function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    for (i = 0; i < 30; i++) learned += Math.floor(rnd() * order.length * 0.6);
+    var missTop = Sched.classMissTop(st.perChar, { chars: order, top: (topSkip || 0) + 10 }).slice(topSkip || 0);
+    return { klass: klass, grade: grade, students: 30, learned: learned, missTop: missTop };
   }
   function demoArchiveYears() {
     var s = demoArchives(), d = new Date(), prev = String((d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1) - 1);
@@ -182,7 +182,7 @@
   function demoArchive(year) {
     var a = demoArchives().archives[year];
     if (!a) throw new Error(year + '年度のデータは ありません');
-    return { year: year, anonymized: !!a.anonymized, classes: a.classes };
+    return { year: year, anonymized: !!a.anonymized, remaining: a.anonymized ? 0 : (a.remaining || 0), anonWord: String(year), anonLog: a.anonLog || null, classes: a.classes };
   }
   function demoArchiveSave(year) {
     var s = demoArchives();
@@ -192,10 +192,13 @@
     saveDemo(s);
     return Promise.resolve(year);
   }
-  function demoArchiveAnonymize(year) {
+  function demoArchiveAnonymize(year, word) {
     var s = demoArchives(), a = s.archives[year];
     if (!a) return Promise.reject(new Error(year + '年度のデータは ありません'));
-    a.anonymized = true; saveDemo(s);
+    if (String(word) !== String(year)) return Promise.reject(new Error('消す年度の名前が違います'));
+    a.anonymized = true; a.remaining = 0;
+    a.anonLog = { year: String(year), at: new Date().toISOString(), count: a.classes.reduce(function (n, c) { return n + c.students; }, 0), by: 'demo' };
+    saveDemo(s);
     return Promise.resolve(true);
   }
 

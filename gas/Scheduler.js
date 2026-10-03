@@ -53,16 +53,6 @@
     return { kind: 'write', c: c, before: before };
   }
 
-  // 直前の1回を取り消す
-  function undo(p, rec) {
-    if (!rec) return;
-    var tbl = rec.kind === 'read' ? p.read : p.write;
-    if (rec.before) tbl[rec.c] = rec.before; else delete tbl[rec.c];
-    if (rec.kind === 'read') {
-      if (rec.beforeW) p.write[rec.c] = rec.beforeW; else delete p.write[rec.c];
-    }
-  }
-
   function answeredToday(tbl, today) {
     var n = 0;
     for (var c in tbl) if (tbl[c][2] > 0 && tbl[c][3] && day(new Date(tbl[c][3])) === today) n++;
@@ -94,7 +84,8 @@
     return out;
   }
 
-  // まちがいの多い字: 答えたことがあり、まちがいが1回以上ある字を、まちがいの割合が高い順に
+  // まちがいの多い字（児童個人）: 答えたことがあり、まちがいが1回以上ある字を、累積まちがい率 e[4]/e[2] の高い順に
+  // 「まちがいの多い字」は2系統ある（design.md §13）。こちらは児童個人の累積まちがい率。学級の集計は classMissTop
   function missList(p, kind, order) {
     var tbl = kind === 'write' ? p.write : p.read, out = [];
     for (var i = 0; i < order.length; i++) {
@@ -103,6 +94,27 @@
     }
     out.sort(function (a, b) { return (b.r - a.r) || (b.m - a.m); });
     return out.map(function (x) { return x.c; });
+  }
+
+  // まちがいの多い字（学級の集計。先生・おためし・過年度データで共通の唯一の実装）:
+  // perChar = { 字: [答えた人数, 最後の答えがまちがい（よむ箱1）の人数] } → 割合の高い順の上位。
+  // 児童個人の missList（累積まちがい率）とは別の指標なので、同じ「まちがいの多い字」でも結果は違うことに注意
+  // opts: { minStudents=3 （答えた人数の下限）, minRate=0 （割合の下限）, chars=対象の字（文字列|配列。無ければ全部）, top=10 （0なら全部） }
+  function classMissTop(perChar, opts) {
+    opts = opts || {};
+    var minS = opts.minStudents === undefined ? 3 : opts.minStudents;
+    var minR = opts.minRate || 0, out = [], i, c;
+    var chars = opts.chars === undefined || opts.chars === null ? null : (typeof opts.chars === 'string' ? Array.from(opts.chars) : opts.chars);
+    function add(ch) {
+      var v = perChar[ch];
+      if (v && v[0] >= minS && v[1] > 0 && v[1] / v[0] >= minR) out.push({ c: ch, s: v[0], b: v[1], r: v[1] / v[0] });
+    }
+    if (chars) for (i = 0; i < chars.length; i++) add(chars[i]);
+    else for (c in perChar) add(c);
+    // 割合 → まちがいの人数 → 字（決定的な並びにするため、同率は人数が多い方・さらに字順で決める）
+    out.sort(function (a, b) { return (b.r - a.r) || (b.b - a.b) || (a.c < b.c ? -1 : a.c > b.c ? 1 : 0); });
+    var top = opts.top === undefined ? 10 : opts.top;
+    return top ? out.slice(0, top) : out;
   }
 
   // 全モードの学習量。木の成長は forestActivity で別に計算する。
@@ -320,23 +332,33 @@
     return { v: 2, archive: copyForest(forestState(archived).archive), modes: modes };
   }
 
-  // 不変条件の検査（I3）。違反の説明の配列を返す
+  // 字エントリ1件が形を保っているか: [箱, 期限, 回数, 最後の時刻, まちがい回数] の5要素の数値で、
+  // 箱が範囲内（lo=読む1〜・書く0〜 MAX_BOX）、期限・回数・時刻・まちがい回数が非負
+  function checkEntry(e, lo) {
+    return Array.isArray(e) && e.length === 5 && e.every(function (x) { return Number.isFinite(x); }) &&
+      e[0] >= lo && e[0] <= MAX_BOX && e[1] >= 0 && e[2] >= 0 && e[3] >= 0 && e[4] >= 0;
+  }
+  // 不変条件の検査（I3）。違反の説明の配列を返す（空なら健全）
   function check(p) {
     var bad = [], c;
-    for (c in p.read) if (!(p.read[c][0] >= 1 && p.read[c][0] <= MAX_BOX)) bad.push('read box ' + c);
-    for (c in p.write) if (!(p.write[c][0] >= 0 && p.write[c][0] <= MAX_BOX)) bad.push('write box ' + c);
+    for (c in p.read) if (!checkEntry(p.read[c], 1)) bad.push('read ' + c);
+    for (c in p.write) if (!checkEntry(p.write[c], 0)) bad.push('write ' + c);
+    if (p.v !== undefined && p.v !== 2) bad.push('v');
     return bad;
   }
 
   var api = {
     INTERVALS: INTERVALS, LIMIT: LIMIT, WRITE_UNLOCK_BOX: WRITE_UNLOCK_BOX, MAX_BOX: MAX_BOX,
-    day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite, undo: undo,
-    dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList,
+    day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite,
+    dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList, classMissTop: classMissTop,
     FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, forestGrowth: forestGrowth, forestActivity: forestActivity, forestRegionLog: forestRegionLog,
-    compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check,
+    compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check, checkEntry: checkEntry,
     normTests: normTests, activeTest: activeTest, GATE_KEYS: GATE_KEYS, normGates: normGates
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sched = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
+
+// GAS 版ずれ検知の版（tools/build-gas.mjs が埋め込む）
+Sched.VER = "c73a1c5";

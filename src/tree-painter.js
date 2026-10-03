@@ -2,14 +2,27 @@
 // tree = {type: 樹種番号, modes: パーツごとの色番号文字列}。同じ入力は同じ画像になる。
 (function (root) {
   'use strict';
-  // 葉の色（これまで・よむ・かく・カード）。背景・色覚の型をまたいで見分けられる4色（color-coding の check-palette で確認）
-  // 緑 #3F7D3A・青 #0F5EA8・橙 #C86A00・茶 #6E4310
-  const MODE_COLORS = [
-    { h: 115, s: 37, l: 36 },
-    { h: 209, s: 84, l: 36 },
-    { h: 32, s: 100, l: 39 },
-    { h: 33, s: 75, l: 25 }
-  ];
+  // 葉の色（これまで・よむ・かく・カード）。背景・色覚の型をまたいで見分けられる4色（color-coding の check-palette で確認）。
+  // この16進表記が正本（凡例・プログレスバーの色もここから取る）。canvas の hsl() 指定向けに MODE_HSL へ換算して使う
+  const MODE_COLORS = ['#3F7D3A', '#0F5EA8', '#C86A00', '#6E4310'];
+  const MODE_HSL = MODE_COLORS.map((hex) => {
+    const n = parseInt(hex.slice(1), 16),
+      r = ((n >> 16) & 255) / 255,
+      g2 = ((n >> 8) & 255) / 255,
+      b = (n & 255) / 255,
+      max = Math.max(r, g2, b),
+      min = Math.min(r, g2, b),
+      l = (max + min) / 2,
+      d = max - min;
+    let h = 0;
+    if (d) {
+      h = max === r ? ((g2 - b) / d) % 6 : max === g2 ? (b - r) / d + 2 : (r - g2) / d + 4;
+      h *= 60;
+      if (h < 0) h += 360;
+    }
+    return { h, s: d ? (d / (1 - Math.abs(2 * l - 1))) * 100 : 0, l: l * 100 };
+  });
+  // 擬似乱数（tree.js の森の配置と共用するので TreePainter.seed として外へ出す）
   const seed = (x) => {
     const y = Math.sin(x * 127.1 + 311.7) * 43758.5453;
     return y - Math.floor(y);
@@ -57,10 +70,10 @@
     g.fill();
     g.restore();
   }
-  function points(id, type) {
-    return Array.from({ length: 36 }, (_, i) => {
+  function points(id, type, step) {
+    return Array.from({ length: step }, (_, i) => {
       const a = i * 2.399963 + seed(id + 4) * 0.4,
-        r = Math.sqrt((i + 0.5) / 36);
+        r = Math.sqrt((i + 0.5) / step);
       let x, y;
       if (type === 4) {
         const row = Math.floor(i / 3),
@@ -78,9 +91,9 @@
     });
   }
   function cluster(g, pt, type, mode, detail, id) {
-    const hue = MODE_COLORS[mode].h,
-      sat = MODE_COLORS[mode].s,
-      light = MODE_COLORS[mode].l + (type === 1 ? 7 : 0) + (-pt.y - 120) * 0.04;
+    const hue = MODE_HSL[mode].h,
+      sat = MODE_HSL[mode].s,
+      light = MODE_HSL[mode].l + (type === 1 ? 7 : 0) + (-pt.y - 120) * 0.04;
     g.save();
     g.translate(pt.x, pt.y);
     const rw = type === 4 ? pt.r * 1.4 : pt.r,
@@ -157,7 +170,7 @@
       for (let j = 0; j < pairs; j++) {
         if ((layer === 'last' && j !== pairs - 1) || (layer === 'base' && j === pairs - 1)) continue;
         const y = -h + j * 13,
-          color = MODE_COLORS[modeAt(tree, j)];
+          color = MODE_HSL[modeAt(tree, j)];
         for (const side of [-1, 1])
           leaf(g, side * 9, y - 3, side * 0.9, 11 - j * 0.7, 0, `hsl(${color.h} ${color.s}% ${color.l}%)`);
       }
@@ -165,7 +178,7 @@
     g.restore();
     return { x: 160, y: 292 - h + (n - 1) * 13 };
   }
-  function paintBranches(g, type, p, pts, n) {
+  function paintBranches(g, type, p, pts, n, step) {
     ellipse(g, 0, 1, type === 4 ? 65 : 96, 13, 'rgba(68,100,48,.12)');
     g.strokeStyle = p.stem;
     g.lineCap = 'round';
@@ -220,7 +233,7 @@
       const pt = pts[i],
         hub = hubs[type === 4 ? 0 : pt.x < -20 ? 0 : pt.x > 20 ? 2 : 1];
       g.strokeStyle = p.stem;
-      g.lineWidth = 1.2 + (1 - i / 36) * 1.1;
+      g.lineWidth = 1.2 + (1 - i / step) * 1.1;
       g.beginPath();
       if (type === 4) {
         g.moveTo(0, pt.y + 12);
@@ -249,7 +262,7 @@
         const y = -263 + row * 16,
           top = row * 6.5,
           bottom = (row + 1.7) * 6.5;
-        const color = MODE_COLORS[modeAt(tree, Math.min(n - 1, row * 3))];
+        const color = MODE_HSL[modeAt(tree, Math.min(n - 1, row * 3))];
         const fill = g.createLinearGradient(-bottom, y, bottom, y + 32);
         fill.addColorStop(0, `hsl(${color.h} ${color.s}% ${color.l + 3}%)`);
         fill.addColorStop(1, `hsl(${color.h} ${color.s}% ${color.l - 10}%)`);
@@ -268,18 +281,18 @@
       }
     }
   }
-  function paintTree(g, id, tree, n, res, layer) {
+  function paintTree(g, id, tree, n, res, layer, step) {
     const type = tree.type,
       p = colors(type),
-      pts = points(id, type),
-      growth = 0.26 + 0.74 * Math.pow(n / 36, 0.46),
+      pts = points(id, type, step),
+      growth = 0.26 + 0.74 * Math.pow(n / step, 0.46),
       detail = res >= 320;
     if (n <= 3) return paintSprout(g, tree, n, res, layer);
     g.save();
     g.scale(res / 320, res / 320);
     g.translate(160, 292);
     g.scale(growth, growth);
-    if (layer !== 'last') paintBranches(g, type, p, pts, n);
+    if (layer !== 'last') paintBranches(g, type, p, pts, n, step);
     paintCedarMantle(g, tree, n, p, layer);
     const indexes = Array.from({ length: n }, (_, i) => i)
       .filter((i) => (layer === 'last' ? i === n - 1 : layer === 'base' ? i !== n - 1 : true))
@@ -289,5 +302,5 @@
     return { x: 160 + pts[n - 1].x * growth, y: 292 + pts[n - 1].y * growth };
   }
 
-  root.TreePainter = { paint: paintTree };
+  root.TreePainter = { paint: paintTree, COLORS: MODE_COLORS, seed: seed };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

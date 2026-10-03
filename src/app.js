@@ -7,7 +7,8 @@
   var app = document.getElementById('app');
   // 日本語の字形を使わせる（中国語フォント・中国語の字形を出さない）。GAS の埋め込みでも確実にするため JS でも付ける
   document.documentElement.lang = 'ja'; document.body.lang = 'ja';
-  var S = { info: null, p: null, grades: [3], kana: [], grade: 3, pointers: {}, orders: {}, sinceFlush: 0, session: null, open: {}, gates: [] };
+  var S = { info: null, p: null, grades: [3], kana: [], grade: 3, pointers: {}, orders: {}, sinceFlush: 0, session: null, open: {}, gates: [],
+    view: null, arch: null, archV: {}, archY: '' }; // view/arch/archV は先生画面の読み結果の控え（学年タブの切り替えで読み直さない）
   var FLUSH_EVERY = 10;
   var SIZE = { read: 10, write: 5, fk: 10, fy: 10 }; // 1回の問題数（えらんだ漢字は全部。上限 SEL_MAX）
   var SEL_MAX = 30;
@@ -383,15 +384,10 @@
 
   // ================= 児童: 問題の始め方（どの字で やるか）
   var KIND_NAME = { read: '[読|よ]む', write: '[書|か]く', fk: 'カード（[漢|かん][字|じ] → [読|よ]み）', fy: 'カード（[読|よ]み → [漢|かん][字|じ]）' };
-  // 学級の集計から まちがいのおおい字（先生のおためし用。3人以上が答え、最後の答えがまちがいの人がいる字を割合の高い順）
+  // 学級の集計から まちがいのおおい字（先生のおためし用。Sched.classMissTop＝学級まちがい判定の唯一の実装）
   function classMissList(order) {
-    var perChar = (S.view && S.view.stats && S.view.stats.perChar) || {}, out = [];
-    for (var i = 0; i < order.length; i++) {
-      var c = order.charAt(i), v = perChar[c];
-      if (v && v[0] >= 3 && v[1] > 0) out.push({ c: c, r: v[1] / v[0], m: v[1] });
-    }
-    out.sort(function (a, b) { return (b.r - a.r) || (b.m - a.m); });
-    return out.map(function (x) { return x.c; });
+    var perChar = (S.view && S.view.stats && S.view.stats.perChar) || {};
+    return Sched.classMissTop(perChar, { chars: order, top: 0 }).map(function (x) { return x.c; });
   }
   function sources(kind) {
     var g = S.grade, order = orderOf(g), n = SIZE[kind], tbl = kind === 'write' ? 'write' : 'read';
@@ -640,7 +636,9 @@
   function loadArch() {
     var el = $('#arch');
     if (!el) return;
-    Platform.archiveYears().then(function (years) { renderArch(el, years); }, function () { el.innerHTML = '<p class="hint">よめませんでした。</p>'; });
+    // 残した年度の一覧・各年度の集計は控えておき、タブ切り替え・先生画面の再描画では読み直さない（§16「0往復」）
+    if (S.arch) renderArch(el, S.arch);
+    else Platform.archiveYears().then(function (years) { S.arch = years; renderArch(el, years); }, function () { el.innerHTML = '<p class="hint">よめませんでした。</p>'; });
   }
   function renderArch(el, years) {
     el.innerHTML = '<p class="hint">年度の終わりに「残す」を押すと、いまの名簿と進捗が「名簿2025」「進捗2025」のような別シートに写されます（いまのシートはそのまま残ります）。残した年度ごとに、クラスで まちがいの おおかった字が見られます。</p>' +
@@ -648,28 +646,53 @@
       (years.length ? '<nav class="tabs t" id="arch-tabs">' + years.map(function (y) { return '<button class="atab" role="tab" data-y="' + y.year + '" aria-selected="false">' + y.year + '年度</button>'; }).join('') + '</nav><div id="arch-body"></div>' : '<p>まだ 過年度のデータは ありません。</p>');
     $('#arch-save').addEventListener('click', function () {
       $('#arch-msg').textContent = '残しています…';
-      Platform.archiveSave($('#arch-year').value.trim()).then(function () { loadArch(); }, function (e) { $('#arch-msg').textContent = (e && e.message) || '残せませんでした'; });
+      var year = $('#arch-year').value.trim();
+      Platform.archiveSave(year).then(function () { S.arch = null; S.archV = {}; S.archY = String(year); loadArch(); }, function (e) { $('#arch-msg').textContent = (e && e.message) || '残せませんでした'; });
     });
     el.querySelectorAll('.atab').forEach(function (b) { b.addEventListener('click', function () { showArchYear(b.dataset.y); }); });
-    if (years.length) showArchYear(years[years.length - 1].year);
+    if (years.length) showArchYear(years.some(function (y) { return y.year === S.archY; }) ? S.archY : years[years.length - 1].year);
+  }
+  // 消した記録 { year, at, count, by } を1行で読める文にする（先生だけが見るのでプレーンな日本語）
+  function anonLogText(l) {
+    var d = new Date(l.at);
+    var when = isNaN(d) ? String(l.at) : d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    return when + '・' + l.count + '人分・' + l.by;
   }
   function showArchYear(year) {
     var body = $('#arch-body');
     if (!body) return;
     body.parentNode.querySelectorAll('.atab').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.y === String(year))); });
-    body.innerHTML = '<p class="hint">よみこみ中…</p>';
-    Platform.archiveView(year).then(function (v) {
+    S.archY = String(year);
+    var show = function (v) {
+      // 「まとめて消す」は消す年度名の入力で確定する（入力する語はサーバーが返す anonWord）。消すと もどせないため注意色で出す
+      var anon = v.anonymized
+        ? '<span class="hint">' + year + '年度の メール・名前は 消してあります。' + (v.anonLog ? ' 消した記録: ' + esc(anonLogText(v.anonLog)) : '') + '</span>'
+        : '<label for="arch-word">「' + esc(v.anonWord) + '」と 入力してください</label> <input id="arch-word" size="10" autocomplete="off"> ' +
+          '<button id="arch-anon" class="btn-danger" disabled>' + year + '年度の メール・名前をまとめて消す</button>' +
+          (v.remaining ? ' <span class="hint">前回は 途中で止まりました（メールが残る行: ' + v.remaining + '）。続きを消せます。</span>' : '') +
+          ' <span class="hint">消すと もどせません（学年・組・番号・答えの記録は残ります）</span>';
       body.innerHTML = v.classes.map(function (cl) {
         return '<h3>' + esc(klassLabel(cl.klass)) + '（' + cl.students + '人・おぼえた字 ' + cl.learned + '字）</h3>' +
           (cl.missTop.length ? '<ol class="hard">' + cl.missTop.map(function (x) { return '<li><span class="hc">' + esc(x.c) + '</span>' + x.s + '人中 ' + x.b + '人（' + Math.round(x.r * 100) + '%）</li>'; }).join('') + '</ol>' : '<p>まちがいのデータは ありません。</p>');
       }).join('') +
-      '<p>' + (v.anonymized ? '<span class="hint">' + year + '年度の メール・名前は 消してあります。</span>' : '<button id="arch-anon">' + year + '年度の メール・名前をまとめて消す</button>') + ' <span id="arch-msg2" class="hint" aria-live="polite"></span></p>';
-      var btn = $('#arch-anon');
-      if (btn) btn.addEventListener('click', function () {
-        $('#arch-msg2').textContent = '消しています…';
-        Platform.archiveAnonymize(year).then(function () { showArchYear(year); }, function () { $('#arch-msg2').textContent = '消せませんでした'; });
-      });
-    }, function (e) { body.innerHTML = '<p class="hint">' + esc((e && e.message) || 'よめませんでした') + '</p>'; });
+      '<p>' + anon + ' <span id="arch-msg2" class="hint" aria-live="polite"></span></p>' +
+      '<p class="hint">なお、スプレッドシートの版履歴（変更履歴）には 消す前の値が残ります。</p>';
+      var btn = $('#arch-anon'), wi = $('#arch-word');
+      if (btn && wi) {
+        wi.addEventListener('input', function () { btn.disabled = wi.value.trim() !== String(v.anonWord); });
+        btn.addEventListener('click', function () {
+          $('#arch-msg2').textContent = '消しています…';
+          Platform.archiveAnonymize(year, wi.value.trim()).then(function () {
+            delete S.archV[year]; // 消した年度だけ控えを捨てて読み直す（一覧の消去済み表示も新しい値にする）
+            if (S.arch) S.arch.forEach(function (y) { if (y.year === String(year)) y.anonymized = true; });
+            showArchYear(year);
+          }, function () { $('#arch-msg2').textContent = '消せませんでした'; });
+        });
+      }
+    };
+    if (S.archV[year]) { show(S.archV[year]); return; }
+    body.innerHTML = '<p class="hint">よみこみ中…</p>';
+    Platform.archiveView(year).then(function (v) { S.archV[year] = v; show(v); }, function (e) { body.innerHTML = '<p class="hint">' + esc((e && e.message) || 'よめませんでした') + '</p>'; });
   }
   // 先生画面のデータは学級ごとに1回の通信で読み、学年タブの切り替えでは読み直さない（reuse）。
   // 学級を変えた時・おためしから戻った時は読み直す
@@ -704,9 +727,8 @@
               return '<tr' + (idle ? ' class="idle"' : '') + '><td>' + esc(k.no) + '</td><td>' + esc(k.name) + '</td><td>' + (idle ? '▲ ' : '') + esc(dateLabel(k.last)) + '</td>' +
                 '<td>' + k.sessions + '（' + k.items + '）</td><td>' + k.learned + '</td><td class="kmiss">' + esc((k.miss || []).join(' ')) + '</td></tr>';
             }).join('') + '</tbody></table></div><p class="hint">▲＝7日以上 使っていない</p>' : '<p>名簿に この学級の子どもが いません（「名簿」シートの 学年・組 を確認してください）。</p>') + '</section>';
-        var hard = Object.keys(st.perChar).filter(function (c) { return D.kanji[c] && D.kanji[c].g === tgrade; })
-          .map(function (c) { var v = st.perChar[c]; return { c: c, s: v[0], b: v[1], r: v[0] ? v[1] / v[0] : 0 }; })
-          .filter(function (x) { return x.s >= 3 && x.b > 0; }).sort(function (a, b) { return b.r - a.r; }).slice(0, 20);
+        // 学級で まちがいのおおい字（その学年の字。上位20字）
+        var hard = Sched.classMissTop(st.perChar, { chars: Object.keys(st.perChar).filter(function (c) { return D.kanji[c] && D.kanji[c].g === tgrade; }), top: 20 });
         var gradeTabs = grades.length > 1 ? '<nav class="tabs t" role="tablist">' + grades.map(function (g) { return '<button role="tab" class="ttab" data-g="' + g + '" aria-selected="' + (g === tgrade) + '">' + g + '年</button>'; }).join('') + '</nav>' : '';
         // 設定は開閉式（押すと開く）。見出しの右に いまの値を出すので、開かなくても状態がわかる。開いた・閉じたは画面を描き直しても保つ
         function fold(id, title, now, body) {
@@ -762,7 +784,7 @@
         // 漢字テストの範囲: テストごとに管理。編集・見せる切替とも押すたびに保存（自動保存）
         // 学級で まちがいの おおい字（よむ: 3人以上が答え、最後の答えがまちがいの人が3割以上）→ あかい わく
         var fails = {};
-        Object.keys(st.perChar).forEach(function (c) { var v = st.perChar[c]; if (v[0] >= 3 && v[1] * 10 >= v[0] * 3) fails[c] = true; });
+        Sched.classMissTop(st.perChar, { minRate: 0.3, top: 0 }).forEach(function (x) { fails[x.c] = true; });
         var testCur = (S.testCur && tests.list.some(function (t) { return t.id === S.testCur; }) ? S.testCur : null) || tests.active || (tests.list[0] && tests.list[0].id) || null;
         function curTest() { return tests.list.filter(function (t) { return t.id === testCur; })[0] || null; }
         function paintTest() {
@@ -1043,6 +1065,14 @@
 
   // ================= 起動
   Platform.init().then(function (info) {
+    // 開いている HTML とサーバーの Scheduler.js の版が違う時は、古いまま使わせず開き直してもらう（§24）
+    var ver = document.querySelector('meta[name="kanzi-ver"]');
+    if (ver && info.ver && ver.content !== info.ver) {
+      var warn = document.createElement('div');
+      warn.className = 'ver-warn';
+      warn.innerHTML = '<p>バージョンが古いので ひらきなおしてね</p><button class="big primary" onclick="location.reload()">ひらきなおす</button>';
+      document.body.insertBefore(warn, document.body.firstChild);
+    }
     S.info = info;
     S.orders = info.orders || {};
     S.pointers = info.pointers || {};

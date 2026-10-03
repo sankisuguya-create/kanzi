@@ -9,10 +9,7 @@
   const NAMES = ['ケヤキ', 'サクラ', 'カエデ', 'シラカバ', 'スギ'];
   const cache = new Map();
   let cachePixels = 0;
-  const seed = (x) => {
-    const y = Math.sin(x * 127.1 + 311.7) * 43758.5453;
-    return y - Math.floor(y);
-  };
+  const seed = root.TreePainter.seed; // 擬似乱数は tree-painter.js の正本を共用
   const lots = [[0, 0]],
     dirs = [
       [1, 0],
@@ -67,13 +64,14 @@
     }
     host.innerHTML =
       '<canvas class="tree" role="img"></canvas>' +
-      '<progress class="forest-progress" max="36" aria-label="今の木の成長"></progress>' +
+      '<progress class="forest-progress" max="' + STEP + '" aria-label="今の木の成長"></progress>' +
       '<div class="forest-tools"><p class="forest-status" aria-live="polite"></p>' +
       '<button type="button" class="forest-focus" aria-pressed="false">育てている場所へ</button></div>' +
       '<div class="forest-regions" hidden><button type="button" class="forest-prev">前の森</button>' +
       '<span class="forest-region-name"></span><button type="button" class="forest-next">次の森</button></div>' +
       '<details class="forest-colors"><summary>葉の色</summary><div class="forest-legend" aria-label="学習モードと葉の色">' +
-      '<span><i class="forest-r" aria-hidden="true"></i>よむ</span><span><i class="forest-w" aria-hidden="true"></i>かく</span>' +
+      '<span><i class="forest-r" style="background:' + root.TreePainter.COLORS[1] + '" aria-hidden="true"></i>よむ</span>' +
+      '<span><i class="forest-w" style="background:' + root.TreePainter.COLORS[2] + '" aria-hidden="true"></i>かく</span>' +
       '</div><p class="forest-note">読む・書くで 育つよ。カードでは 育たないよ。</p></details>';
     const canvas = host.querySelector('canvas'),
       ctx = canvas.getContext('2d', { alpha: false });
@@ -107,7 +105,7 @@
         return hit;
       }
       const image = makeCanvas(res, res);
-      const anchor = root.TreePainter.paint(image.getContext('2d'), id, r, n, res, layer);
+      const anchor = root.TreePainter.paint(image.getContext('2d'), id, r, n, res, layer, STEP);
       const result = { image, anchor };
       cache.set(key, result);
       cachePixels += res * res;
@@ -286,8 +284,9 @@
             1 +
             '本目の ' +
             NAMES[active % 5] +
-            (local === 36 ? 'が 育ったよ' : local === 1 ? 'の 新芽が 出たよ' : 'が 育っているよ');
+            (local === STEP ? 'が 育ったよ' : local === 1 ? 'の 新芽が 出たよ' : 'が 育っているよ');
       const progress = host.querySelector('.forest-progress');
+      progress.style.accentColor = root.TreePainter.COLORS[1]; // プログレスの色も葉の色の正本から
       progress.value = n - active * STEP;
       progress.hidden = !state.focus && d.region < growth.completed.length;
       focus.textContent = state.focus ? '森全体へ' : '育てている場所へ';
