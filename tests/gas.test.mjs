@@ -305,6 +305,23 @@ test('過年度の消去: 途中で止まったら残数を出し、同じ番号
   assert.equal(env.api_archiveView('2025').anonymized, true);
 });
 
+test('過年度の消去: 消し終わった年度をもう一度消しても無害（同時実行の後続と同じ処理）', () => {
+  const s = base(), env = makeEnv(s, T);
+  env.api_archiveSave('2025');
+  const first = env.api_archiveAnonymize('2025', '2025');
+  assert.equal(first.remaining, 0);
+  const roster = env.book['名簿2025'].map((r) => r.slice()), progress = env.book['進捗2025'].map((r) => r.slice());
+  // ロックで直列化されるので、2回目が走るのは消し終わったあと。空の照合表から始めても、
+  // 消えた行はメールが無いので飛ばされ、別の番号を付け直すことがない
+  const second = env.api_archiveAnonymize('2025', '2025');
+  assert.equal(second.remaining, 0);
+  assert.deepEqual(env.book['名簿2025'], roster);
+  assert.deepEqual(env.book['進捗2025'], progress); // 番号が変わらない（結合が壊れない）
+  assert.equal(env.book['照合2025'], undefined); // 対応表はやはり消えている
+  assert.equal(env.book['設定'].filter((r) => r[0] === 'archLog:2025').length, 1);
+  assert.equal(env.api_archiveView('2025').anonymized, true);
+});
+
 test('過年度の消去: 照合表を先に保存してから名簿・進捗を書き換える', () => {
   const s = base(), env = makeEnv(s, T);
   env.api_archiveSave('2025');
