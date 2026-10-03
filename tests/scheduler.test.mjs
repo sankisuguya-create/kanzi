@@ -44,19 +44,6 @@ test('かく: 箱0は失敗で0のまま、成功で1。箱1以上の失敗は1'
   assert.deepEqual(S.check(p), []);
 });
 
-test('取り消しで直前の状態に戻る（かくの追加も戻る）', () => {
-  const p = S.newProgress();
-  p.read['あ'] = [1, 0, 0, 0, 0];
-  S.answerRead(p, 'あ', true, 1);
-  const snap = JSON.stringify(p);
-  const rec = S.answerRead(p, 'あ', true, 3);
-  assert.ok(p.write['あ']);
-  S.undo(p, rec);
-  assert.equal(JSON.stringify(p), snap);
-  const rec2 = S.answerRead(p, 'い', true, 3);
-  S.undo(p, rec2);
-  assert.equal(p.read['い'], undefined);
-});
 
 test('1日の復習は上限まで、期限切れが古い順（I5：長期休み明け）', () => {
   const p = S.newProgress();

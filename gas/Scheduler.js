@@ -53,16 +53,6 @@
     return { kind: 'write', c: c, before: before };
   }
 
-  // 直前の1回を取り消す
-  function undo(p, rec) {
-    if (!rec) return;
-    var tbl = rec.kind === 'read' ? p.read : p.write;
-    if (rec.before) tbl[rec.c] = rec.before; else delete tbl[rec.c];
-    if (rec.kind === 'read') {
-      if (rec.beforeW) p.write[rec.c] = rec.beforeW; else delete p.write[rec.c];
-    }
-  }
-
   function answeredToday(tbl, today) {
     var n = 0;
     for (var c in tbl) if (tbl[c][2] > 0 && tbl[c][3] && day(new Date(tbl[c][3])) === today) n++;
@@ -359,7 +349,7 @@
 
   var api = {
     INTERVALS: INTERVALS, LIMIT: LIMIT, WRITE_UNLOCK_BOX: WRITE_UNLOCK_BOX, MAX_BOX: MAX_BOX,
-    day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite, undo: undo,
+    day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite,
     dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList, classMissTop: classMissTop,
     FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, forestGrowth: forestGrowth, forestActivity: forestActivity, forestRegionLog: forestRegionLog,
@@ -371,4 +361,4 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 // GAS 版ずれ検知の版（tools/build-gas.mjs が埋め込む）
-Sched.VER = "600793d";
+Sched.VER = "925136e";

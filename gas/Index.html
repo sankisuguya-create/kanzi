@@ -55,9 +55,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 }
 .big.primary { background: var(--solid-on); border-color: var(--solid-on); color: #fff; }
 .big .meta { font-size: 18px; font-weight: 400; letter-spacing: 0; }
-.big .next-chars { font-size: 22px; letter-spacing: .3em; }
 .big:active { transform: translateY(2px); }
-.done-note { font-size: 22px; font-weight: 400; border-style: dashed; border-color: var(--line); color: var(--ink-sub); }
 
 /* ---- メニュー */
 .menu { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; align-items: center; }
@@ -85,8 +83,6 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .card .ot { font-size: clamp(56px, 12vmin, 110px); }
 .card .kana { font-size: 40px; letter-spacing: .15em; visibility: hidden; min-height: 1.3em; }
 .card.flipped .kana { visibility: visible; }
-.card .tap-hint { position: absolute; bottom: 12px; color: var(--ink-sub); font-size: 18px; }
-.card.flipped .tap-hint { visibility: hidden; }
 .answer { display: grid; gap: 8px; width: min(100%, 720px); }
 .answer .q { font-size: 20px; font-weight: 700; }
 .answer-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; }
@@ -100,19 +96,16 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .after { display: flex; gap: 14px; align-items: center; width: min(100%, 720px); justify-content: flex-end; }
 .after .big { width: auto; min-width: 240px; min-height: 76px; }
 .after .btn-mada { min-height: 60px; padding: 0 22px; font-size: 20px; border-radius: 12px; }
-.judge { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; width: min(100%, 720px); visibility: hidden; }
-.judge.show { visibility: visible; }
-.judge button { min-height: 92px; font-size: 30px; font-weight: 700; border-radius: 18px; letter-spacing: .1em; }
 .btn-mada { background: var(--card); border: 3px solid var(--ink); }
 .btn-ok { background: var(--solid-on); border: 3px solid var(--solid-on); color: #fff; }
 /* もどせない操作（過年度のまとめて消す）: 注意色の枠と文字だけ。主操作の強調（塗り）はしない */
 .btn-danger { background: var(--card); border: 3px solid var(--ink-alert); color: var(--ink-alert); font-weight: 700; min-height: 52px; padding: 4px 14px; font-size: 18px; border-radius: 10px; }
 .btn-danger[disabled] { opacity: .45; cursor: default; }
 .speak { min-height: 56px; padding: 0 22px; font-size: 20px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; }
+.say { min-width: var(--tap); min-height: var(--tap); font-size: 26px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; }
 
 /* ---- 書字パッド */
 .padbox { width: min(62vh, 520px, calc(100vw - 32px)); aspect-ratio: 1; margin: 0 auto; }
-.pv-pad .padbox { width: min(52vh, 440px, calc(100vw - 32px)); }
 .pad { width: 100%; height: 100%; display: block; touch-action: none; user-select: none; background: var(--card); border-radius: 12px; }
 .pad-frame { fill: none; stroke: var(--ink); stroke-width: 1; }
 .pad-grid { stroke: var(--line); stroke-width: .6; stroke-dasharray: 2 2; }
@@ -133,10 +126,6 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .prompt .box { display: inline-block; width: 1em; height: 1em; border: 3px solid var(--ink); vertical-align: -0.1em; background: var(--fill-b); }
 .prompt rt { font-size: 30px; font-family: var(--font-sans); letter-spacing: .1em; }
 .prompt-kana { margin: 0; color: var(--ink-sub); font-size: 30px; letter-spacing: .1em; }
-.stages { display: flex; gap: 8px; list-style: none; padding: 0; margin: 4px 0; flex-wrap: wrap; }
-.stages li { padding: 4px 12px; border: 2px solid var(--line); border-radius: 999px; color: var(--ink-sub); font-size: 18px; }
-.stages li.cur { border-color: var(--ink); color: var(--ink); font-weight: 700; background: var(--fill-a); }
-.stages li.past::after { content: " ✓"; }
 .msg { min-height: 1.6em; margin: 0; font-size: 26px; font-weight: 700; }
 .tools { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .tools button { min-height: 90px; padding: 0 30px; font-size: 26px; background: var(--card); border: 3px solid var(--ink); border-radius: 16px; }
@@ -146,20 +135,8 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .res.again { color: var(--ink); }
 .res-note { margin: 0; color: var(--ink-sub); }
 
-/* ---- よしゅう */
-.preview { display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: start; }
-.pv-pad { display: grid; gap: 10px; }
-.pv-pad .strokes { color: var(--ink-sub); }
-.pv-info { display: grid; gap: 14px; align-content: start; }
-.words { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.words li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px 14px; }
-.pw { font-size: 44px; font-family: var(--font-kanji); }
-.pw b { font-weight: 400; text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
-.pk { font-size: 24px; letter-spacing: .1em; }
-.say { min-width: var(--tap); min-height: var(--tap); font-size: 26px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; }
-.pv-guide { margin: 0; font-size: 22px; font-weight: 700; }
-
 /* ---- おわり */
+
 .done { display: grid; gap: 18px; justify-items: center; text-align: center; padding-top: 10vh; max-width: 560px; margin: 0 auto; }
 .done-big { font-size: 40px; font-weight: 700; margin: 0; }
 
@@ -198,8 +175,8 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 
 /* ---- 縦長（タブレット持ち）・狭い画面 */
 @media (max-aspect-ratio: 1/1), (max-width: 760px) {
-  .menu, .write, .preview { grid-template-columns: 1fr; }
-  .padbox, .pv-pad .padbox { width: min(calc(100vw - 32px), 52vh); }
+  .menu, .write { grid-template-columns: 1fr; }
+  .padbox { width: min(calc(100vw - 32px), 52vh); }
   .card { min-height: 38vh; }
   .tree { max-height: 42vh; }
 }
@@ -472,7 +449,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
   body.trial #trial-bar #tb-back { margin-top: auto; }
 }
 </style>
-<meta name="kanzi-ver" content="600793d">
+<meta name="kanzi-ver" content="925136e">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -539,16 +516,6 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     var box = ok ? Math.min(e[0] + 1, MAX_BOX) : (e[0] === 0 ? 0 : 1);
     p.write[c] = [box, today + INTERVALS[box], e[2] + 1, now || 0, (e[4] || 0) + (ok ? 0 : 1)];
     return { kind: 'write', c: c, before: before };
-  }
-
-  // 直前の1回を取り消す
-  function undo(p, rec) {
-    if (!rec) return;
-    var tbl = rec.kind === 'read' ? p.read : p.write;
-    if (rec.before) tbl[rec.c] = rec.before; else delete tbl[rec.c];
-    if (rec.kind === 'read') {
-      if (rec.beforeW) p.write[rec.c] = rec.beforeW; else delete p.write[rec.c];
-    }
   }
 
   function answeredToday(tbl, today) {
@@ -847,7 +814,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
 
   var api = {
     INTERVALS: INTERVALS, LIMIT: LIMIT, WRITE_UNLOCK_BOX: WRITE_UNLOCK_BOX, MAX_BOX: MAX_BOX,
-    day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite, undo: undo,
+    day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite,
     dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList, classMissTop: classMissTop,
     FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, forestGrowth: forestGrowth, forestActivity: forestActivity, forestRegionLog: forestRegionLog,
@@ -1250,7 +1217,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   }
 
   // 書字パッド
-  // opts: { strokes: [d...], mode: 'trace'|'hint'|'free'|'show', onDone(result), onMiss(kind), onStroke(i) }
+  // opts: { strokes: [d...], mode: 'free'|'show', onDone(result), onMiss(kind), onStroke(i), onStuck(result) }
   function Pad(container, opts) {
     var self = this;
     this.opts = opts;
@@ -1301,16 +1268,16 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     return -1;
   };
 
-  // ガイド: なぞる＝全画を薄く、ヒント＝次の1画だけ、じぶんで＝なし（外れが続いたら次の1画を出す）
+  // ガイド: 見本＝全画を薄く表示、じぶんで＝なし（外れが続いたら次の1画だけ出す）
   Pad.prototype.renderGuide = function () {
     var m = this.mode, nx = this.expected(), hint = this.hintOn;
     this.tplPaths.forEach(function (p, i) {
-      var show = m === 'show' || (m === 'trace' && !this.done[i]) || ((m === 'hint' || hint) && i === nx);
+      var show = m === 'show' || (hint && i === nx);
       p.setAttribute('class', show ? (i === nx && m !== 'show' ? 'g-next' : 'g-all') : 'g-hide');
       p.style.strokeDasharray = ''; p.style.strokeDashoffset = '';
     }, this);
     this.marks.innerHTML = '';
-    if (nx >= 0 && (m === 'trace' || m === 'hint' || hint)) {
+    if (nx >= 0 && hint) {
       var s = this.tpl[nx].pts[0];
       el('circle', { cx: s.x, cy: s.y, r: 3.2, class: 'start-dot' }, this.marks);
     }

@@ -89,7 +89,7 @@
   }
 
   // 書字パッド
-  // opts: { strokes: [d...], mode: 'trace'|'hint'|'free'|'show', onDone(result), onMiss(kind), onStroke(i) }
+  // opts: { strokes: [d...], mode: 'free'|'show', onDone(result), onMiss(kind), onStroke(i), onStuck(result) }
   function Pad(container, opts) {
     var self = this;
     this.opts = opts;
@@ -140,16 +140,16 @@
     return -1;
   };
 
-  // ガイド: なぞる＝全画を薄く、ヒント＝次の1画だけ、じぶんで＝なし（外れが続いたら次の1画を出す）
+  // ガイド: 見本＝全画を薄く表示、じぶんで＝なし（外れが続いたら次の1画だけ出す）
   Pad.prototype.renderGuide = function () {
     var m = this.mode, nx = this.expected(), hint = this.hintOn;
     this.tplPaths.forEach(function (p, i) {
-      var show = m === 'show' || (m === 'trace' && !this.done[i]) || ((m === 'hint' || hint) && i === nx);
+      var show = m === 'show' || (hint && i === nx);
       p.setAttribute('class', show ? (i === nx && m !== 'show' ? 'g-next' : 'g-all') : 'g-hide');
       p.style.strokeDasharray = ''; p.style.strokeDashoffset = '';
     }, this);
     this.marks.innerHTML = '';
-    if (nx >= 0 && (m === 'trace' || m === 'hint' || hint)) {
+    if (nx >= 0 && hint) {
       var s = this.tpl[nx].pts[0];
       el('circle', { cx: s.x, cy: s.y, r: 3.2, class: 'start-dot' }, this.marks);
     }
