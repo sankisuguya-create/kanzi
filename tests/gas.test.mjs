@@ -166,6 +166,18 @@ test('不変条件の検査: エントリの形・箱の範囲・負の値・v �
   assert.ok(bad.length === 4, bad.join(','));
 });
 
+test('GAS版ずれ検知: Index.html のメタと Scheduler.js の Sched.VER が一致し、api_init が ver を返す', () => {
+  const html = fs.readFileSync(new URL('../gas/Index.html', import.meta.url), 'utf8');
+  const meta = html.match(/<meta name="kanzi-ver" content="([^"]+)">/);
+  assert.ok(meta, 'gas/Index.html に kanzi-ver のメタタグがない（npm run build:gas を実行したか）');
+  const ctx = { console, JSON, Date, Math, Number, String, Array, Object, Set };
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(new URL('../gas/Scheduler.js', import.meta.url), 'utf8'), ctx);
+  assert.equal(ctx.Sched.VER, meta[1]);
+  // テスト環境は src/scheduler.js を読むので VER は空。GAS ではデプロイした Scheduler.js の VER が返る
+  assert.equal(makeEnv(base(), T).api_init().ver, '');
+});
+
 test('漢字テストの範囲: テストごとに管理し、児童に見せるのは1つ（担当の先生だけ）', () => {
   const env = makeEnv(base(), T);
   const t = env.api_setTests('3-1', JSON.stringify({ active: 't2', list: [

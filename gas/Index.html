@@ -167,6 +167,10 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .top.t { flex-wrap: wrap; }
 .try { margin-left: auto; min-height: 52px; padding: 0 18px; font-size: 18px; background: var(--card); border: 2px solid var(--cat-1); color: var(--ink-link); border-radius: 12px; }
 #trial-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 16px; background: var(--fill-b); border-bottom: 2px solid var(--cat-3); font-size: 16px; }
+/* GAS版ずれの警告: どの画面でも一番上に重ねて出す（内容を押さないよう fixed） */
+.ver-warn { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 10px 14px; background: #FFE0B2; border-bottom: 3px solid var(--warn, #E65100); text-align: center; font-size: 20px; font-weight: 700; }
+.ver-warn p { margin: 0 0 8px; }
+.ver-warn button { min-height: 44px; padding: 0 18px; font-size: 18px; }
 #trial-bar .tb-label { font-weight: 700; margin-right: auto; }
 #trial-bar button { min-height: 44px; padding: 0 14px; font-size: 16px; background: var(--card); border: 2px solid var(--ink); border-radius: 10px; }
 .top.t h1 { font-size: 26px; }
@@ -470,6 +474,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
   body.trial #trial-bar #tb-back { margin-top: auto; }
 }
 </style>
+<meta name="kanzi-ver" content="d6c110b">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -3160,6 +3165,14 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
 
   // ================= 起動
   Platform.init().then(function (info) {
+    // 開いている HTML とサーバーの Scheduler.js の版が違う時は、古いまま使わせず開き直してもらう（§24）
+    var ver = document.querySelector('meta[name="kanzi-ver"]');
+    if (ver && info.ver && ver.content !== info.ver) {
+      var warn = document.createElement('div');
+      warn.className = 'ver-warn';
+      warn.innerHTML = '<p>バージョンが古いので ひらきなおしてね</p><button class="big primary" onclick="location.reload()">ひらきなおす</button>';
+      document.body.insertBefore(warn, document.body.firstChild);
+    }
     S.info = info;
     S.orders = info.orders || {};
     S.pointers = info.pointers || {};

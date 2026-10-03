@@ -210,13 +210,13 @@ function parseProgress_(read, write, meta) {
 }
 
 function api_init() {
-  var me = begin_(), orders = orders_();
+  var me = begin_(), orders = orders_(), ver = Sched.VER || '';
   if (me.role === 'student') {
     var klass = classOf_(me.email);
-    return { role: 'student', email: me.email, klass: klass, progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders, test: Sched.activeTest(tests_(klass)), writeLevel: writeLevel_(klass), gates: gates_(klass) };
+    return { role: 'student', email: me.email, klass: klass, progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders, test: Sched.activeTest(tests_(klass)), writeLevel: writeLevel_(klass), gates: gates_(klass), ver: ver };
   }
-  if (me.role === 'teacher') return { role: 'teacher', email: me.email, classes: teacherClasses_(me.email), orders: orders };
-  return { role: 'unknown', email: me.email };
+  if (me.role === 'teacher') return { role: 'teacher', email: me.email, classes: teacherClasses_(me.email), orders: orders, ver: ver };
+  return { role: 'unknown', email: me.email, ver: ver };
 }
 
 // 児童の進捗を受け取り、保存済みのものと統合して返す。

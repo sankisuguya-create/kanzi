@@ -1065,6 +1065,14 @@
 
   // ================= 起動
   Platform.init().then(function (info) {
+    // 開いている HTML とサーバーの Scheduler.js の版が違う時は、古いまま使わせず開き直してもらう（§24）
+    var ver = document.querySelector('meta[name="kanzi-ver"]');
+    if (ver && info.ver && ver.content !== info.ver) {
+      var warn = document.createElement('div');
+      warn.className = 'ver-warn';
+      warn.innerHTML = '<p>バージョンが古いので ひらきなおしてね</p><button class="big primary" onclick="location.reload()">ひらきなおす</button>';
+      document.body.insertBefore(warn, document.body.firstChild);
+    }
     S.info = info;
     S.orders = info.orders || {};
     S.pointers = info.pointers || {};
