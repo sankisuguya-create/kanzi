@@ -222,7 +222,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 #stage .show-svg .ink path.s3 { stroke: var(--stroke-3); }
 #stage .show-svg .ink path.s4 { stroke: var(--stroke-4); }
 .cswatch.s1 { color: var(--stroke-1); }
-.cswatch.s2 { color: #A85800; }
+.cswatch.s2 { color: #A85800; } /* 文字として読むために 2画目の画線色（--stroke-2、下線に使う実色）より一段濃い茶にする。薄い橙の文字は読みにくいため意図して別値 */
 .cswatch.s3 { color: var(--stroke-3); }
 .cswatch.s4 { color: var(--stroke-4); }
 .cswatch { font-weight: 700; margin: 0 .25em; border-bottom: 4px solid currentColor; }
@@ -360,7 +360,6 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .teacher input#arch-word { font-size: 18px; min-height: 44px; padding: 0 10px; width: 7em; }
 .picked .tlist { font-size: 26px; letter-spacing: .15em; font-family: var(--font-kanji); }
 
-:root { --forest-preview:#3F7D3A; --forest-read:#0F5EA8; --forest-write:#C86A00; --forest-card-k:#6E4310; }
 .tree { height:340px; border-radius:12px; }
 .forest-tools { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 8px 4px; }
 .forest-status { flex: 1 1 150px; margin: 0; font-size: 17px; }
@@ -371,15 +370,14 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .forest-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 16px; padding: 4px; font-size: 16px; }
 .forest-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .forest-legend i { display: inline-block; width: 12px; height: 12px; }
-.forest-p { background: var(--forest-preview); border-radius: 75% 0 75% 0; }
-.forest-r { background: var(--forest-read); border-radius: 50%; }
-.forest-w { background: var(--forest-write); transform: rotate(45deg); }
-.forest-k { background: var(--forest-card-k); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+/* 葉の色（背景色）は tree-painter.js の COLORS が正本で、tree.js がインラインで当てる。ここでは形だけ */
+.forest-r { border-radius: 50%; }
+.forest-w { transform: rotate(45deg); }
 .forest-colors { margin: 0; padding: 0 4px; font-size: 16px; }
 .forest-colors:not([open]) > :not(summary) { display: none; }
 .forest-colors summary { min-height: 56px; padding: 14px 6px; cursor: pointer; }
 .forest-note { margin: 0 0 8px; font-size: 14px; }
-.forest-progress { display: block; flex: none; width: 100%; height: 6px; accent-color: var(--forest-read); }
+.forest-progress { display: block; flex: none; width: 100%; height: 6px; } /* バーの色（accent-color）も tree.js が COLORS から当てる */
 .forest-progress[hidden] { display: none; }
 .test-overview h2 { margin: 20px 0 8px; font-size: 22px; overflow-wrap: anywhere; }
 .test-count { white-space: nowrap; font-size: 18px; font-weight: normal; }
@@ -474,7 +472,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
   body.trial #trial-bar #tb-back { margin-top: auto; }
 }
 </style>
-<meta name="kanzi-ver" content="d6c110b">
+<meta name="kanzi-ver" content="600793d">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -1426,14 +1424,27 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
 // tree = {type: 樹種番号, modes: パーツごとの色番号文字列}。同じ入力は同じ画像になる。
 (function (root) {
   'use strict';
-  // 葉の色（これまで・よむ・かく・カード）。背景・色覚の型をまたいで見分けられる4色（color-coding の check-palette で確認）
-  // 緑 #3F7D3A・青 #0F5EA8・橙 #C86A00・茶 #6E4310
-  const MODE_COLORS = [
-    { h: 115, s: 37, l: 36 },
-    { h: 209, s: 84, l: 36 },
-    { h: 32, s: 100, l: 39 },
-    { h: 33, s: 75, l: 25 }
-  ];
+  // 葉の色（これまで・よむ・かく・カード）。背景・色覚の型をまたいで見分けられる4色（color-coding の check-palette で確認）。
+  // この16進表記が正本（凡例・プログレスバーの色もここから取る）。canvas の hsl() 指定向けに MODE_HSL へ換算して使う
+  const MODE_COLORS = ['#3F7D3A', '#0F5EA8', '#C86A00', '#6E4310'];
+  const MODE_HSL = MODE_COLORS.map((hex) => {
+    const n = parseInt(hex.slice(1), 16),
+      r = ((n >> 16) & 255) / 255,
+      g2 = ((n >> 8) & 255) / 255,
+      b = (n & 255) / 255,
+      max = Math.max(r, g2, b),
+      min = Math.min(r, g2, b),
+      l = (max + min) / 2,
+      d = max - min;
+    let h = 0;
+    if (d) {
+      h = max === r ? ((g2 - b) / d) % 6 : max === g2 ? (b - r) / d + 2 : (r - g2) / d + 4;
+      h *= 60;
+      if (h < 0) h += 360;
+    }
+    return { h, s: d ? (d / (1 - Math.abs(2 * l - 1))) * 100 : 0, l: l * 100 };
+  });
+  // 擬似乱数（tree.js の森の配置と共用するので TreePainter.seed として外へ出す）
   const seed = (x) => {
     const y = Math.sin(x * 127.1 + 311.7) * 43758.5453;
     return y - Math.floor(y);
@@ -1481,10 +1492,10 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     g.fill();
     g.restore();
   }
-  function points(id, type) {
-    return Array.from({ length: 36 }, (_, i) => {
+  function points(id, type, step) {
+    return Array.from({ length: step }, (_, i) => {
       const a = i * 2.399963 + seed(id + 4) * 0.4,
-        r = Math.sqrt((i + 0.5) / 36);
+        r = Math.sqrt((i + 0.5) / step);
       let x, y;
       if (type === 4) {
         const row = Math.floor(i / 3),
@@ -1502,9 +1513,9 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     });
   }
   function cluster(g, pt, type, mode, detail, id) {
-    const hue = MODE_COLORS[mode].h,
-      sat = MODE_COLORS[mode].s,
-      light = MODE_COLORS[mode].l + (type === 1 ? 7 : 0) + (-pt.y - 120) * 0.04;
+    const hue = MODE_HSL[mode].h,
+      sat = MODE_HSL[mode].s,
+      light = MODE_HSL[mode].l + (type === 1 ? 7 : 0) + (-pt.y - 120) * 0.04;
     g.save();
     g.translate(pt.x, pt.y);
     const rw = type === 4 ? pt.r * 1.4 : pt.r,
@@ -1581,7 +1592,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       for (let j = 0; j < pairs; j++) {
         if ((layer === 'last' && j !== pairs - 1) || (layer === 'base' && j === pairs - 1)) continue;
         const y = -h + j * 13,
-          color = MODE_COLORS[modeAt(tree, j)];
+          color = MODE_HSL[modeAt(tree, j)];
         for (const side of [-1, 1])
           leaf(g, side * 9, y - 3, side * 0.9, 11 - j * 0.7, 0, `hsl(${color.h} ${color.s}% ${color.l}%)`);
       }
@@ -1589,7 +1600,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     g.restore();
     return { x: 160, y: 292 - h + (n - 1) * 13 };
   }
-  function paintBranches(g, type, p, pts, n) {
+  function paintBranches(g, type, p, pts, n, step) {
     ellipse(g, 0, 1, type === 4 ? 65 : 96, 13, 'rgba(68,100,48,.12)');
     g.strokeStyle = p.stem;
     g.lineCap = 'round';
@@ -1644,7 +1655,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       const pt = pts[i],
         hub = hubs[type === 4 ? 0 : pt.x < -20 ? 0 : pt.x > 20 ? 2 : 1];
       g.strokeStyle = p.stem;
-      g.lineWidth = 1.2 + (1 - i / 36) * 1.1;
+      g.lineWidth = 1.2 + (1 - i / step) * 1.1;
       g.beginPath();
       if (type === 4) {
         g.moveTo(0, pt.y + 12);
@@ -1673,7 +1684,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
         const y = -263 + row * 16,
           top = row * 6.5,
           bottom = (row + 1.7) * 6.5;
-        const color = MODE_COLORS[modeAt(tree, Math.min(n - 1, row * 3))];
+        const color = MODE_HSL[modeAt(tree, Math.min(n - 1, row * 3))];
         const fill = g.createLinearGradient(-bottom, y, bottom, y + 32);
         fill.addColorStop(0, `hsl(${color.h} ${color.s}% ${color.l + 3}%)`);
         fill.addColorStop(1, `hsl(${color.h} ${color.s}% ${color.l - 10}%)`);
@@ -1692,18 +1703,18 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       }
     }
   }
-  function paintTree(g, id, tree, n, res, layer) {
+  function paintTree(g, id, tree, n, res, layer, step) {
     const type = tree.type,
       p = colors(type),
-      pts = points(id, type),
-      growth = 0.26 + 0.74 * Math.pow(n / 36, 0.46),
+      pts = points(id, type, step),
+      growth = 0.26 + 0.74 * Math.pow(n / step, 0.46),
       detail = res >= 320;
     if (n <= 3) return paintSprout(g, tree, n, res, layer);
     g.save();
     g.scale(res / 320, res / 320);
     g.translate(160, 292);
     g.scale(growth, growth);
-    if (layer !== 'last') paintBranches(g, type, p, pts, n);
+    if (layer !== 'last') paintBranches(g, type, p, pts, n, step);
     paintCedarMantle(g, tree, n, p, layer);
     const indexes = Array.from({ length: n }, (_, i) => i)
       .filter((i) => (layer === 'last' ? i === n - 1 : layer === 'base' ? i !== n - 1 : true))
@@ -1713,7 +1724,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     return { x: 160 + pts[n - 1].x * growth, y: 292 + pts[n - 1].y * growth };
   }
 
-  root.TreePainter = { paint: paintTree };
+  root.TreePainter = { paint: paintTree, COLORS: MODE_COLORS, seed: seed };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 </script>
 <script>
@@ -1728,10 +1739,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   const NAMES = ['ケヤキ', 'サクラ', 'カエデ', 'シラカバ', 'スギ'];
   const cache = new Map();
   let cachePixels = 0;
-  const seed = (x) => {
-    const y = Math.sin(x * 127.1 + 311.7) * 43758.5453;
-    return y - Math.floor(y);
-  };
+  const seed = root.TreePainter.seed; // 擬似乱数は tree-painter.js の正本を共用
   const lots = [[0, 0]],
     dirs = [
       [1, 0],
@@ -1786,13 +1794,14 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     }
     host.innerHTML =
       '<canvas class="tree" role="img"></canvas>' +
-      '<progress class="forest-progress" max="36" aria-label="今の木の成長"></progress>' +
+      '<progress class="forest-progress" max="' + STEP + '" aria-label="今の木の成長"></progress>' +
       '<div class="forest-tools"><p class="forest-status" aria-live="polite"></p>' +
       '<button type="button" class="forest-focus" aria-pressed="false">育てている場所へ</button></div>' +
       '<div class="forest-regions" hidden><button type="button" class="forest-prev">前の森</button>' +
       '<span class="forest-region-name"></span><button type="button" class="forest-next">次の森</button></div>' +
       '<details class="forest-colors"><summary>葉の色</summary><div class="forest-legend" aria-label="学習モードと葉の色">' +
-      '<span><i class="forest-r" aria-hidden="true"></i>よむ</span><span><i class="forest-w" aria-hidden="true"></i>かく</span>' +
+      '<span><i class="forest-r" style="background:' + root.TreePainter.COLORS[1] + '" aria-hidden="true"></i>よむ</span>' +
+      '<span><i class="forest-w" style="background:' + root.TreePainter.COLORS[2] + '" aria-hidden="true"></i>かく</span>' +
       '</div><p class="forest-note">読む・書くで 育つよ。カードでは 育たないよ。</p></details>';
     const canvas = host.querySelector('canvas'),
       ctx = canvas.getContext('2d', { alpha: false });
@@ -1826,7 +1835,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
         return hit;
       }
       const image = makeCanvas(res, res);
-      const anchor = root.TreePainter.paint(image.getContext('2d'), id, r, n, res, layer);
+      const anchor = root.TreePainter.paint(image.getContext('2d'), id, r, n, res, layer, STEP);
       const result = { image, anchor };
       cache.set(key, result);
       cachePixels += res * res;
@@ -2005,8 +2014,9 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
             1 +
             '本目の ' +
             NAMES[active % 5] +
-            (local === 36 ? 'が 育ったよ' : local === 1 ? 'の 新芽が 出たよ' : 'が 育っているよ');
+            (local === STEP ? 'が 育ったよ' : local === 1 ? 'の 新芽が 出たよ' : 'が 育っているよ');
       const progress = host.querySelector('.forest-progress');
+      progress.style.accentColor = root.TreePainter.COLORS[1]; // プログレスの色も葉の色の正本から
       progress.value = n - active * STEP;
       progress.hidden = !state.focus && d.region < growth.completed.length;
       focus.textContent = state.focus ? '森全体へ' : '育てている場所へ';

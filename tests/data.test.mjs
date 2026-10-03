@@ -19,6 +19,14 @@ test('学年別の字数は 80/160/200/202/193/191＝1026（I1）、順番は重
   assert.equal(Object.keys(D.kanji).length, 1026);
 });
 
+test('gas/Code.js の学年の字数は配当データと同じ（GRADE_LEN の正本照合）', () => {
+  const code = fs.readFileSync(new URL('../gas/Code.js', import.meta.url), 'utf8');
+  const m = code.match(/GRADE_LEN = \{([^}]+)\}/);
+  assert.ok(m, 'gas/Code.js に GRADE_LEN がない');
+  const lens = Object.fromEntries([...m[1].matchAll(/(\d):\s*(\d+)/g)].map((x) => [Number(x[1]), Number(x[2])]));
+  for (const g of [1, 2, 3, 4, 5, 6]) assert.equal(lens[g], D.grades[g].order.length, `${g}年`);
+});
+
 test('すべての字に例語と筆順がある', () => {
   for (const c of Object.keys(D.kanji)) {
     const k = D.kanji[c];

@@ -218,7 +218,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 #stage .show-svg .ink path.s3 { stroke: var(--stroke-3); }
 #stage .show-svg .ink path.s4 { stroke: var(--stroke-4); }
 .cswatch.s1 { color: var(--stroke-1); }
-.cswatch.s2 { color: #A85800; }
+.cswatch.s2 { color: #A85800; } /* 文字として読むために 2画目の画線色（--stroke-2、下線に使う実色）より一段濃い茶にする。薄い橙の文字は読みにくいため意図して別値 */
 .cswatch.s3 { color: var(--stroke-3); }
 .cswatch.s4 { color: var(--stroke-4); }
 .cswatch { font-weight: 700; margin: 0 .25em; border-bottom: 4px solid currentColor; }
@@ -356,7 +356,6 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .teacher input#arch-word { font-size: 18px; min-height: 44px; padding: 0 10px; width: 7em; }
 .picked .tlist { font-size: 26px; letter-spacing: .15em; font-family: var(--font-kanji); }
 
-:root { --forest-preview:#3F7D3A; --forest-read:#0F5EA8; --forest-write:#C86A00; --forest-card-k:#6E4310; }
 .tree { height:340px; border-radius:12px; }
 .forest-tools { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 8px 4px; }
 .forest-status { flex: 1 1 150px; margin: 0; font-size: 17px; }
@@ -367,15 +366,14 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .forest-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 16px; padding: 4px; font-size: 16px; }
 .forest-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .forest-legend i { display: inline-block; width: 12px; height: 12px; }
-.forest-p { background: var(--forest-preview); border-radius: 75% 0 75% 0; }
-.forest-r { background: var(--forest-read); border-radius: 50%; }
-.forest-w { background: var(--forest-write); transform: rotate(45deg); }
-.forest-k { background: var(--forest-card-k); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+/* 葉の色（背景色）は tree-painter.js の COLORS が正本で、tree.js がインラインで当てる。ここでは形だけ */
+.forest-r { border-radius: 50%; }
+.forest-w { transform: rotate(45deg); }
 .forest-colors { margin: 0; padding: 0 4px; font-size: 16px; }
 .forest-colors:not([open]) > :not(summary) { display: none; }
 .forest-colors summary { min-height: 56px; padding: 14px 6px; cursor: pointer; }
 .forest-note { margin: 0 0 8px; font-size: 14px; }
-.forest-progress { display: block; flex: none; width: 100%; height: 6px; accent-color: var(--forest-read); }
+.forest-progress { display: block; flex: none; width: 100%; height: 6px; } /* バーの色（accent-color）も tree.js が COLORS から当てる */
 .forest-progress[hidden] { display: none; }
 .test-overview h2 { margin: 20px 0 8px; font-size: 22px; overflow-wrap: anywhere; }
 .test-count { white-space: nowrap; font-size: 18px; font-weight: normal; }

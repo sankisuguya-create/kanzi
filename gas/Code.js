@@ -6,6 +6,7 @@
 // 児童への応答には本人の進捗以外を含めない（不変条件 I7）。先生は担当学級のものだけ読み書きできる。
 var STUDENT_RE = /@kyoiku\.edu\.nishi\.or\.jp$/;
 var TEACHER_RE = /@edu\.nishi\.or\.jp$/;
+// 学年ごとの字数（各学年の字の割り振りに使う）。正本は src/data.js の配当データ。tests/data.test.mjs で照合する
 var GRADE_LEN = { 1: 80, 2: 160, 3: 200, 4: 202, 5: 193, 6: 191 };
 
 function doGet() {
