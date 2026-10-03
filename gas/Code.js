@@ -1,6 +1,6 @@
 // 漢字の森 GASサーバー（設計書 §7）。スプレッドシートにバインドして使う。
 // シート: 名簿[メール, 学年, 組, 番号, 名前]（児童）／ 教師[メール, 学年, 組]（担当。1人で複数行可。組が空なら その学年の全学級）
-//         進捗[メール, read, write, meta, 更新] ／ 設定[キー, 値]
+//         進捗[メール, read, write, meta, 更新] ／ 設定[キー, 値] ／ 名簿YYYY・進捗YYYY（年度末に「残す」でできる過年度データ）
 // 学級のキーは「学年-組」（例 3-1）。設定のキー: grades:<学級>（見せる学年 "1,2,3"）／ pointer:<学級>:<学年>（授業の進度）／ order:<学年>（出題順）
 // 児童への応答には本人の進捗以外を含めない（不変条件 I7）。先生は担当学級のものだけ読み書きできる。
 var STUDENT_RE = /@kyoiku\.edu\.nishi\.or\.jp$/;
@@ -311,4 +311,111 @@ function api_setOrder(grade, s) {
   if (!v) throw new Error(grade + '年の字がちょうど1回ずつ入っていません');
   setSetting_('order:' + grade, v);
   return v;
+}
+
+// ---- 過年度データ（年度末に いまの「名簿」「進捗」を写して残す。児童名は集計に出さない）
+// 過年度のシート名は「名簿2025」「進捗2025」（名前＋4桁の年度）
+function sheetByName_(name) { return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name); }
+function archYear_(year) {
+  year = String(year || '');
+  if (!/^\d{4}$/.test(year)) throw new Error('年度は4桁の数字で入れてください（例: 2025）');
+  return year;
+}
+// 残した年度ごとのシートの有無: { '2025': { roster: true, progress: true } }
+function archSheets_() {
+  var out = {};
+  SpreadsheetApp.getActiveSpreadsheet().getSheets().forEach(function (s) {
+    var m = /^(名簿|進捗)(\d{4})$/.exec(s.getName());
+    if (m) (out[m[2]] = out[m[2]] || {})[m[1] === '名簿' ? 'roster' : 'progress'] = true;
+  });
+  return out;
+}
+// 過年度の名簿は個人情報を消したか（先頭行のメール欄に@が無ければ消去済みとみなす）
+function archAnonymized_(year) {
+  var sh = sheetByName_('名簿' + year);
+  return !sh || sh.getLastRow() < 2 || String(sh.getRange(2, 1).getValue()).indexOf('@') < 0;
+}
+// 見出しの名前で列を探して読む（過年度のシート用。シートを新しく作らない読み取り専用）
+function rowsOf_(sh, header) {
+  var n = sh.getLastRow() - 1, w = sh.getLastColumn();
+  if (n <= 0 || w <= 0) return [];
+  var vals = sh.getRange(1, 1, n + 1, w).getValues(), head = vals[0].map(String);
+  return vals.slice(1).map(function (r) { var o = {}; header.forEach(function (h) { var i = head.indexOf(h); o[h] = i >= 0 ? r[i] : ''; }); return o; });
+}
+// 残した年度の一覧: [{ year, anonymized }]
+function api_archiveYears() {
+  requireTeacher_();
+  var arch = archSheets_(), out = [];
+  for (var y in arch) if (arch[y].roster) out.push({ year: y, anonymized: archAnonymized_(y) });
+  return out.sort(function (a, b) { return a.year < b.year ? -1 : 1; });
+}
+// 今年度を 過年度として残す: 「名簿」「進捗」を 名前に年度を付けて複写（いまのシートはそのまま残る）
+function api_archiveSave(year) {
+  requireTeacher_();
+  year = archYear_(year);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss.getSheetByName('名簿' + year) || ss.getSheetByName('進捗' + year)) throw new Error(year + '年度は すでに残してあります');
+  ['名簿', '進捗'].forEach(function (name) {
+    var sh = ss.getSheetByName(name), dst = ss.insertSheet(name + year), n = sh.getLastRow(), w = sh.getLastColumn();
+    if (n > 0 && w > 0) dst.getRange(1, 1, n, w).setValues(sh.getRange(1, 1, n, w).getValues());
+    dst.setFrozenRows(1);
+  });
+  return year;
+}
+// 過年度の集計: クラスごとに 人数・おぼえた字の合計・まちがいのおおかった字（上位10字。児童名は出さない）
+function api_archiveView(year) {
+  requireTeacher_();
+  year = archYear_(year);
+  var rs = sheetByName_('名簿' + year), ps = sheetByName_('進捗' + year);
+  if (!rs) throw new Error(year + '年度のデータは ありません');
+  var roster = rowsOf_(rs, ['メール', '学年', '組']).map(function (o) {
+    return { email: String(o['メール']).toLowerCase(), klass: klassKey_(Number(o['学年']), String(o['組'])), grade: Number(o['学年']) || 0 };
+  }).filter(function (x) { return x.email && x.klass; });
+  var rows = {};
+  if (ps) { var m = ps.getLastRow() - 1; if (m > 0) ps.getRange(2, 1, m, 4).getValues().forEach(function (r) { rows[String(r[0]).toLowerCase()] = r; }); }
+  var classes = {};
+  roster.forEach(function (k) {
+    var cl = classes[k.klass] || (classes[k.klass] = { grade: k.grade, students: 0, learned: 0, perChar: {} });
+    cl.students++;
+    var r = rows[k.email];
+    if (!r) return;
+    var p = parseProgress_(r[1], r[2], r[3]), c;
+    for (c in p.read) {
+      var e = p.read[c];
+      if (e[0] >= Sched.WRITE_UNLOCK_BOX) cl.learned++;
+      if (e[2] > 0) { var v = cl.perChar[c] || (cl.perChar[c] = [0, 0]); v[0]++; if (e[0] === 1) v[1]++; }
+    }
+  });
+  return { year: year, anonymized: archAnonymized_(year), classes: Object.keys(classes).map(function (k) {
+    var cl = classes[k];
+    var missTop = Object.keys(cl.perChar).map(function (c) { var v = cl.perChar[c]; return { c: c, s: v[0], b: v[1], r: v[0] ? v[1] / v[0] : 0 }; })
+      .filter(function (x) { return x.s >= 3 && x.b > 0; }).sort(function (a, b) { return b.r - a.r || b.b - a.b; }).slice(0, 10);
+    return { klass: k, grade: cl.grade, students: cl.students, learned: cl.learned, missTop: missTop };
+  }).sort(function (a, b) { return a.grade - b.grade || (a.klass < b.klass ? -1 : 1); }) };
+}
+// 過年度の個人情報をまとめて消す: メール → 児童001・002…、名前 → 空。学年・組・番号・答えの記録は残るので集計は見られる
+function api_archiveAnonymize(year) {
+  requireTeacher_();
+  year = archYear_(year);
+  var rs = sheetByName_('名簿' + year), ps = sheetByName_('進捗' + year);
+  if (!rs && !ps) throw new Error(year + '年度のデータは ありません');
+  var ids = {}, n = 0;
+  function anon(v) { v = String(v); if (!v) return v; if (!(v in ids)) { n++; ids[v] = '児童' + ('00' + n).slice(-3); } return ids[v]; }
+  if (rs) {
+    var m = rs.getLastRow() - 1;
+    if (m > 0) {
+      var w = Math.min(5, rs.getLastColumn()), vals = rs.getRange(2, 1, m, w).getValues();
+      vals.forEach(function (r) { r[0] = anon(r[0]); if (w >= 5) r[4] = ''; });
+      rs.getRange(2, 1, m, w).setValues(vals);
+    }
+  }
+  if (ps) {
+    var m2 = ps.getLastRow() - 1;
+    if (m2 > 0) {
+      var vals2 = ps.getRange(2, 1, m2, 1).getValues();
+      vals2.forEach(function (r) { r[0] = anon(r[0]); });
+      ps.getRange(2, 1, m2, 1).setValues(vals2);
+    }
+  }
+  return true;
 }

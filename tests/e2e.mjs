@@ -272,6 +272,21 @@ await page.selectOption('#test-sel', { index: 0 }); await page.check('#test-show
 check((await page.textContent('#d-test-now')).includes('9月の漢字テスト'), '先生: 9月のテストを 見せる状態にもどす');
 await shot('14-teacher-tests');
 
+// ---- 過年度データ: 年度ごとに残し・集計を見る・個人情報をまとめて消す（先生）
+check((await page.textContent('.teacher')).includes('過年度データ'), '先生: 過年度データの区画がある');
+await page.waitForSelector('.atab');
+check((await page.textContent('#arch-tabs')).includes('年度'), '先生: 残した年度のタブ');
+await page.waitForSelector('#arch-body h3');
+check((await page.textContent('#arch-body')).includes('3年1組') && (await page.$$('#arch-body .hard li')).length > 0, '先生: 年度ごとに クラスの まちがいの おおかった字');
+await page.click('#arch-anon');
+await page.waitForFunction(() => document.querySelector('#arch-body').textContent.includes('消してあります'));
+check(true, '先生: 年度の メール・名前をまとめて消せる');
+await page.fill('#arch-year', '2019');
+await page.click('#arch-save');
+await page.waitForFunction(() => document.querySelectorAll('.atab').length === 2);
+check(true, '先生: 「この年度のデータを残す」で年度が増える');
+await shot('15-teacher-arch');
+
 // ---- 書き順を大きく見せる（学年タブ・全画面）
 await page.click('#show');
 check(await page.evaluate(() => { const t = document.querySelector('.grid').getBoundingClientRect().top; return t > 0 && t <= 200; }), '提示: 漢字一覧は最初から最上部');
