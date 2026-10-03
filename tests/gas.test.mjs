@@ -367,3 +367,32 @@ test('児童画面のボタンのオン・オフ: 先生が担当学級だけ保
   assert.deepEqual(Array.from(makeEnv(Object.assign(t.book, { __cache: {} }), K3).api_gates()), []); // 3年2組には届かない
   assert.throws(() => t.api_gates(), /児童のアカウントではありません/);
 });
+
+test('過年度の消去: 名簿の列の順が違っても、見出しで メール・名前を探して消す', () => {
+  const s = base();
+  s.名簿 = [['番号', '名前', 'メール', '学年', '組'], [1, 'あおい', K1, 3, 1], [2, 'はると', K2, 3, 1], [1, 'ゆい', K3, 3, 2]];
+  const env = makeEnv(s, T);
+  env.api_archiveSave('2025');
+  assert.equal(env.api_archiveView('2025').remaining, 4); // 名簿3行＋進捗1行
+  const res = env.api_archiveAnonymize('2025', '2025');
+  assert.equal(res.remaining, 0);
+  const r = env.book['名簿2025'];
+  assert.deepEqual(r.slice(1).map((x) => [x[1], x[2]]), [['', '児童001'], ['', '児童002'], ['', '児童003']]);
+  assert.deepEqual(r.slice(1).map((x) => [x[0], x[3], x[4]]), [[1, 3, 1], [2, 3, 1], [1, 3, 2]]); // ほかの列はそのまま
+  assert.equal(env.book['進捗2025'][1][0], '児童001'); // 進捗（アプリが書く決まった列の順）も同じIDで、名簿との結合を保つ
+  assert.ok(!JSON.stringify(env.book['名簿2025']).includes('@') && !JSON.stringify(env.book['進捗2025']).includes('@'));
+  const v = env.api_archiveView('2025');
+  assert.equal(v.anonymized, true);
+  assert.equal(v.classes.find((c) => c.klass === '3-1').students, 2); // 消したあとも学級の集計が読める
+});
+
+test('過年度の消去: メールの列が見つからなければ、何も書き換えずに止める（消したと記録しない）', () => {
+  const s = base();
+  const env = makeEnv(s, T);
+  env.api_archiveSave('2025');
+  env.book['名簿2025'][0][0] = 'mail'; // 見出しを手で書き換えた
+  const before = JSON.stringify(env.book['名簿2025']);
+  assert.throws(() => env.api_archiveAnonymize('2025', '2025'), /「メール」の列が見つかりません/);
+  assert.equal(JSON.stringify(env.book['名簿2025']), before);
+  assert.equal(env.book['設定'].find((r) => r[0] === 'archLog:2025'), undefined);
+});

@@ -361,11 +361,19 @@ function archAnonRemaining_(year) {
   ['名簿', '進捗'].forEach(function (name) {
     var sh = sheetByName_(name + year);
     if (!sh) return;
-    var m = sh.getLastRow() - 1;
+    var m = sh.getLastRow() - 1, col = archCol_(sh, 'メール', true);
     if (m <= 0) return;
-    sh.getRange(2, 1, m, 1).getValues().forEach(function (r) { if (String(r[0]).indexOf('@') >= 0) n++; });
+    sh.getRange(2, col, m, 1).getValues().forEach(function (r) { if (String(r[0]).indexOf('@') >= 0) n++; });
   });
   return n;
+}
+// 過年度シートの列を見出しの名前で探す（1から数えた列番号。無ければ 0）。
+// 名簿は列の順を入れ替えても読める作りなので（table_）、消去も列の位置で決め打ちしない。
+// メールの列が見つからない時は、消したことにせず止める（消し残しを「消した」と記録しないため）
+function archCol_(sh, name, required) {
+  var w = sh.getLastColumn(), i = w > 0 ? sh.getRange(1, 1, 1, w).getValues()[0].map(function (h) { return String(h).trim(); }).indexOf(name) : -1;
+  if (i < 0 && required) throw new Error(sh.getName() + ' に「' + name + '」の列が見つかりません。1行目の見出しを確認してください');
+  return i + 1;
 }
 function archAnonymized_(year) { return archAnonRemaining_(year) === 0; }
 // 「まとめて消す」の確定語（画面は api_archiveView の anonWord を受け取って出し、サーバーでも照合する）
@@ -457,26 +465,30 @@ function api_archiveAnonymize(year, confirmWord) {
   }
   // 先に全メールの番号を確定して照合表に保存してから、名簿・進捗を書き換える。
   // 書き換えの途中で止まっても、照合表が残っていれば再実行で同じ番号が付く（名簿と進捗の結合がずれない）
-  var vals = null, w = 0, m = 0;
+  // 列は見出しの名前で探す（名簿の列の順が違っても、メール・名前を確実に消す）。メールの列が無ければ何も書き換えずに止める
+  var ec = rs ? archCol_(rs, 'メール', true) : 0, nc = rs ? archCol_(rs, '名前', false) : 0, ec2 = ps ? archCol_(ps, 'メール', true) : 0;
+  var mails = null, names = null, m = 0;
   if (rs) {
     m = rs.getLastRow() - 1;
-    if (m > 0) { w = Math.min(5, rs.getLastColumn()); vals = rs.getRange(2, 1, m, w).getValues(); }
+    if (m > 0) { mails = rs.getRange(2, ec, m, 1).getValues(); if (nc) names = rs.getRange(2, nc, m, 1).getValues(); }
   }
   var vals2 = null, m2 = 0;
   if (ps) {
     m2 = ps.getLastRow() - 1;
-    if (m2 > 0) vals2 = ps.getRange(2, 1, m2, 1).getValues();
+    if (m2 > 0) vals2 = ps.getRange(2, ec2, m2, 1).getValues();
   }
-  if (vals) vals.forEach(function (r) { anon(r[0]); });
+  if (mails) mails.forEach(function (r) { anon(r[0]); });
   if (vals2) vals2.forEach(function (r) { anon(r[0]); });
   if (added.length) ms.getRange(m0 + 1, 1, added.length, 2).setValues(added);
-  if (vals) {
-    vals.forEach(function (r) { if (String(r[0]).indexOf('@') >= 0) { r[0] = anon(r[0]); if (w >= 5) r[4] = ''; } });
-    rs.getRange(2, 1, m, w).setValues(vals);
+  if (mails) {
+    // 名前は、メールが残っている行（まだ消していない行）だけ空にする
+    mails.forEach(function (r, i) { if (String(r[0]).indexOf('@') >= 0) { r[0] = anon(r[0]); if (names) names[i][0] = ''; } });
+    if (names) rs.getRange(2, nc, m, 1).setValues(names);
+    rs.getRange(2, ec, m, 1).setValues(mails);
   }
   if (vals2) {
     vals2.forEach(function (r) { r[0] = anon(r[0]); });
-    ps.getRange(2, 1, m2, 1).setValues(vals2);
+    ps.getRange(2, ec2, m2, 1).setValues(vals2);
   }
   var remaining = archAnonRemaining_(year);
   if (remaining === 0) {
