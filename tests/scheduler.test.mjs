@@ -82,6 +82,23 @@ test('まちがいの多い字: まちがいの割合が高い順（まちがい
   assert.deepEqual(S.missList(p, 'read', 'あいうえお'), ['い', 'あ']);
 });
 
+test('学級のまちがいの多い字: 3人以上・まちがいの人がいる字を割合順（上位・下限・対象の字）', () => {
+  // perChar = {字: [答えた人数, 最後の答えがまちがいの人数]}
+  const pc = { あ: [5, 5], い: [4, 2], う: [3, 1], え: [2, 2], お: [10, 0], か: [6, 1] };
+  const top = S.classMissTop(pc);
+  // えは2人だけ（3人未満）・おはまちがい0 で出ない。割合は あ1.0 > い0.5 > う0.33… > か0.166…
+  assert.deepEqual(top.map((x) => x.c), ['あ', 'い', 'う', 'か']);
+  assert.deepEqual([top[0].s, top[0].b], [5, 5]);
+  // top・minRate・minStudents・chars
+  assert.deepEqual(S.classMissTop(pc, { top: 2 }).map((x) => x.c), ['あ', 'い']);
+  assert.deepEqual(S.classMissTop(pc, { minRate: 0.4, top: 0 }).map((x) => x.c), ['あ', 'い']);
+  assert.deepEqual(S.classMissTop(pc, { minStudents: 4 }).map((x) => x.c), ['あ', 'い', 'か']);
+  assert.deepEqual(S.classMissTop(pc, { chars: 'うかき' }).map((x) => x.c), ['う', 'か']);
+  // 同率はまちがいの人数が多い方、それも同じなら字順で決まる（どの呼び出しでも同じ並び）
+  const tie = S.classMissTop({ さ: [4, 2], き: [4, 2], く: [4, 3] });
+  assert.deepEqual(tie.map((x) => x.c), ['く', 'き', 'さ']);
+});
+
 test('木: 最後まで終えた回の問題数だけ増える', () => {
   const p = S.newProgress();
   assert.equal(S.activity(p), 0);

@@ -164,15 +164,13 @@
   // デモでは この端末だけに年度ごとの集計を持つ。はじめて開いた時に 前年度ぶんを作る
   function demoArchives() { var s = demoSettings(); s.archives = s.archives || {}; return s; }
   function demoClassStats(klass, grade, topSkip) {
-    var st = demoStats(), order = KANZI_DATA.grades[grade].order, missTop = [], learned = 0;
+    var st = demoStats(), order = KANZI_DATA.grades[grade].order, learned = 0;
     for (var i = 0; i < order.length; i++) {
-      var c = order.charAt(i), v = st.perChar[c];
-      if (!v) continue;
-      learned += v[0];
-      if (v[0] >= 3 && v[1] > 0) missTop.push({ c: c, s: v[0], b: v[1], r: v[1] / v[0] });
+      var v = st.perChar[order.charAt(i)];
+      if (v) learned += v[0];
     }
-    missTop.sort(function (a, b) { return b.r - a.r || b.b - a.b; });
-    return { klass: klass, grade: grade, students: 30, learned: learned, missTop: missTop.slice(topSkip, (topSkip || 0) + 10) };
+    var missTop = Sched.classMissTop(st.perChar, { chars: order, top: (topSkip || 0) + 10 }).slice(topSkip || 0);
+    return { klass: klass, grade: grade, students: 30, learned: learned, missTop: missTop };
   }
   function demoArchiveYears() {
     var s = demoArchives(), d = new Date(), prev = String((d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1) - 1);

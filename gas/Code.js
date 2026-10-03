@@ -406,8 +406,8 @@ function api_archiveView(year) {
   try { var l = setting_('archLog:' + year); if (l) anonLog = JSON.parse(l); } catch (e) {}
   return { year: year, anonymized: remaining === 0, remaining: remaining, anonWord: archAnonWord_(year), anonLog: anonLog, classes: Object.keys(classes).map(function (k) {
     var cl = classes[k];
-    var missTop = Object.keys(cl.perChar).map(function (c) { var v = cl.perChar[c]; return { c: c, s: v[0], b: v[1], r: v[0] ? v[1] / v[0] : 0 }; })
-      .filter(function (x) { return x.s >= 3 && x.b > 0; }).sort(function (a, b) { return b.r - a.r || b.b - a.b; }).slice(0, 10);
+    // 学級まちがい判定は Sched.classMissTop（3人以上が答え・最後の答えがまちがいの人がいる字を割合順に上位10件）
+    var missTop = Sched.classMissTop(cl.perChar, { top: 10 });
     return { klass: k, grade: cl.grade, students: cl.students, learned: cl.learned, missTop: missTop };
   }).sort(function (a, b) { return a.grade - b.grade || (a.klass < b.klass ? -1 : 1); }) };
 }

@@ -384,15 +384,10 @@
 
   // ================= 児童: 問題の始め方（どの字で やるか）
   var KIND_NAME = { read: '[読|よ]む', write: '[書|か]く', fk: 'カード（[漢|かん][字|じ] → [読|よ]み）', fy: 'カード（[読|よ]み → [漢|かん][字|じ]）' };
-  // 学級の集計から まちがいのおおい字（先生のおためし用。3人以上が答え、最後の答えがまちがいの人がいる字を割合の高い順）
+  // 学級の集計から まちがいのおおい字（先生のおためし用。Sched.classMissTop＝学級まちがい判定の唯一の実装）
   function classMissList(order) {
-    var perChar = (S.view && S.view.stats && S.view.stats.perChar) || {}, out = [];
-    for (var i = 0; i < order.length; i++) {
-      var c = order.charAt(i), v = perChar[c];
-      if (v && v[0] >= 3 && v[1] > 0) out.push({ c: c, r: v[1] / v[0], m: v[1] });
-    }
-    out.sort(function (a, b) { return (b.r - a.r) || (b.m - a.m); });
-    return out.map(function (x) { return x.c; });
+    var perChar = (S.view && S.view.stats && S.view.stats.perChar) || {};
+    return Sched.classMissTop(perChar, { chars: order, top: 0 }).map(function (x) { return x.c; });
   }
   function sources(kind) {
     var g = S.grade, order = orderOf(g), n = SIZE[kind], tbl = kind === 'write' ? 'write' : 'read';
@@ -732,9 +727,8 @@
               return '<tr' + (idle ? ' class="idle"' : '') + '><td>' + esc(k.no) + '</td><td>' + esc(k.name) + '</td><td>' + (idle ? '▲ ' : '') + esc(dateLabel(k.last)) + '</td>' +
                 '<td>' + k.sessions + '（' + k.items + '）</td><td>' + k.learned + '</td><td class="kmiss">' + esc((k.miss || []).join(' ')) + '</td></tr>';
             }).join('') + '</tbody></table></div><p class="hint">▲＝7日以上 使っていない</p>' : '<p>名簿に この学級の子どもが いません（「名簿」シートの 学年・組 を確認してください）。</p>') + '</section>';
-        var hard = Object.keys(st.perChar).filter(function (c) { return D.kanji[c] && D.kanji[c].g === tgrade; })
-          .map(function (c) { var v = st.perChar[c]; return { c: c, s: v[0], b: v[1], r: v[0] ? v[1] / v[0] : 0 }; })
-          .filter(function (x) { return x.s >= 3 && x.b > 0; }).sort(function (a, b) { return b.r - a.r; }).slice(0, 20);
+        // 学級で まちがいのおおい字（その学年の字。上位20字）
+        var hard = Sched.classMissTop(st.perChar, { chars: Object.keys(st.perChar).filter(function (c) { return D.kanji[c] && D.kanji[c].g === tgrade; }), top: 20 });
         var gradeTabs = grades.length > 1 ? '<nav class="tabs t" role="tablist">' + grades.map(function (g) { return '<button role="tab" class="ttab" data-g="' + g + '" aria-selected="' + (g === tgrade) + '">' + g + '年</button>'; }).join('') + '</nav>' : '';
         // 設定は開閉式（押すと開く）。見出しの右に いまの値を出すので、開かなくても状態がわかる。開いた・閉じたは画面を描き直しても保つ
         function fold(id, title, now, body) {
@@ -790,7 +784,7 @@
         // 漢字テストの範囲: テストごとに管理。編集・見せる切替とも押すたびに保存（自動保存）
         // 学級で まちがいの おおい字（よむ: 3人以上が答え、最後の答えがまちがいの人が3割以上）→ あかい わく
         var fails = {};
-        Object.keys(st.perChar).forEach(function (c) { var v = st.perChar[c]; if (v[0] >= 3 && v[1] * 10 >= v[0] * 3) fails[c] = true; });
+        Sched.classMissTop(st.perChar, { minRate: 0.3, top: 0 }).forEach(function (x) { fails[x.c] = true; });
         var testCur = (S.testCur && tests.list.some(function (t) { return t.id === S.testCur; }) ? S.testCur : null) || tests.active || (tests.list[0] && tests.list[0].id) || null;
         function curTest() { return tests.list.filter(function (t) { return t.id === testCur; })[0] || null; }
         function paintTest() {

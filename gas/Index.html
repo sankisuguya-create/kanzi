@@ -579,7 +579,8 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     return out;
   }
 
-  // まちがいの多い字: 答えたことがあり、まちがいが1回以上ある字を、まちがいの割合が高い順に
+  // まちがいの多い字（児童個人）: 答えたことがあり、まちがいが1回以上ある字を、累積まちがい率 e[4]/e[2] の高い順に
+  // 「まちがいの多い字」は2系統ある（design.md §13）。こちらは児童個人の累積まちがい率。学級の集計は classMissTop
   function missList(p, kind, order) {
     var tbl = kind === 'write' ? p.write : p.read, out = [];
     for (var i = 0; i < order.length; i++) {
@@ -588,6 +589,27 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     }
     out.sort(function (a, b) { return (b.r - a.r) || (b.m - a.m); });
     return out.map(function (x) { return x.c; });
+  }
+
+  // まちがいの多い字（学級の集計。先生・おためし・過年度データで共通の唯一の実装）:
+  // perChar = { 字: [答えた人数, 最後の答えがまちがい（よむ箱1）の人数] } → 割合の高い順の上位。
+  // 児童個人の missList（累積まちがい率）とは別の指標なので、同じ「まちがいの多い字」でも結果は違うことに注意
+  // opts: { minStudents=3 （答えた人数の下限）, minRate=0 （割合の下限）, chars=対象の字（文字列|配列。無ければ全部）, top=10 （0なら全部） }
+  function classMissTop(perChar, opts) {
+    opts = opts || {};
+    var minS = opts.minStudents === undefined ? 3 : opts.minStudents;
+    var minR = opts.minRate || 0, out = [], i, c;
+    var chars = opts.chars === undefined || opts.chars === null ? null : (typeof opts.chars === 'string' ? Array.from(opts.chars) : opts.chars);
+    function add(ch) {
+      var v = perChar[ch];
+      if (v && v[0] >= minS && v[1] > 0 && v[1] / v[0] >= minR) out.push({ c: ch, s: v[0], b: v[1], r: v[1] / v[0] });
+    }
+    if (chars) for (i = 0; i < chars.length; i++) add(chars[i]);
+    else for (c in perChar) add(c);
+    // 割合 → まちがいの人数 → 字（決定的な並びにするため、同率は人数が多い方・さらに字順で決める）
+    out.sort(function (a, b) { return (b.r - a.r) || (b.b - a.b) || (a.c < b.c ? -1 : a.c > b.c ? 1 : 0); });
+    var top = opts.top === undefined ? 10 : opts.top;
+    return top ? out.slice(0, top) : out;
   }
 
   // 全モードの学習量。木の成長は forestActivity で別に計算する。
@@ -816,7 +838,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   var api = {
     INTERVALS: INTERVALS, LIMIT: LIMIT, WRITE_UNLOCK_BOX: WRITE_UNLOCK_BOX, MAX_BOX: MAX_BOX,
     day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite, undo: undo,
-    dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList,
+    dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList, classMissTop: classMissTop,
     FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, forestGrowth: forestGrowth, forestActivity: forestActivity, forestRegionLog: forestRegionLog,
     compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check,
@@ -993,15 +1015,13 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   // デモでは この端末だけに年度ごとの集計を持つ。はじめて開いた時に 前年度ぶんを作る
   function demoArchives() { var s = demoSettings(); s.archives = s.archives || {}; return s; }
   function demoClassStats(klass, grade, topSkip) {
-    var st = demoStats(), order = KANZI_DATA.grades[grade].order, missTop = [], learned = 0;
+    var st = demoStats(), order = KANZI_DATA.grades[grade].order, learned = 0;
     for (var i = 0; i < order.length; i++) {
-      var c = order.charAt(i), v = st.perChar[c];
-      if (!v) continue;
-      learned += v[0];
-      if (v[0] >= 3 && v[1] > 0) missTop.push({ c: c, s: v[0], b: v[1], r: v[1] / v[0] });
+      var v = st.perChar[order.charAt(i)];
+      if (v) learned += v[0];
     }
-    missTop.sort(function (a, b) { return b.r - a.r || b.b - a.b; });
-    return { klass: klass, grade: grade, students: 30, learned: learned, missTop: missTop.slice(topSkip, (topSkip || 0) + 10) };
+    var missTop = Sched.classMissTop(st.perChar, { chars: order, top: (topSkip || 0) + 10 }).slice(topSkip || 0);
+    return { klass: klass, grade: grade, students: 30, learned: learned, missTop: missTop };
   }
   function demoArchiveYears() {
     var s = demoArchives(), d = new Date(), prev = String((d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1) - 1);
@@ -2452,15 +2472,10 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
 
   // ================= 児童: 問題の始め方（どの字で やるか）
   var KIND_NAME = { read: '[読|よ]む', write: '[書|か]く', fk: 'カード（[漢|かん][字|じ] → [読|よ]み）', fy: 'カード（[読|よ]み → [漢|かん][字|じ]）' };
-  // 学級の集計から まちがいのおおい字（先生のおためし用。3人以上が答え、最後の答えがまちがいの人がいる字を割合の高い順）
+  // 学級の集計から まちがいのおおい字（先生のおためし用。Sched.classMissTop＝学級まちがい判定の唯一の実装）
   function classMissList(order) {
-    var perChar = (S.view && S.view.stats && S.view.stats.perChar) || {}, out = [];
-    for (var i = 0; i < order.length; i++) {
-      var c = order.charAt(i), v = perChar[c];
-      if (v && v[0] >= 3 && v[1] > 0) out.push({ c: c, r: v[1] / v[0], m: v[1] });
-    }
-    out.sort(function (a, b) { return (b.r - a.r) || (b.m - a.m); });
-    return out.map(function (x) { return x.c; });
+    var perChar = (S.view && S.view.stats && S.view.stats.perChar) || {};
+    return Sched.classMissTop(perChar, { chars: order, top: 0 }).map(function (x) { return x.c; });
   }
   function sources(kind) {
     var g = S.grade, order = orderOf(g), n = SIZE[kind], tbl = kind === 'write' ? 'write' : 'read';
@@ -2800,9 +2815,8 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
               return '<tr' + (idle ? ' class="idle"' : '') + '><td>' + esc(k.no) + '</td><td>' + esc(k.name) + '</td><td>' + (idle ? '▲ ' : '') + esc(dateLabel(k.last)) + '</td>' +
                 '<td>' + k.sessions + '（' + k.items + '）</td><td>' + k.learned + '</td><td class="kmiss">' + esc((k.miss || []).join(' ')) + '</td></tr>';
             }).join('') + '</tbody></table></div><p class="hint">▲＝7日以上 使っていない</p>' : '<p>名簿に この学級の子どもが いません（「名簿」シートの 学年・組 を確認してください）。</p>') + '</section>';
-        var hard = Object.keys(st.perChar).filter(function (c) { return D.kanji[c] && D.kanji[c].g === tgrade; })
-          .map(function (c) { var v = st.perChar[c]; return { c: c, s: v[0], b: v[1], r: v[0] ? v[1] / v[0] : 0 }; })
-          .filter(function (x) { return x.s >= 3 && x.b > 0; }).sort(function (a, b) { return b.r - a.r; }).slice(0, 20);
+        // 学級で まちがいのおおい字（その学年の字。上位20字）
+        var hard = Sched.classMissTop(st.perChar, { chars: Object.keys(st.perChar).filter(function (c) { return D.kanji[c] && D.kanji[c].g === tgrade; }), top: 20 });
         var gradeTabs = grades.length > 1 ? '<nav class="tabs t" role="tablist">' + grades.map(function (g) { return '<button role="tab" class="ttab" data-g="' + g + '" aria-selected="' + (g === tgrade) + '">' + g + '年</button>'; }).join('') + '</nav>' : '';
         // 設定は開閉式（押すと開く）。見出しの右に いまの値を出すので、開かなくても状態がわかる。開いた・閉じたは画面を描き直しても保つ
         function fold(id, title, now, body) {
@@ -2858,7 +2872,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
         // 漢字テストの範囲: テストごとに管理。編集・見せる切替とも押すたびに保存（自動保存）
         // 学級で まちがいの おおい字（よむ: 3人以上が答え、最後の答えがまちがいの人が3割以上）→ あかい わく
         var fails = {};
-        Object.keys(st.perChar).forEach(function (c) { var v = st.perChar[c]; if (v[0] >= 3 && v[1] * 10 >= v[0] * 3) fails[c] = true; });
+        Sched.classMissTop(st.perChar, { minRate: 0.3, top: 0 }).forEach(function (x) { fails[x.c] = true; });
         var testCur = (S.testCur && tests.list.some(function (t) { return t.id === S.testCur; }) ? S.testCur : null) || tests.active || (tests.list[0] && tests.list[0].id) || null;
         function curTest() { return tests.list.filter(function (t) { return t.id === testCur; })[0] || null; }
         function paintTest() {
