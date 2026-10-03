@@ -653,22 +653,39 @@
     el.querySelectorAll('.atab').forEach(function (b) { b.addEventListener('click', function () { showArchYear(b.dataset.y); }); });
     if (years.length) showArchYear(years[years.length - 1].year);
   }
+  // 消した記録 { year, at, count, by } を1行で読める文にする（先生だけが見るのでプレーンな日本語）
+  function anonLogText(l) {
+    var d = new Date(l.at);
+    var when = isNaN(d) ? String(l.at) : d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    return when + '・' + l.count + '人分・' + l.by;
+  }
   function showArchYear(year) {
     var body = $('#arch-body');
     if (!body) return;
     body.parentNode.querySelectorAll('.atab').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.y === String(year))); });
     body.innerHTML = '<p class="hint">よみこみ中…</p>';
     Platform.archiveView(year).then(function (v) {
+      // 「まとめて消す」は消す年度名の入力で確定する（入力する語はサーバーが返す anonWord）。消すと もどせないため注意色で出す
+      var anon = v.anonymized
+        ? '<span class="hint">' + year + '年度の メール・名前は 消してあります。' + (v.anonLog ? ' 消した記録: ' + esc(anonLogText(v.anonLog)) : '') + '</span>'
+        : '<label for="arch-word">「' + esc(v.anonWord) + '」と 入力してください</label> <input id="arch-word" size="10" autocomplete="off"> ' +
+          '<button id="arch-anon" class="btn-danger" disabled>' + year + '年度の メール・名前をまとめて消す</button>' +
+          (v.remaining ? ' <span class="hint">前回は 途中で止まりました（メールが残る行: ' + v.remaining + '）。続きを消せます。</span>' : '') +
+          ' <span class="hint">消すと もどせません（学年・組・番号・答えの記録は残ります）</span>';
       body.innerHTML = v.classes.map(function (cl) {
         return '<h3>' + esc(klassLabel(cl.klass)) + '（' + cl.students + '人・おぼえた字 ' + cl.learned + '字）</h3>' +
           (cl.missTop.length ? '<ol class="hard">' + cl.missTop.map(function (x) { return '<li><span class="hc">' + esc(x.c) + '</span>' + x.s + '人中 ' + x.b + '人（' + Math.round(x.r * 100) + '%）</li>'; }).join('') + '</ol>' : '<p>まちがいのデータは ありません。</p>');
       }).join('') +
-      '<p>' + (v.anonymized ? '<span class="hint">' + year + '年度の メール・名前は 消してあります。</span>' : '<button id="arch-anon">' + year + '年度の メール・名前をまとめて消す</button>') + ' <span id="arch-msg2" class="hint" aria-live="polite"></span></p>';
-      var btn = $('#arch-anon');
-      if (btn) btn.addEventListener('click', function () {
-        $('#arch-msg2').textContent = '消しています…';
-        Platform.archiveAnonymize(year).then(function () { showArchYear(year); }, function () { $('#arch-msg2').textContent = '消せませんでした'; });
-      });
+      '<p>' + anon + ' <span id="arch-msg2" class="hint" aria-live="polite"></span></p>' +
+      '<p class="hint">なお、スプレッドシートの版履歴（変更履歴）には 消す前の値が残ります。</p>';
+      var btn = $('#arch-anon'), wi = $('#arch-word');
+      if (btn && wi) {
+        wi.addEventListener('input', function () { btn.disabled = wi.value.trim() !== String(v.anonWord); });
+        btn.addEventListener('click', function () {
+          $('#arch-msg2').textContent = '消しています…';
+          Platform.archiveAnonymize(year, wi.value.trim()).then(function () { showArchYear(year); }, function () { $('#arch-msg2').textContent = '消せませんでした'; });
+        });
+      }
     }, function (e) { body.innerHTML = '<p class="hint">' + esc((e && e.message) || 'よめませんでした') + '</p>'; });
   }
   // 先生画面のデータは学級ごとに1回の通信で読み、学年タブの切り替えでは読み直さない（reuse）。

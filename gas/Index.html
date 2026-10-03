@@ -105,6 +105,9 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .judge button { min-height: 92px; font-size: 30px; font-weight: 700; border-radius: 18px; letter-spacing: .1em; }
 .btn-mada { background: var(--card); border: 3px solid var(--ink); }
 .btn-ok { background: var(--solid-on); border: 3px solid var(--solid-on); color: #fff; }
+/* もどせない操作（過年度のまとめて消す）: 注意色の枠と文字だけ。主操作の強調（塗り）はしない */
+.btn-danger { background: var(--card); border: 3px solid var(--ink-alert); color: var(--ink-alert); font-weight: 700; min-height: 52px; padding: 4px 14px; font-size: 18px; border-radius: 10px; }
+.btn-danger[disabled] { opacity: .45; cursor: default; }
 .speak { min-height: 56px; padding: 0 22px; font-size: 20px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; }
 
 /* ---- 書字パッド */
@@ -350,6 +353,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .tmgr { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 8px; }
 .tmgr select { font-size: 18px; min-height: 44px; max-width: 16em; }
 .teacher input#test-label { font-size: 18px; min-height: 44px; padding: 0 10px; width: min(100%, 360px); }
+.teacher input#arch-word { font-size: 18px; min-height: 44px; padding: 0 10px; width: 7em; }
 .picked .tlist { font-size: 26px; letter-spacing: .15em; font-family: var(--font-kanji); }
 
 :root { --forest-preview:#3F7D3A; --forest-read:#0F5EA8; --forest-write:#C86A00; --forest-card-k:#6E4310; }
@@ -985,7 +989,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   function archiveYears() { return isGas ? gas('api_archiveYears') : Promise.resolve(demoArchiveYears()); }
   function archiveView(year) { return isGas ? gas('api_archiveView', year) : Promise.resolve(demoArchive(year)); }
   function archiveSave(year) { return isGas ? gas('api_archiveSave', year) : demoArchiveSave(year); }
-  function archiveAnonymize(year) { return isGas ? gas('api_archiveAnonymize', year) : demoArchiveAnonymize(year); }
+  function archiveAnonymize(year, word) { return isGas ? gas('api_archiveAnonymize', year, word) : demoArchiveAnonymize(year, word); }
   // デモでは この端末だけに年度ごとの集計を持つ。はじめて開いた時に 前年度ぶんを作る
   function demoArchives() { var s = demoSettings(); s.archives = s.archives || {}; return s; }
   function demoClassStats(klass, grade, topSkip) {
@@ -1007,7 +1011,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   function demoArchive(year) {
     var a = demoArchives().archives[year];
     if (!a) throw new Error(year + '年度のデータは ありません');
-    return { year: year, anonymized: !!a.anonymized, classes: a.classes };
+    return { year: year, anonymized: !!a.anonymized, remaining: a.anonymized ? 0 : (a.remaining || 0), anonWord: String(year), anonLog: a.anonLog || null, classes: a.classes };
   }
   function demoArchiveSave(year) {
     var s = demoArchives();
@@ -1017,10 +1021,13 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     saveDemo(s);
     return Promise.resolve(year);
   }
-  function demoArchiveAnonymize(year) {
+  function demoArchiveAnonymize(year, word) {
     var s = demoArchives(), a = s.archives[year];
     if (!a) return Promise.reject(new Error(year + '年度のデータは ありません'));
-    a.anonymized = true; saveDemo(s);
+    if (String(word) !== String(year)) return Promise.reject(new Error('消す年度の名前が違います'));
+    a.anonymized = true; a.remaining = 0;
+    a.anonLog = { year: String(year), at: new Date().toISOString(), count: a.classes.reduce(function (n, c) { return n + c.students; }, 0), by: 'demo' };
+    saveDemo(s);
     return Promise.resolve(true);
   }
 
@@ -2714,22 +2721,39 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     el.querySelectorAll('.atab').forEach(function (b) { b.addEventListener('click', function () { showArchYear(b.dataset.y); }); });
     if (years.length) showArchYear(years[years.length - 1].year);
   }
+  // 消した記録 { year, at, count, by } を1行で読める文にする（先生だけが見るのでプレーンな日本語）
+  function anonLogText(l) {
+    var d = new Date(l.at);
+    var when = isNaN(d) ? String(l.at) : d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    return when + '・' + l.count + '人分・' + l.by;
+  }
   function showArchYear(year) {
     var body = $('#arch-body');
     if (!body) return;
     body.parentNode.querySelectorAll('.atab').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.y === String(year))); });
     body.innerHTML = '<p class="hint">よみこみ中…</p>';
     Platform.archiveView(year).then(function (v) {
+      // 「まとめて消す」は消す年度名の入力で確定する（入力する語はサーバーが返す anonWord）。消すと もどせないため注意色で出す
+      var anon = v.anonymized
+        ? '<span class="hint">' + year + '年度の メール・名前は 消してあります。' + (v.anonLog ? ' 消した記録: ' + esc(anonLogText(v.anonLog)) : '') + '</span>'
+        : '<label for="arch-word">「' + esc(v.anonWord) + '」と 入力してください</label> <input id="arch-word" size="10" autocomplete="off"> ' +
+          '<button id="arch-anon" class="btn-danger" disabled>' + year + '年度の メール・名前をまとめて消す</button>' +
+          (v.remaining ? ' <span class="hint">前回は 途中で止まりました（メールが残る行: ' + v.remaining + '）。続きを消せます。</span>' : '') +
+          ' <span class="hint">消すと もどせません（学年・組・番号・答えの記録は残ります）</span>';
       body.innerHTML = v.classes.map(function (cl) {
         return '<h3>' + esc(klassLabel(cl.klass)) + '（' + cl.students + '人・おぼえた字 ' + cl.learned + '字）</h3>' +
           (cl.missTop.length ? '<ol class="hard">' + cl.missTop.map(function (x) { return '<li><span class="hc">' + esc(x.c) + '</span>' + x.s + '人中 ' + x.b + '人（' + Math.round(x.r * 100) + '%）</li>'; }).join('') + '</ol>' : '<p>まちがいのデータは ありません。</p>');
       }).join('') +
-      '<p>' + (v.anonymized ? '<span class="hint">' + year + '年度の メール・名前は 消してあります。</span>' : '<button id="arch-anon">' + year + '年度の メール・名前をまとめて消す</button>') + ' <span id="arch-msg2" class="hint" aria-live="polite"></span></p>';
-      var btn = $('#arch-anon');
-      if (btn) btn.addEventListener('click', function () {
-        $('#arch-msg2').textContent = '消しています…';
-        Platform.archiveAnonymize(year).then(function () { showArchYear(year); }, function () { $('#arch-msg2').textContent = '消せませんでした'; });
-      });
+      '<p>' + anon + ' <span id="arch-msg2" class="hint" aria-live="polite"></span></p>' +
+      '<p class="hint">なお、スプレッドシートの版履歴（変更履歴）には 消す前の値が残ります。</p>';
+      var btn = $('#arch-anon'), wi = $('#arch-word');
+      if (btn && wi) {
+        wi.addEventListener('input', function () { btn.disabled = wi.value.trim() !== String(v.anonWord); });
+        btn.addEventListener('click', function () {
+          $('#arch-msg2').textContent = '消しています…';
+          Platform.archiveAnonymize(year, wi.value.trim()).then(function () { showArchYear(year); }, function () { $('#arch-msg2').textContent = '消せませんでした'; });
+        });
+      }
     }, function (e) { body.innerHTML = '<p class="hint">' + esc((e && e.message) || 'よめませんでした') + '</p>'; });
   }
   // 先生画面のデータは学級ごとに1回の通信で読み、学年タブの切り替えでは読み直さない（reuse）。

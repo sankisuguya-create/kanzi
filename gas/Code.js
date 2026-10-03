@@ -331,11 +331,22 @@ function archSheets_() {
   });
   return out;
 }
-// 過年度の名簿は個人情報を消したか（先頭行のメール欄に@が無ければ消去済みとみなす）
-function archAnonymized_(year) {
-  var sh = sheetByName_('名簿' + year);
-  return !sh || sh.getLastRow() < 2 || String(sh.getRange(2, 1).getValue()).indexOf('@') < 0;
+// 過年度データでメールが残っている行の数（名簿・進捗の両方のA列）。0 なら消去済み。
+// 途中で止まった時は 残っている行数が返るので、画面で続きを実行できる（済んだ行はメールが無いので自然に飛ばされる）
+function archAnonRemaining_(year) {
+  var n = 0;
+  ['名簿', '進捗'].forEach(function (name) {
+    var sh = sheetByName_(name + year);
+    if (!sh) return;
+    var m = sh.getLastRow() - 1;
+    if (m <= 0) return;
+    sh.getRange(2, 1, m, 1).getValues().forEach(function (r) { if (String(r[0]).indexOf('@') >= 0) n++; });
+  });
+  return n;
 }
+function archAnonymized_(year) { return archAnonRemaining_(year) === 0; }
+// 「まとめて消す」の確定語（画面は api_archiveView の anonWord を受け取って出し、サーバーでも照合する）
+function archAnonWord_(year) { return String(year); }
 // 見出しの名前で列を探して読む（過年度のシート用。シートを新しく作らない読み取り専用）
 function rowsOf_(sh, header) {
   var n = sh.getLastRow() - 1, w = sh.getLastColumn();
@@ -369,11 +380,15 @@ function api_archiveView(year) {
   year = archYear_(year);
   var rs = sheetByName_('名簿' + year), ps = sheetByName_('進捗' + year);
   if (!rs) throw new Error(year + '年度のデータは ありません');
-  var roster = rowsOf_(rs, ['メール', '学年', '組']).map(function (o) {
+  var rosterRaw = rowsOf_(rs, ['メール', '学年', '組']);
+  var roster = rosterRaw.map(function (o) {
     return { email: String(o['メール']).toLowerCase(), klass: klassKey_(Number(o['学年']), String(o['組'])), grade: Number(o['学年']) || 0 };
   }).filter(function (x) { return x.email && x.klass; });
   var rows = {};
   if (ps) { var m = ps.getLastRow() - 1; if (m > 0) ps.getRange(2, 1, m, 4).getValues().forEach(function (r) { rows[String(r[0]).toLowerCase()] = r; }); }
+  // メールが残っている行数（名簿・進捗の両方）。読んだデータから数えるのでシートの読み直しはしない
+  var remaining = rosterRaw.filter(function (o) { return String(o['メール']).indexOf('@') >= 0; }).length +
+    Object.keys(rows).filter(function (k) { return k.indexOf('@') >= 0; }).length;
   var classes = {};
   roster.forEach(function (k) {
     var cl = classes[k.klass] || (classes[k.klass] = { grade: k.grade, students: 0, learned: 0, perChar: {} });
@@ -387,26 +402,41 @@ function api_archiveView(year) {
       if (e[2] > 0) { var v = cl.perChar[c] || (cl.perChar[c] = [0, 0]); v[0]++; if (e[0] === 1) v[1]++; }
     }
   });
-  return { year: year, anonymized: archAnonymized_(year), classes: Object.keys(classes).map(function (k) {
+  var anonLog = null;
+  try { var l = setting_('archLog:' + year); if (l) anonLog = JSON.parse(l); } catch (e) {}
+  return { year: year, anonymized: remaining === 0, remaining: remaining, anonWord: archAnonWord_(year), anonLog: anonLog, classes: Object.keys(classes).map(function (k) {
     var cl = classes[k];
     var missTop = Object.keys(cl.perChar).map(function (c) { var v = cl.perChar[c]; return { c: c, s: v[0], b: v[1], r: v[0] ? v[1] / v[0] : 0 }; })
       .filter(function (x) { return x.s >= 3 && x.b > 0; }).sort(function (a, b) { return b.r - a.r || b.b - a.b; }).slice(0, 10);
     return { klass: k, grade: cl.grade, students: cl.students, learned: cl.learned, missTop: missTop };
   }).sort(function (a, b) { return a.grade - b.grade || (a.klass < b.klass ? -1 : 1); }) };
 }
-// 過年度の個人情報をまとめて消す: メール → 児童001・002…、名前 → 空。学年・組・番号・答えの記録は残るので集計は見られる
-function api_archiveAnonymize(year) {
-  requireTeacher_();
+// 過年度の個人情報をまとめて消す: メール → 児童001・002…、名前 → 空。学年・組・番号・答えの記録は残るので集計は見られる。
+// 誤操作を防ぐため、画面が受け取った確定語（anonWord＝年度名）を confirmWord としてサーバーでも照合する。
+// メール→番号の対応は一時シート「照合YYYY」に残し、途中で止まった時の再実行は同じ番号で続きを消す（全部消えたら対応表ごと消す。
+// 対応表にはメールが残るので、消し残しには出来ない）。消し終わったら実行記録を設定シートに残す（個人情報は入れない）
+function api_archiveAnonymize(year, confirmWord) {
+  var me = requireTeacher_();
   year = archYear_(year);
+  if (String(confirmWord || '') !== archAnonWord_(year)) throw new Error('消す年度の名前が違います。画面の案内どおりに入れてください');
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var rs = sheetByName_('名簿' + year), ps = sheetByName_('進捗' + year);
   if (!rs && !ps) throw new Error(year + '年度のデータは ありません');
-  var ids = {}, n = 0;
-  function anon(v) { v = String(v); if (!v) return v; if (!(v in ids)) { n++; ids[v] = '児童' + ('00' + n).slice(-3); } return ids[v]; }
+  var mapName = '照合' + year, ms = sheetByName_(mapName) || ss.insertSheet(mapName);
+  var ids = {}, m0 = ms.getLastRow(), added = [];
+  if (m0 > 0) ms.getRange(1, 1, m0, 2).getValues().forEach(function (r) { var k = String(r[0]); if (k && !(k in ids)) ids[k] = String(r[1]); });
+  var n = Object.keys(ids).length;
+  function anon(v) {
+    v = String(v);
+    if (v.indexOf('@') < 0) return v; // 消えた行（児童NNN）や空は飛ばす — 再実行で自然に続きになる
+    if (!(v in ids)) { n++; ids[v] = '児童' + ('00' + n).slice(-3); added.push([v, ids[v]]); }
+    return ids[v];
+  }
   if (rs) {
     var m = rs.getLastRow() - 1;
     if (m > 0) {
       var w = Math.min(5, rs.getLastColumn()), vals = rs.getRange(2, 1, m, w).getValues();
-      vals.forEach(function (r) { r[0] = anon(r[0]); if (w >= 5) r[4] = ''; });
+      vals.forEach(function (r) { if (String(r[0]).indexOf('@') >= 0) { r[0] = anon(r[0]); if (w >= 5) r[4] = ''; } });
       rs.getRange(2, 1, m, w).setValues(vals);
     }
   }
@@ -418,7 +448,13 @@ function api_archiveAnonymize(year) {
       ps.getRange(2, 1, m2, 1).setValues(vals2);
     }
   }
-  return true;
+  if (added.length) ms.getRange(m0 + 1, 1, added.length, 2).setValues(added);
+  var remaining = archAnonRemaining_(year);
+  if (remaining === 0) {
+    ss.deleteSheet(ms); // 対応表は個人情報を含むため残せない
+    setSetting_('archLog:' + year, JSON.stringify({ year: year, at: new Date().toISOString(), count: n, by: me.email }));
+  }
+  return { remaining: remaining };
 }
 
 // 児童画面のボタンのオン・オフ（設定のキー gates:<学級>。オフにしたボタンのキーを「,」で並べる）。

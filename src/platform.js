@@ -160,7 +160,7 @@
   function archiveYears() { return isGas ? gas('api_archiveYears') : Promise.resolve(demoArchiveYears()); }
   function archiveView(year) { return isGas ? gas('api_archiveView', year) : Promise.resolve(demoArchive(year)); }
   function archiveSave(year) { return isGas ? gas('api_archiveSave', year) : demoArchiveSave(year); }
-  function archiveAnonymize(year) { return isGas ? gas('api_archiveAnonymize', year) : demoArchiveAnonymize(year); }
+  function archiveAnonymize(year, word) { return isGas ? gas('api_archiveAnonymize', year, word) : demoArchiveAnonymize(year, word); }
   // デモでは この端末だけに年度ごとの集計を持つ。はじめて開いた時に 前年度ぶんを作る
   function demoArchives() { var s = demoSettings(); s.archives = s.archives || {}; return s; }
   function demoClassStats(klass, grade, topSkip) {
@@ -182,7 +182,7 @@
   function demoArchive(year) {
     var a = demoArchives().archives[year];
     if (!a) throw new Error(year + '年度のデータは ありません');
-    return { year: year, anonymized: !!a.anonymized, classes: a.classes };
+    return { year: year, anonymized: !!a.anonymized, remaining: a.anonymized ? 0 : (a.remaining || 0), anonWord: String(year), anonLog: a.anonLog || null, classes: a.classes };
   }
   function demoArchiveSave(year) {
     var s = demoArchives();
@@ -192,10 +192,13 @@
     saveDemo(s);
     return Promise.resolve(year);
   }
-  function demoArchiveAnonymize(year) {
+  function demoArchiveAnonymize(year, word) {
     var s = demoArchives(), a = s.archives[year];
     if (!a) return Promise.reject(new Error(year + '年度のデータは ありません'));
-    a.anonymized = true; saveDemo(s);
+    if (String(word) !== String(year)) return Promise.reject(new Error('消す年度の名前が違います'));
+    a.anonymized = true; a.remaining = 0;
+    a.anonLog = { year: String(year), at: new Date().toISOString(), count: a.classes.reduce(function (n, c) { return n + c.students; }, 0), by: 'demo' };
+    saveDemo(s);
     return Promise.resolve(true);
   }
 

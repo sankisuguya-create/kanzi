@@ -101,6 +101,9 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .judge button { min-height: 92px; font-size: 30px; font-weight: 700; border-radius: 18px; letter-spacing: .1em; }
 .btn-mada { background: var(--card); border: 3px solid var(--ink); }
 .btn-ok { background: var(--solid-on); border: 3px solid var(--solid-on); color: #fff; }
+/* もどせない操作（過年度のまとめて消す）: 注意色の枠と文字だけ。主操作の強調（塗り）はしない */
+.btn-danger { background: var(--card); border: 3px solid var(--ink-alert); color: var(--ink-alert); font-weight: 700; min-height: 52px; padding: 4px 14px; font-size: 18px; border-radius: 10px; }
+.btn-danger[disabled] { opacity: .45; cursor: default; }
 .speak { min-height: 56px; padding: 0 22px; font-size: 20px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; }
 
 /* ---- 書字パッド */
@@ -346,6 +349,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 .tmgr { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 8px; }
 .tmgr select { font-size: 18px; min-height: 44px; max-width: 16em; }
 .teacher input#test-label { font-size: 18px; min-height: 44px; padding: 0 10px; width: min(100%, 360px); }
+.teacher input#arch-word { font-size: 18px; min-height: 44px; padding: 0 10px; width: 7em; }
 .picked .tlist { font-size: 26px; letter-spacing: .15em; font-family: var(--font-kanji); }
 
 :root { --forest-preview:#3F7D3A; --forest-read:#0F5EA8; --forest-write:#C86A00; --forest-card-k:#6E4310; }
