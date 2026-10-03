@@ -164,11 +164,13 @@
   // デモでは この端末だけに年度ごとの集計を持つ。はじめて開いた時に 前年度ぶんを作る
   function demoArchives() { var s = demoSettings(); s.archives = s.archives || {}; return s; }
   function demoClassStats(klass, grade, topSkip) {
-    var st = demoStats(), order = KANZI_DATA.grades[grade].order, learned = 0;
-    for (var i = 0; i < order.length; i++) {
-      var v = st.perChar[order.charAt(i)];
-      if (v) learned += v[0];
-    }
+    var st = demoStats(), order = KANZI_DATA.grades[grade].order;
+    // 「おぼえた字」は児童×字の合計（よむが箱3以上の字の数。gas/Code.js の learned と同じ意味）。
+    // perChar の v[0] は「その字を答えた人数」で意味が違うので、別に学級ごとの数として生成する
+    var seed = 13, learned = 0, i;
+    for (i = 0; i < klass.length; i++) seed = seed * 31 + klass.charCodeAt(i);
+    function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    for (i = 0; i < 30; i++) learned += Math.floor(rnd() * order.length * 0.6);
     var missTop = Sched.classMissTop(st.perChar, { chars: order, top: (topSkip || 0) + 10 }).slice(topSkip || 0);
     return { klass: klass, grade: grade, students: 30, learned: learned, missTop: missTop };
   }
