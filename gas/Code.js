@@ -450,6 +450,16 @@ function api_archiveAnonymize(year, confirmWord) {
   var me = requireTeacher_();
   year = archYear_(year);
   if (String(confirmWord || '') !== archAnonWord_(year)) throw new Error('消す年度の名前が違います。画面の案内どおりに入れてください');
+  // 同じ年度を同時に消さない（後続が空の照合表を読んで別番号を付け直すと、名簿と進捗の結合が壊れる）
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    return anonymize_(year, me);
+  } finally {
+    lock.releaseLock();
+  }
+}
+function anonymize_(year, me) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var rs = sheetByName_('名簿' + year), ps = sheetByName_('進捗' + year);
   if (!rs && !ps) throw new Error(year + '年度のデータは ありません');
