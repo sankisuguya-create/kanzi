@@ -2075,7 +2075,8 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   var app = document.getElementById('app');
   // 日本語の字形を使わせる（中国語フォント・中国語の字形を出さない）。GAS の埋め込みでも確実にするため JS でも付ける
   document.documentElement.lang = 'ja'; document.body.lang = 'ja';
-  var S = { info: null, p: null, grades: [3], kana: [], grade: 3, pointers: {}, orders: {}, sinceFlush: 0, session: null, open: {}, gates: [] };
+  var S = { info: null, p: null, grades: [3], kana: [], grade: 3, pointers: {}, orders: {}, sinceFlush: 0, session: null, open: {}, gates: [],
+    view: null, arch: null, archV: {}, archY: '' }; // view/arch/archV は先生画面の読み結果の控え（学年タブの切り替えで読み直さない）
   var FLUSH_EVERY = 10;
   var SIZE = { read: 10, write: 5, fk: 10, fy: 10 }; // 1回の問題数（えらんだ漢字は全部。上限 SEL_MAX）
   var SEL_MAX = 30;
@@ -2708,7 +2709,9 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   function loadArch() {
     var el = $('#arch');
     if (!el) return;
-    Platform.archiveYears().then(function (years) { renderArch(el, years); }, function () { el.innerHTML = '<p class="hint">よめませんでした。</p>'; });
+    // 残した年度の一覧・各年度の集計は控えておき、タブ切り替え・先生画面の再描画では読み直さない（§16「0往復」）
+    if (S.arch) renderArch(el, S.arch);
+    else Platform.archiveYears().then(function (years) { S.arch = years; renderArch(el, years); }, function () { el.innerHTML = '<p class="hint">よめませんでした。</p>'; });
   }
   function renderArch(el, years) {
     el.innerHTML = '<p class="hint">年度の終わりに「残す」を押すと、いまの名簿と進捗が「名簿2025」「進捗2025」のような別シートに写されます（いまのシートはそのまま残ります）。残した年度ごとに、クラスで まちがいの おおかった字が見られます。</p>' +
@@ -2716,10 +2719,11 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       (years.length ? '<nav class="tabs t" id="arch-tabs">' + years.map(function (y) { return '<button class="atab" role="tab" data-y="' + y.year + '" aria-selected="false">' + y.year + '年度</button>'; }).join('') + '</nav><div id="arch-body"></div>' : '<p>まだ 過年度のデータは ありません。</p>');
     $('#arch-save').addEventListener('click', function () {
       $('#arch-msg').textContent = '残しています…';
-      Platform.archiveSave($('#arch-year').value.trim()).then(function () { loadArch(); }, function (e) { $('#arch-msg').textContent = (e && e.message) || '残せませんでした'; });
+      var year = $('#arch-year').value.trim();
+      Platform.archiveSave(year).then(function () { S.arch = null; S.archV = {}; S.archY = String(year); loadArch(); }, function (e) { $('#arch-msg').textContent = (e && e.message) || '残せませんでした'; });
     });
     el.querySelectorAll('.atab').forEach(function (b) { b.addEventListener('click', function () { showArchYear(b.dataset.y); }); });
-    if (years.length) showArchYear(years[years.length - 1].year);
+    if (years.length) showArchYear(years.some(function (y) { return y.year === S.archY; }) ? S.archY : years[years.length - 1].year);
   }
   // 消した記録 { year, at, count, by } を1行で読める文にする（先生だけが見るのでプレーンな日本語）
   function anonLogText(l) {
@@ -2731,8 +2735,8 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     var body = $('#arch-body');
     if (!body) return;
     body.parentNode.querySelectorAll('.atab').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.y === String(year))); });
-    body.innerHTML = '<p class="hint">よみこみ中…</p>';
-    Platform.archiveView(year).then(function (v) {
+    S.archY = String(year);
+    var show = function (v) {
       // 「まとめて消す」は消す年度名の入力で確定する（入力する語はサーバーが返す anonWord）。消すと もどせないため注意色で出す
       var anon = v.anonymized
         ? '<span class="hint">' + year + '年度の メール・名前は 消してあります。' + (v.anonLog ? ' 消した記録: ' + esc(anonLogText(v.anonLog)) : '') + '</span>'
@@ -2751,10 +2755,17 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
         wi.addEventListener('input', function () { btn.disabled = wi.value.trim() !== String(v.anonWord); });
         btn.addEventListener('click', function () {
           $('#arch-msg2').textContent = '消しています…';
-          Platform.archiveAnonymize(year, wi.value.trim()).then(function () { showArchYear(year); }, function () { $('#arch-msg2').textContent = '消せませんでした'; });
+          Platform.archiveAnonymize(year, wi.value.trim()).then(function () {
+            delete S.archV[year]; // 消した年度だけ控えを捨てて読み直す（一覧の消去済み表示も新しい値にする）
+            if (S.arch) S.arch.forEach(function (y) { if (y.year === String(year)) y.anonymized = true; });
+            showArchYear(year);
+          }, function () { $('#arch-msg2').textContent = '消せませんでした'; });
         });
       }
-    }, function (e) { body.innerHTML = '<p class="hint">' + esc((e && e.message) || 'よめませんでした') + '</p>'; });
+    };
+    if (S.archV[year]) { show(S.archV[year]); return; }
+    body.innerHTML = '<p class="hint">よみこみ中…</p>';
+    Platform.archiveView(year).then(function (v) { S.archV[year] = v; show(v); }, function (e) { body.innerHTML = '<p class="hint">' + esc((e && e.message) || 'よめませんでした') + '</p>'; });
   }
   // 先生画面のデータは学級ごとに1回の通信で読み、学年タブの切り替えでは読み直さない（reuse）。
   // 学級を変えた時・おためしから戻った時は読み直す
