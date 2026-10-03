@@ -2,6 +2,7 @@
 // シート: 名簿[メール, 学年, 組, 番号, 名前]（児童）／ 教師[メール, 学年, 組]（担当。1人で複数行可。組が空なら その学年の全学級）
 //         進捗[メール, read, write, meta, 更新] ／ 設定[キー, 値]
 // 学級のキーは「学年-組」（例 3-1）。設定のキー: grades:<学級>（見せる学年 "1,2,3"）／ pointer:<学級>:<学年>（授業の進度）／ order:<学年>（出題順）
+//   ／ gates:<学級>（児童画面でオフにしたボタン "m.write,s.rnd"。Sched.GATE_KEYS）
 // 児童への応答には本人の進捗以外を含めない（不変条件 I7）。先生は担当学級のものだけ読み書きできる。
 var STUDENT_RE = /@kyoiku\.edu\.nishi\.or\.jp$/;
 var TEACHER_RE = /@edu\.nishi\.or\.jp$/;
@@ -196,7 +197,7 @@ function api_init() {
   var me = begin_(), orders = orders_();
   if (me.role === 'student') {
     var klass = classOf_(me.email);
-    return { role: 'student', email: me.email, klass: klass, progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders, test: Sched.activeTest(tests_(klass)), writeLevel: writeLevel_(klass) };
+    return { role: 'student', email: me.email, klass: klass, progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders, test: Sched.activeTest(tests_(klass)), writeLevel: writeLevel_(klass), gates: gates_(klass) };
   }
   if (me.role === 'teacher') return { role: 'teacher', email: me.email, classes: teacherClasses_(me.email), orders: orders };
   return { role: 'unknown', email: me.email };
@@ -263,7 +264,7 @@ function api_teacherView(klass) {
     return out;
   }).sort(function (a, b) { return (Number(a.no) || 999) - (Number(b.no) || 999); });
   var tests = tests_(klass);
-  return { grades: grades_(klass), pointers: pointers_(klass), tests: tests, test: Sched.activeTest(tests), writeLevel: writeLevel_(klass), students: students, stats: { students: kids.length, perChar: per } };
+  return { grades: grades_(klass), pointers: pointers_(klass), tests: tests, test: Sched.activeTest(tests), writeLevel: writeLevel_(klass), gates: gates_(klass), students: students, stats: { students: kids.length, perChar: per } };
 }
 
 function api_setGrades(klass, list) {
@@ -311,4 +312,26 @@ function api_setOrder(grade, s) {
   if (!v) throw new Error(grade + '年の字がちょうど1回ずつ入っていません');
   setSetting_('order:' + grade, v);
   return v;
+}
+
+// 児童画面のボタンのオン・オフ（設定のキー gates:<学級>。オフにしたボタンのキーを「,」で並べる）。
+// 授業中に先生が切り替えたものを、開いたままの児童画面へ届けるため、児童はメニューを出すたびと30秒ごとに api_gates を呼ぶ。
+// 30人分の呼び出しでシートを読まないよう、学級の値と児童の学級を CacheService に置く（先生が保存した時はすぐ上書き）
+var GATE_CACHE_SEC_ = 600;
+function gates_(klass) { return Sched.normGates(setting_('gates:' + klass)); }
+function api_setGates(klass, list) {
+  requireClass_(klass);
+  list = Sched.normGates(list);
+  setSetting_('gates:' + klass, list.join(','));
+  CacheService.getScriptCache().put('gates:' + klass, list.join(','), GATE_CACHE_SEC_);
+  return list;
+}
+function api_gates() {
+  var me = begin_();
+  if (me.role !== 'student') throw new Error('児童のアカウントではありません');
+  var cache = CacheService.getScriptCache(), kk = 'klass:' + me.email, klass = cache.get(kk);
+  if (klass === null) { klass = classOf_(me.email); if (!klass) return []; cache.put(kk, klass, GATE_CACHE_SEC_); }
+  var v = cache.get('gates:' + klass);
+  if (v === null) { v = gates_(klass).join(','); cache.put('gates:' + klass, v, GATE_CACHE_SEC_); }
+  return Sched.normGates(v);
 }

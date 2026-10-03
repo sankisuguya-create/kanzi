@@ -228,6 +228,16 @@
     }
   }
 
+  // ---- 児童画面のボタンのオン・オフ（学級ごと。先生がおためし画面で切り替える）
+  // 持つのはオフにしたボタンのキーだけ。m.＝メニューのボタン、s.＝「どの字で やる？」の選び方（読む・書く・カードで共通）
+  // 先生画面・児童画面・GAS サーバーが同じ一覧を使う（ここが唯一の定義）
+  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 's.test', 's.due', 's.sel', 's.rnd', 's.miss'];
+  // 配列・「,」区切りの文字列のどちらでも受け、知らないキー・重なりを除いて GATE_KEYS の順に並べる
+  function normGates(v) {
+    var list = Array.isArray(v) ? v.map(String) : String(v || '').split(',');
+    return GATE_KEYS.filter(function (k) { return list.indexOf(k) >= 0; });
+  }
+
   // ---- 漢字テストの範囲（学級ごとに複数、児童に見せるのは1つ）
   // { active: 見せているテストの id（見せない時は null）, list: [{ id, label, chars }] }
   // 旧形式 { label, chars } は1個だけのテストとして読む（見せていたので active も復元する）
@@ -325,7 +335,7 @@
     FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, forestGrowth: forestGrowth, forestActivity: forestActivity, forestRegionLog: forestRegionLog,
     compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check,
-    normTests: normTests, activeTest: activeTest
+    normTests: normTests, activeTest: activeTest, GATE_KEYS: GATE_KEYS, normGates: normGates
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sched = api;

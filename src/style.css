@@ -413,3 +413,51 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 
 /* 読む: かなを含む句では、読みを問う字に下線（大きさだけに頼らない） */
 .card.part .word .tg { text-decoration: underline; text-decoration-thickness: .06em; text-underline-offset: .12em; }
+
+/* ---- 児童画面のボタンのオン・オフ（先生のおためし画面のチップ）
+   チップはボタンの右上の角に、付箋のように半分はみ出して重ねる（position: absolute）。ボタンの大きさ・並び・中の文字の位置は児童画面と変わらない。
+   ボタンの内側にかかるのは角の丸みの部分だけなので、横いっぱいの文字（「どの字で やる？」）にも重ならない。
+   チップは記号1字の小さな四角にし、意味は おためしの帯に書く。
+   オン／オフは色だけでなく 記号（✓／✕）・塗り（青い面／白地に点線）・ボタン自体のうすさで見分ける（color-coding スキルの既定トークン） */
+.big[data-gate] { position: relative; }
+.gate-chip {
+  position: absolute; top: -9px; right: -9px; z-index: 2;
+  display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  font-size: 17px; font-weight: 700; letter-spacing: 0; line-height: 1;
+  border-radius: 8px; border: 2px solid #fff; background: var(--solid-on); color: #fff;
+  box-shadow: 0 0 0 1px var(--ink), 0 2px 4px rgba(0, 0, 0, .3); cursor: pointer;
+}
+.gate-chip[aria-checked="false"] { background: var(--card); color: var(--ink); border: 2px dashed var(--ink); box-shadow: 0 2px 4px rgba(0, 0, 0, .3); }
+/* 「どの字で やる？」は文字がボタンの横いっぱいまで来るので、チップはボタンの右の外（列の外の空き）に置く */
+.chooser .big[data-gate] .gate-chip { top: 50%; right: -42px; transform: translateY(-50%); }
+.gate-chip:focus-visible { outline: 4px solid var(--cat-2); outline-offset: 2px; }
+/* おためし画面のうすいボタン: disabled（opacity）と同じ見た目を、チップをうすくせずに作る（紙の色を55%重ねる＝opacity .45 と同じ混ざり方） */
+.big.dim { cursor: default; }
+.big.dim::after { content: ''; position: absolute; inset: -3px; border-radius: 18px; background: var(--paper); opacity: .55; pointer-events: none; z-index: 1; }
+.big.dim:active { transform: none; }
+#trial-bar .tb-gate { font-size: 15px; }
+#trial-bar .tb-gate b { display: inline-block; min-width: 22px; text-align: center; border-radius: 5px; margin: 0 2px; }
+#trial-bar .tb-gate .on { background: var(--solid-on); color: #fff; }
+#trial-bar .tb-gate .off { background: var(--card); border: 1px dashed var(--ink); }
+#trial-bar #tb-msg { font-weight: 700; margin-left: 6px; }
+/* おためし中のメニュー: 帯の分だけメニューを縮めて、児童画面と同じく画面の高さに収める（「どの字で やる？」と同じ仕組み） */
+@media (min-aspect-ratio: 1/1) and (min-width: 761px) and (min-height: 480px) {
+  body.menu-screen { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
+  body.menu-screen #trial-bar { flex: none; }
+  body.menu-screen #app { flex: 1 1 0; height: auto; width: 100%; }
+}
+/* おためしの帯は画面の左に縦に置く（利用者の指定）。上に置くと その分だけ児童画面が下にずれ、スクロールが要る画面が出るため。
+   児童画面は残りの幅に入る。画面の幅が 1260px 以上なら 残りが #app の最大幅 1100px 以上になり、児童画面と同じ大きさ（それより狭い画面では児童画面より狭い） */
+@media (min-width: 761px) {
+  body.trial { padding-left: 160px; }
+  body.trial #trial-bar {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 40; width: 160px; overflow-y: auto;
+    flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; padding: 12px 8px;
+    border-bottom: 0; border-right: 2px solid var(--cat-3);
+  }
+  body.trial #trial-bar .tb-label { margin-right: 0; }
+  body.trial #trial-bar .tb-gl { display: block; line-height: 1.8; }
+  body.trial #trial-bar button { padding: 0 6px; font-size: 15px; }
+  body.trial #trial-bar #tb-msg { display: block; margin: 4px 0 0; line-height: 1.4; }
+  body.trial #trial-bar #tb-back { margin-top: auto; }
+}
