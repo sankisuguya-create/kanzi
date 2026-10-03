@@ -446,3 +446,18 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
   body.menu-screen #trial-bar { flex: none; }
   body.menu-screen #app { flex: 1 1 0; height: auto; width: 100%; }
 }
+/* おためしの帯は画面の左に縦に置く（利用者の指定）。上に置くと その分だけ児童画面が下にずれ、スクロールが要る画面が出るため。
+   児童画面は残りの幅に入る。画面の幅が 1260px 以上なら 残りが #app の最大幅 1100px 以上になり、児童画面と同じ大きさ（それより狭い画面では児童画面より狭い） */
+@media (min-width: 761px) {
+  body.trial { padding-left: 160px; }
+  body.trial #trial-bar {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 40; width: 160px; overflow-y: auto;
+    flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; padding: 12px 8px;
+    border-bottom: 0; border-right: 2px solid var(--cat-3);
+  }
+  body.trial #trial-bar .tb-label { margin-right: 0; }
+  body.trial #trial-bar .tb-gl { display: block; line-height: 1.8; }
+  body.trial #trial-bar button { padding: 0 6px; font-size: 15px; }
+  body.trial #trial-bar #tb-msg { display: block; margin: 4px 0 0; line-height: 1.4; }
+  body.trial #trial-bar #tb-back { margin-top: auto; }
+}

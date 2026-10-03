@@ -965,6 +965,7 @@
   // ================= 先生のおためし（児童画面を試す。記録はこの端末だけ、サーバーへは送らない）
   function trialBar() {
     var bar = document.getElementById('trial-bar');
+    document.body.classList.toggle('trial', !!S.trial); // 帯は画面の左に置く（style.css）。児童画面の高さを削らない
     if (!S.trial) { if (bar) bar.remove(); return; }
     if (!bar) {
       bar = document.createElement('div');
@@ -972,7 +973,7 @@
       document.body.insertBefore(bar, app);
     }
     bar.innerHTML = '<span class="tb-label">先生のおためし中（記録は この端末だけ）' + (S.dayOffset ? '・' + S.dayOffset + '日後' : '') + '</span>' +
-      '<span class="tb-gate">ボタンの右上: <b class="on">✓</b>児童が使える <b class="off">✕</b>使えない<span id="tb-msg" aria-live="polite"></span></span>' +
+      '<span class="tb-gate"><span class="tb-gl">ボタンの右上:</span> <span class="tb-gl"><b class="on">✓</b>児童が使える</span> <span class="tb-gl"><b class="off">✕</b>使えない</span><span id="tb-msg" aria-live="polite"></span></span>' +
       '<button id="tb-day">1日すすめる</button><button id="tb-reset">はじめから</button><button id="tb-back">先生画面にもどる</button>';
     bar.querySelector('#tb-day').addEventListener('click', function () { S.dayOffset = (S.dayOffset || 0) + 1; trialBar(); menu(); });
     bar.querySelector('#tb-reset').addEventListener('click', function () {
