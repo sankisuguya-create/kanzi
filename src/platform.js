@@ -25,7 +25,7 @@
 
   // ---- デモの設定（先生画面で変える）: { grades: { 組: [学年...] }, pointers: { '組:学年': n }, orders: { 学年: 並び } }
   var SKEY = 'kanzi.settings';
-  function demoSettings() { var s = store.get(SKEY) || {}; s.grades = s.grades || {}; s.pointers = s.pointers || {}; s.orders = s.orders || {}; s.tests = s.tests || {}; s.writeLevels = s.writeLevels || {}; return s; }
+  function demoSettings() { var s = store.get(SKEY) || {}; s.grades = s.grades || {}; s.pointers = s.pointers || {}; s.orders = s.orders || {}; s.tests = s.tests || {}; s.writeLevels = s.writeLevels || {}; s.gates = s.gates || {}; return s; }
   function saveDemo(s) { store.set(SKEY, s); }
   function demoGrades(klass) { return demoSettings().grades[klass] || [1, 2, 3]; }
   function demoPointers(klass) {
@@ -51,7 +51,7 @@
     if (!isGas) {
       var role = /teacher/.test(location.search) ? 'teacher' : 'student', s = demoSettings(), klass = '3-1';
       return Promise.resolve({ role: role, demo: true, email: 'demo', klass: klass, progress: Sched.norm(store.get(key)),
-        grades: demoGrades(klass), pointers: demoPointers(klass), orders: s.orders, test: Sched.activeTest(s.tests[klass]), writeLevel: s.writeLevels[klass] || '', classes: [klass] });
+        grades: demoGrades(klass), pointers: demoPointers(klass), orders: s.orders, test: Sched.activeTest(s.tests[klass]), writeLevel: s.writeLevels[klass] || '', gates: Sched.normGates(s.gates[klass]), classes: [klass] });
     }
     return gas('api_init').then(function (info) {
       key = 'kanzi.progress.' + info.email;
@@ -95,7 +95,7 @@
     if (isGas) return gas('api_teacherView', klass);
     var s = demoSettings();
     var tests = Sched.normTests(s.tests[klass]);
-    return Promise.resolve({ grades: demoGrades(klass), pointers: demoPointers(klass), tests: tests, test: Sched.activeTest(tests), writeLevel: s.writeLevels[klass] || '', students: demoStudents(), stats: demoStats() });
+    return Promise.resolve({ grades: demoGrades(klass), pointers: demoPointers(klass), tests: tests, test: Sched.activeTest(tests), writeLevel: s.writeLevels[klass] || '', gates: Sched.normGates(s.gates[klass]), students: demoStudents(), stats: demoStats() });
   }
   function demoStats() {
     var seed = 7, out = {}, g, i;
@@ -130,6 +130,18 @@
     level = level === 'easy' ? 'easy' : '';
     if (isGas) return gas('api_setWriteLevel', klass, level);
     var s = demoSettings(); s.writeLevels[klass] = level; saveDemo(s); return Promise.resolve(level);
+  }
+  // 児童画面のボタンのオン・オフ（学級ごと。オフにしたキーの配列。Sched.GATE_KEYS）
+  function setGates(klass, list) {
+    list = Sched.normGates(list);
+    if (isGas) return gas('api_setGates', klass, list);
+    var s = demoSettings(); s.gates[klass] = list; saveDemo(s); return Promise.resolve(list);
+  }
+  // 児童: いまのオン・オフを読み直す（授業中に先生が変えたものを、開いたままの画面に届ける）。
+  // デモは先生画面と同じ端末の保存を読むので、別のタブで先生画面を開いて切り替えると届く
+  function gates() {
+    if (isGas) return gas('api_gates').then(Sched.normGates);
+    return Promise.resolve(Sched.normGates(demoSettings().gates['3-1']));
   }
   function setPointer(klass, grade, n) {
     if (isGas) return gas('api_setPointer', klass, grade, n);
@@ -188,6 +200,6 @@
   }
 
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
-    teacherView: teacherView, setTests: setTests, setWriteLevel: setWriteLevel, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder,
+    teacherView: teacherView, setTests: setTests, setWriteLevel: setWriteLevel, setGates: setGates, gates: gates, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder,
     archiveYears: archiveYears, archiveView: archiveView, archiveSave: archiveSave, archiveAnonymize: archiveAnonymize, store: store };
 })(this);
