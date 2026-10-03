@@ -141,6 +141,31 @@ test('保存: 本人の行だけを更新し、meta に えらんだ漢字・終
   assert.throws(() => makeEnv(base(), T).api_save('{}'), /児童のアカウントではありません/);
 });
 
+test('保存: 形の違う字エントリは字単位で落とし、残る分は正しく保存する', () => {
+  const env = makeEnv(base(), K2);
+  const p = {
+    read: { 暗: [2, 0, 1, 1, 0], 悪: [9, 0, 1, 0, 0], 安: '壊れ', 意: [1, 0, -3, 0, 0], 運: [1, 0, 2, 0] },
+    write: { 暗: [0, 0, 0, 0, 0], 悪: [1, 0, 1, 0, 0, 99] },
+    sel: {}, done: {}
+  };
+  const m = JSON.parse(env.api_save(JSON.stringify(p)));
+  assert.deepEqual(Object.keys(m.read).sort(), ['暗', '運']); // 悪(箱9)・安(文字列)・意(負)は落ちる
+  assert.deepEqual(m.read['運'], [1, 0, 2, 0, 0]); // 4要素の旧形式はまちがい回数0で補う
+  assert.deepEqual(Object.keys(m.write).sort(), ['暗']); // 悪(6要素)は落ちる
+  const row = env.book['進捗'].find((r) => r[0] === K2);
+  assert.deepEqual(JSON.parse(row[1]), { 暗: [2, 0, 1, 1, 0], 運: [1, 0, 2, 0, 0] });
+  assert.deepEqual(JSON.parse(JSON.stringify(env.Sched.check(m))), []);
+});
+
+test('不変条件の検査: エントリの形・箱の範囲・負の値・v を検査する', () => {
+  const p = makeEnv(base(), K2).Sched.newProgress();
+  p.read['あ'] = [1, 0, 1, 0, 0]; p.write['い'] = [0, 0, 0, 0, 0];
+  assert.deepEqual(JSON.parse(JSON.stringify(makeEnv(base(), K2).Sched.check(p))), []);
+  p.read['う'] = [6, 0, 1, 0, 0]; p.read['え'] = [1, 0, 1]; p.write['お'] = [1, 0, -1, 0, 0]; p.v = 1;
+  const bad = makeEnv(base(), K2).Sched.check(p);
+  assert.ok(bad.length === 4, bad.join(','));
+});
+
 test('漢字テストの範囲: テストごとに管理し、児童に見せるのは1つ（担当の先生だけ）', () => {
   const env = makeEnv(base(), T);
   const t = env.api_setTests('3-1', JSON.stringify({ active: 't2', list: [

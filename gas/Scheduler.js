@@ -342,11 +342,18 @@
     return { v: 2, archive: copyForest(forestState(archived).archive), modes: modes };
   }
 
-  // 不変条件の検査（I3）。違反の説明の配列を返す
+  // 字エントリ1件が形を保っているか: [箱, 期限, 回数, 最後の時刻, まちがい回数] の5要素の数値で、
+  // 箱が範囲内（lo=読む1〜・書く0〜 MAX_BOX）、期限・回数・時刻・まちがい回数が非負
+  function checkEntry(e, lo) {
+    return Array.isArray(e) && e.length === 5 && e.every(function (x) { return Number.isFinite(x); }) &&
+      e[0] >= lo && e[0] <= MAX_BOX && e[1] >= 0 && e[2] >= 0 && e[3] >= 0 && e[4] >= 0;
+  }
+  // 不変条件の検査（I3）。違反の説明の配列を返す（空なら健全）
   function check(p) {
     var bad = [], c;
-    for (c in p.read) if (!(p.read[c][0] >= 1 && p.read[c][0] <= MAX_BOX)) bad.push('read box ' + c);
-    for (c in p.write) if (!(p.write[c][0] >= 0 && p.write[c][0] <= MAX_BOX)) bad.push('write box ' + c);
+    for (c in p.read) if (!checkEntry(p.read[c], 1)) bad.push('read ' + c);
+    for (c in p.write) if (!checkEntry(p.write[c], 0)) bad.push('write ' + c);
+    if (p.v !== undefined && p.v !== 2) bad.push('v');
     return bad;
   }
 
@@ -356,7 +363,7 @@
     dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList, classMissTop: classMissTop,
     FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, forestGrowth: forestGrowth, forestActivity: forestActivity, forestRegionLog: forestRegionLog,
-    compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check,
+    compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check, checkEntry: checkEntry,
     normTests: normTests, activeTest: activeTest, GATE_KEYS: GATE_KEYS, normGates: normGates
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

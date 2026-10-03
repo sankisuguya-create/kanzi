@@ -32,8 +32,8 @@ test('よむ: おぼえた→箱+1（上限5）、まだ→箱1。箱3で かく
 
 test('かく: 箱0は失敗で0のまま、成功で1。箱1以上の失敗は1', () => {
   const p = S.newProgress();
-  p.read['か'] = [3, 0, 2, 0];
-  p.write['か'] = [0, 0, 0, 0];
+  p.read['か'] = [3, 0, 2, 0, 0];
+  p.write['か'] = [0, 0, 0, 0, 0];
   S.answerWrite(p, 'か', false, 5);
   assert.deepEqual(p.write['か'].slice(0, 2), [0, 6]);
   S.answerWrite(p, 'か', true, 6);
@@ -79,6 +79,7 @@ test('選んだ漢字: 選ぶ・外す、教科書順で返す', () => {
 test('まちがいの多い字: まちがいの割合が高い順（まちがい0は出さない）', () => {
   const p = S.newProgress();
   p.read['あ'] = [1, 0, 4, 0, 1]; p.read['い'] = [1, 0, 2, 0, 2]; p.read['う'] = [3, 0, 5, 0, 0];
+
   assert.deepEqual(S.missList(p, 'read', 'あいうえお'), ['い', 'あ']);
 });
 

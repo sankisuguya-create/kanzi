@@ -66,10 +66,17 @@ function settings_() {
   });
 }
 function setting_(key) { var e = settings_()[key]; return e ? e.value : ''; }
+// 設定の書き込みはスクリプトロックで順番にする（先生が複数画面・複数人で同時に変えた時に古い値で上書きしない）
 function setSetting_(key, value) {
-  var sh = settingsSheet_(), all = settings_(), e = all[key];
-  if (e) sh.getRange(e.row, 2).setValue(value); else { sh.appendRow([key, value]); delete MEMO_.settings; }
-  if (e) e.value = value;
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sh = settingsSheet_(), all = settings_(), e = all[key];
+    if (e) sh.getRange(e.row, 2).setValue(value); else { sh.appendRow([key, value]); delete MEMO_.settings; }
+    if (e) e.value = value;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // 見出しの名前で列を探して読む（列の順番が変わっても、旧版の[メール, 組]の名簿でも読める）
@@ -169,6 +176,15 @@ function loadForest_(sh, row) {
   // 壊れていても（列を消した・手で書きかえた等）開けなくならないようにする。失うのは葉の色だけ（成長量は D列の done・old）
   try { return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
 }
+// 形の違う字エントリを取り除く（api_save で統合する前の下ごしらえ）。
+// まちがい回数の無い旧形式（4要素の数値）は 0 で補って残す。それ以外の不正（非数値・範囲外・負）は字単位で落とす
+function dropBadEntries_(tbl, lo) {
+  for (var c in tbl) {
+    var e = tbl[c];
+    if (Array.isArray(e) && e.length === 4 && e.every(function (x) { return Number.isFinite(x); })) tbl[c] = e.concat(0);
+    if (!Sched.checkEntry(tbl[c], lo)) delete tbl[c];
+  }
+}
 function writeProgress_(sh, rowNumber, row, forest) {
   var json = JSON.stringify(forest), chunks = [];
   for (var i = 0; i < json.length; i += FOREST_CHUNK_SIZE_) chunks.push(json.slice(i, i + FOREST_CHUNK_SIZE_));
@@ -209,6 +225,9 @@ function api_save(json) {
   var me = begin_();
   if (me.role !== 'student') throw new Error('児童のアカウントではありません');
   var incoming = Sched.norm(JSON.parse(json));
+  // 形の違う字エントリは字単位で直す（旧形式は補完）・落としてから統合する。
+  // 全体を拒否すると、一部だけ壊れた端末の進捗が永遠に保存できなくなる
+  dropBadEntries_(incoming.read, 1); dropBadEntries_(incoming.write, 0);
   // 同じ児童の2台からの同時保存だけを順番にする（別の児童の行は独立。appendRow は1回で行を足すので競合しない）。
   // ユーザー単位のロックにして、学級の30人が同時に終えても互いを待たせない
   var lock = LockService.getUserLock();
