@@ -237,7 +237,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 
 /* ================= 学年タブ・一覧・見る・問題の始め方・カード・おわり（全学年版） */
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
-.tabs .tab, .tabs .ttab, .tabs .ptab { min-height: 52px; min-width: 76px; padding: 0 14px; font-size: 22px; font-weight: 700; background: var(--card); border: 2px solid var(--line); border-radius: 12px 12px 0 0; color: var(--ink-sub); }
+.tabs .tab, .tabs .ttab, .tabs .ptab, .tabs .atab { min-height: 52px; min-width: 76px; padding: 0 14px; font-size: 22px; font-weight: 700; background: var(--card); border: 2px solid var(--line); border-radius: 12px 12px 0 0; color: var(--ink-sub); }
 .tabs [aria-selected="true"] { border-color: var(--ink); color: var(--ink); background: var(--fill-a); box-shadow: inset 0 -4px 0 var(--cat-1); }
 .tabs.t { margin: 6px 0 10px; }
 .big[disabled] { opacity: .45; cursor: default; }

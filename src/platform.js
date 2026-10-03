@@ -156,6 +156,50 @@
     var s = demoSettings(); s.orders[grade] = str; saveDemo(s); return Promise.resolve(str);
   }
 
+  // ---- 過年度データ（年度末に残して、年度ごとに集計を見る。個人情報はあとでまとめて消せる）
+  function archiveYears() { return isGas ? gas('api_archiveYears') : Promise.resolve(demoArchiveYears()); }
+  function archiveView(year) { return isGas ? gas('api_archiveView', year) : Promise.resolve(demoArchive(year)); }
+  function archiveSave(year) { return isGas ? gas('api_archiveSave', year) : demoArchiveSave(year); }
+  function archiveAnonymize(year) { return isGas ? gas('api_archiveAnonymize', year) : demoArchiveAnonymize(year); }
+  // デモでは この端末だけに年度ごとの集計を持つ。はじめて開いた時に 前年度ぶんを作る
+  function demoArchives() { var s = demoSettings(); s.archives = s.archives || {}; return s; }
+  function demoClassStats(klass, grade, topSkip) {
+    var st = demoStats(), order = KANZI_DATA.grades[grade].order, missTop = [], learned = 0;
+    for (var i = 0; i < order.length; i++) {
+      var c = order.charAt(i), v = st.perChar[c];
+      if (!v) continue;
+      learned += v[0];
+      if (v[0] >= 3 && v[1] > 0) missTop.push({ c: c, s: v[0], b: v[1], r: v[1] / v[0] });
+    }
+    missTop.sort(function (a, b) { return b.r - a.r || b.b - a.b; });
+    return { klass: klass, grade: grade, students: 30, learned: learned, missTop: missTop.slice(topSkip, (topSkip || 0) + 10) };
+  }
+  function demoArchiveYears() {
+    var s = demoArchives(), d = new Date(), prev = String((d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1) - 1);
+    if (!Object.keys(s.archives).length) { s.archives[prev] = { anonymized: false, classes: [demoClassStats('3-1', 3, 0), demoClassStats('3-2', 3, 2)] }; saveDemo(s); }
+    return Object.keys(s.archives).sort().map(function (y) { return { year: y, anonymized: !!s.archives[y].anonymized }; });
+  }
+  function demoArchive(year) {
+    var a = demoArchives().archives[year];
+    if (!a) throw new Error(year + '年度のデータは ありません');
+    return { year: year, anonymized: !!a.anonymized, classes: a.classes };
+  }
+  function demoArchiveSave(year) {
+    var s = demoArchives();
+    if (!/^\d{4}$/.test(String(year))) return Promise.reject(new Error('年度は4桁の数字で入れてください'));
+    if (s.archives[year]) return Promise.reject(new Error(year + '年度は すでに残してあります'));
+    s.archives[year] = { anonymized: false, classes: [demoClassStats('3-1', 3, 0)] };
+    saveDemo(s);
+    return Promise.resolve(year);
+  }
+  function demoArchiveAnonymize(year) {
+    var s = demoArchives(), a = s.archives[year];
+    if (!a) return Promise.reject(new Error(year + '年度のデータは ありません'));
+    a.anonymized = true; saveDemo(s);
+    return Promise.resolve(true);
+  }
+
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
-    teacherView: teacherView, setTests: setTests, setWriteLevel: setWriteLevel, setGates: setGates, gates: gates, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder, store: store };
+    teacherView: teacherView, setTests: setTests, setWriteLevel: setWriteLevel, setGates: setGates, gates: gates, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder,
+    archiveYears: archiveYears, archiveView: archiveView, archiveSave: archiveSave, archiveAnonymize: archiveAnonymize, store: store };
 })(this);

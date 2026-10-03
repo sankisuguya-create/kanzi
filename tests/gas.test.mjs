@@ -28,7 +28,7 @@ function makeEnv(sheets, email) {
   }
   const ctx = {
     console, JSON, Date, Math, Number, String, Array, Object, Set,
-    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: tick((n) => (book[n] ? sheetObj(n) : null)), insertSheet: (n) => { book[n] = []; return sheetObj(n); } }) },
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: tick((n) => (book[n] ? sheetObj(n) : null)), insertSheet: (n) => { book[n] = []; return sheetObj(n); }, getSheets: () => Object.keys(book).map((n) => ({ getName: () => n })) }) },
     Session: { getActiveUser: () => ({ getEmail: () => email }) },
     LockService: { getUserLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) },
     CacheService: { getScriptCache: () => ({ get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = String(v); } }) },
@@ -211,6 +211,37 @@ test('見せる学年に ひらがな・カタカナを入れられる（1〜6�
   assert.deepEqual(Array.from(env.api_teacherView('3-1').grades), ['h', 'k', 1]);
   assert.deepEqual(Array.from(makeEnv(env.book, K1).api_init().grades), ['h', 'k', 1]);
   assert.throws(() => env.api_setGrades('3-1', ['h']), /1年〜6年から/);
+});
+
+test('過年度データ: 残す→一覧→集計→個人情報をまとめて消す（担当の先生だけ）', () => {
+  const s = base();
+  for (let i = 4; i <= 7; i++) { // 3-1 に 計6人。安をまちがえた人が4人増えるとクラス集計に出る
+    const k = `1000000${i}@kyoiku.edu.nishi.or.jp`;
+    s.名簿.push([k, 3, 1, i, 'kid' + i]);
+    s.進捗.push([k, JSON.stringify({ 安: [1, 0, 2, 1790000000000, 1] }), '{}', '{}', '']);
+  }
+  const env = makeEnv(s, T);
+  assert.throws(() => makeEnv(s, K1).api_archiveYears(), /先生のアカウントではありません/);
+  assert.equal(env.api_archiveSave('2025'), '2025');
+  assert.deepEqual(env.book['名簿2025'], s.名簿.map((r) => r.slice()));
+  assert.deepEqual(env.book['進捗2025'], s.進捗.map((r) => r.slice()));
+  assert.equal(env.book['名簿'].length, s.名簿.length); // いまのシートはそのまま残る
+  assert.throws(() => env.api_archiveSave('2025'), /すでに残してあります/);
+  assert.throws(() => env.api_archiveSave('20A5'), /4桁/);
+  assert.deepEqual(JSON.parse(JSON.stringify(env.api_archiveYears())), [{ year: '2025', anonymized: false }]);
+  const v = env.api_archiveView('2025');
+  assert.equal(v.anonymized, false);
+  const c1 = v.classes.find((c) => c.klass === '3-1'), c2 = v.classes.find((c) => c.klass === '3-2');
+  assert.equal(c1.students, 6); assert.equal(c1.learned, 1); // K1の 悪が箱3
+  assert.equal(c1.missTop[0].c, '安'); assert.deepEqual([c1.missTop[0].s, c1.missTop[0].b], [5, 5]); // K1＋4人
+  assert.equal(c2.students, 1);
+  env.api_archiveAnonymize('2025');
+  const arch = env.book['名簿2025'];
+  assert.equal(arch[1][0], '児童001'); assert.equal(arch[1][4], ''); // メール・名前を消す
+  assert.equal(env.book['進捗2025'][1][0], '児童001'); // 進捗側も同じIDにして集計を保つ
+  const v2 = env.api_archiveView('2025');
+  assert.equal(v2.anonymized, true);
+  assert.equal(v2.classes.find((c) => c.klass === '3-1').missTop[0].c, '安'); // 消しても集計は読める
 });
 
 test('書く問題の判定: 担当の先生が学級ごとに選び、その学級の児童に届く', () => {
