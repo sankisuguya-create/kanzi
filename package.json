@@ -10,7 +10,8 @@
     "e2e": "node tests/e2e.mjs",
     "build:font": "node tools/build-font.mjs",
     "e2e:forest": "node tests/forest-e2e.mjs",
-    "e2e:test-overview": "node tests/test-overview-e2e.mjs"
+    "e2e:test-overview": "node tests/test-overview-e2e.mjs",
+    "e2e:gates": "node tests/gates-e2e.mjs"
   },
   "devDependencies": {
     "kanjidic2-json": "^0.1.0",

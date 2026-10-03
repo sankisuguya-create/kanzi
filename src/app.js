@@ -7,7 +7,7 @@
   var app = document.getElementById('app');
   // 日本語の字形を使わせる（中国語フォント・中国語の字形を出さない）。GAS の埋め込みでも確実にするため JS でも付ける
   document.documentElement.lang = 'ja'; document.body.lang = 'ja';
-  var S = { info: null, p: null, grades: [3], kana: [], grade: 3, pointers: {}, orders: {}, sinceFlush: 0, session: null, open: {} };
+  var S = { info: null, p: null, grades: [3], kana: [], grade: 3, pointers: {}, orders: {}, sinceFlush: 0, session: null, open: {}, gates: [] };
   var FLUSH_EVERY = 10;
   var SIZE = { read: 10, write: 5, fk: 10, fy: 10 }; // 1回の問題数（えらんだ漢字は全部。上限 SEL_MAX）
   var SEL_MAX = 30;
@@ -97,6 +97,89 @@
     return '<h1 class="title">漢字の' + mori + (extra ? '<span class="title-extra">' + extra + '</span>' : '') + '</h1>';
   }
 
+  // ================= 児童画面のボタンのオン・オフ（学級ごと。先生が おためし画面のチップで切り替える）
+  // いま使わない活動を、先生の説明なしで児童が見分けられるようにする。キーは Sched.GATE_KEYS
+  //   児童: オフのボタンは押せず、うすく見える（disabled。「選んだ漢字がない」時と同じ見た目）
+  //   先生のおためし: ボタンの右上にチップを重ねる（ボタンの外にも中の文字にも場所を取らないので、並びは児童画面と同じ）
+  var GATE_LABEL = { 'm.browse': 'ぜんぶ見る', 'm.read': '読む', 'm.write': '書く', 'm.fk': 'カード（漢字→読み）', 'm.fy': 'カード（読み→漢字）',
+    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
+    's.sel': '出す字: 選んだ漢字', 's.rnd': '出す字: ランダム', 's.miss': '出す字: まちがいの多い漢字' };
+  var GATE_POLL_MS = 30000;
+  function gateOff(k) { return S.gates.indexOf(k) >= 0; }
+  function paintGates() {
+    app.querySelectorAll('[data-gate]').forEach(function (b) {
+      if (b.dataset.base === undefined) b.dataset.base = b.disabled ? '1' : ''; // 中身がなくて押せないボタン（えらんだ字が0など）
+      var off = gateOff(b.dataset.gate), base = b.dataset.base === '1';
+      b.classList.toggle('gated', off);
+      if (!S.trial) { b.disabled = base || off; return; }
+      // おためし: disabled にするとチップも押せなくなるので使わない。うすい見た目は .dim、押した時の動きは gateClick で止める
+      b.disabled = false;
+      b.classList.toggle('dim', base || off);
+      if (base || off) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
+      var chip = b.querySelector('.gate-chip');
+      if (!chip) { chip = document.createElement('span'); chip.className = 'gate-chip'; chip.setAttribute('role', 'switch'); chip.tabIndex = 0; b.appendChild(chip); }
+      chip.setAttribute('aria-checked', String(!off));
+      chip.setAttribute('aria-label', GATE_LABEL[b.dataset.gate] + 'を 児童に使わせる');
+      chip.textContent = off ? '✕' : '✓';
+      chip.title = off ? 'オフ（児童は押せない）。押すと オン' : 'オン（児童が使える）。押すと オフ';
+    });
+  }
+  // おためしのチップ: 押すと切り替える。うすいボタン（オフ・中身なし）の本体を押しても何もしない
+  function gateClick(ev) {
+    if (!S.trial || !ev.target.closest) return;
+    var b = ev.target.closest('[data-gate]');
+    if (!b) return;
+    if (ev.target.closest('.gate-chip')) { ev.stopPropagation(); ev.preventDefault(); toggleGate(b.dataset.gate); }
+    else if (b.classList.contains('dim')) { ev.stopPropagation(); ev.preventDefault(); }
+  }
+  app.addEventListener('click', gateClick, true); // ボタン自身の動きより先に受ける
+  app.addEventListener('keydown', function (ev) {
+    if (S.trial && ev.target.classList && ev.target.classList.contains('gate-chip') && (ev.key === 'Enter' || ev.key === ' ')) {
+      ev.preventDefault(); ev.stopPropagation(); toggleGate(ev.target.closest('[data-gate]').dataset.gate);
+    }
+  }, true);
+  // 保存は1つずつ順に送る（続けて押した時に古い一覧が後から届いて上書きしないように）。
+  // 送っている間に押された分は、終わってから最新の一覧を1回だけ送る。失敗したら最後に保存できた状態に戻す
+  var gateSaving = false, gateDirty = false;
+  function toggleGate(k) {
+    S.gates = Sched.normGates(gateOff(k) ? S.gates.filter(function (x) { return x !== k; }) : S.gates.concat([k]));
+    paintGates();
+    saveGates();
+  }
+  function saveGates() {
+    if (gateSaving) { gateDirty = true; return; }
+    gateSaving = true; gateMsg('保存中…');
+    Platform.setGates(S.klass, S.gates).then(function (v) {
+      gateSaving = false;
+      S.gatesSaved = v;
+      if (S.view && S.view.klass === S.klass) S.view.gates = v;
+      if (gateDirty) { gateDirty = false; return saveGates(); }
+      S.gates = v; paintGates();
+      gateMsg('✓ 保存（30秒ほどで 児童に とどく）');
+    }, function () {
+      gateSaving = false; gateDirty = false;
+      S.gates = (S.gatesSaved || []).slice(); paintGates();
+      gateMsg('× 保存できませんでした。もう一度 押してください');
+    });
+  }
+  function gateMsg(t) { var m = document.getElementById('tb-msg'); if (m) m.textContent = t; }
+  // 児童: メニュー・「どの字で やる？」を出すたびと、開いている間 30秒ごとに読み直す（授業中の切り替えを、開いたままの画面に届ける）
+  var gateFetchedAt = 0;
+  function watchGates() {
+    paintGates();
+    if (S.trial || !S.p) return;
+    function fetch(force) {
+      if (!force && Date.now() - gateFetchedAt < 5000) return; // メニューと選ぶ画面を行き来しても続けて読まない
+      gateFetchedAt = Date.now();
+      Platform.gates().then(function (v) { if (!S.trial && v.join() !== S.gates.join()) { S.gates = v; paintGates(); } }, function () {}); // 通信できなければ今のまま
+    }
+    fetch(false);
+    var timer = setInterval(function () { if (document.visibilityState === 'visible') fetch(true); }, GATE_POLL_MS);
+    function vis() { if (document.visibilityState === 'visible') fetch(false); }
+    document.addEventListener('visibilitychange', vis);
+    cleanup.push(function () { clearInterval(timer); document.removeEventListener('visibilitychange', vis); });
+  }
+
   // ================= 児童: メニュー
   function tabs(cur, cls) {
     var list = S.kana.concat(S.grades);
@@ -122,15 +205,15 @@
       '<section class="tree-box"><div id="forest"></div></section>' +
       '<section class="actions">' +
       (kana
-        ? '<button class="big" id="go-browse">' + noun + K('を ぜんぶ[見|み]る<span class="meta">') + orderOf(g).length + K('[字|じ]・[見|み]る／[選|えら]ぶ</span></button>') +
-          '<button class="big primary" id="go-write">' + K('[書|か]く<span class="meta">') + (g === 'h' ? K('[聞|き]いて ひらがなを [書|か]く') : K('ひらがな → カタカナを [書|か]く')) + '</span></button>'
-        : '<button class="big" id="go-browse">' + g + K('年の[漢|かん][字|じ]を ぜんぶ[見|み]る<span class="meta">') + orderOf(g).length + K('[字|じ]・[見|み]る／[選|えら]ぶ</span></button>') +
-          K('<div class="two"><button class="big primary" id="go-read">[読|よ]む<span class="meta">[漢|かん][字|じ] → [読|よ]みを [書|か]く</span></button>') +
-          K('<button class="big primary" id="go-write">[書|か]く<span class="meta">[読|よ]み → [漢|かん][字|じ]を [書|か]く</span></button></div>') +
-          K('<div class="two"><button class="big" id="go-fk">カード<span class="meta">[漢|かん][字|じ] → [読|よ]み</span></button>') +
-          K('<button class="big" id="go-fy">カード<span class="meta">[読|よ]み → [漢|かん][字|じ]</span></button></div>') +
-          (testChars().length ? '<button class="big test" id="go-test">' + K('[次|つぎ]の[漢|かん][字|じ]テストの はんいを [見|み]る') + '<span class="meta">' + (S.test.label ? esc(S.test.label) + '・' : '') + testChars().length + K('[字|じ]') + '</span></button>' : '')) +
-      '<button class="big" id="go-seen"' + (nSel ? '' : ' disabled') + '>' + K('[選|えら]んだ') + noun + K('を[見|み]る') + '<span class="meta">' + (nSel ? nSel + K('[字|じ]') : K('まだ [選|えら]んでいないよ')) + '</span></button>' +
+        ? '<button class="big" id="go-browse" data-gate="m.browse">' + noun + K('を ぜんぶ[見|み]る<span class="meta">') + orderOf(g).length + K('[字|じ]・[見|み]る／[選|えら]ぶ</span></button>') +
+          '<button class="big primary" id="go-write" data-gate="m.write">' + K('[書|か]く<span class="meta">') + (g === 'h' ? K('[聞|き]いて ひらがなを [書|か]く') : K('ひらがな → カタカナを [書|か]く')) + '</span></button>'
+        : '<button class="big" id="go-browse" data-gate="m.browse">' + g + K('年の[漢|かん][字|じ]を ぜんぶ[見|み]る<span class="meta">') + orderOf(g).length + K('[字|じ]・[見|み]る／[選|えら]ぶ</span></button>') +
+          K('<div class="two"><button class="big primary" id="go-read" data-gate="m.read">[読|よ]む<span class="meta">[漢|かん][字|じ] → [読|よ]みを [書|か]く</span></button>') +
+          K('<button class="big primary" id="go-write" data-gate="m.write">[書|か]く<span class="meta">[読|よ]み → [漢|かん][字|じ]を [書|か]く</span></button></div>') +
+          K('<div class="two"><button class="big" id="go-fk" data-gate="m.fk">カード<span class="meta">[漢|かん][字|じ] → [読|よ]み</span></button>') +
+          K('<button class="big" id="go-fy" data-gate="m.fy">カード<span class="meta">[読|よ]み → [漢|かん][字|じ]</span></button></div>') +
+          (testChars().length ? '<button class="big test" id="go-test" data-gate="m.test">' + K('[次|つぎ]の[漢|かん][字|じ]テストの はんいを [見|み]る') + '<span class="meta">' + (S.test.label ? esc(S.test.label) + '・' : '') + testChars().length + K('[字|じ]') + '</span></button>' : '')) +
+      '<button class="big" id="go-seen" data-gate="m.seen"' + (nSel ? '' : ' disabled') + '>' + K('[選|えら]んだ') + noun + K('を[見|み]る') + '<span class="meta">' + (nSel ? nSel + K('[字|じ]') : K('まだ [選|えら]んでいないよ')) + '</span></button>' +
       '</section></main>' + (S.info.demo && !S.trial ? '<p class="demo-note">デモ（この端末にだけ保存）</p>' : '');
     // メニューは画面の高さに収める（スクロールしない）。ほかの画面に移る時に外す
     document.body.classList.add('menu-screen');
@@ -146,6 +229,7 @@
     on('#go-fy', function () { chooser('fy'); });
     on('#go-test', testOverview);
     on('#go-seen', function () { var l = Sched.selected(S.p, orderOf(S.grade)); if (l.length) viewChars(l, 0, menu); });
+    watchGates();
   }
 
   // テスト範囲は全字を先生の指定順で一覧。練習の30問上限・学年タブでは切り詰めない。
@@ -330,7 +414,7 @@
     app.innerHTML =
       '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + K(KIND_NAME[kind]) + '・' + gName(S.grade) + '</span><span></span></header>' +
       K('<main class="chooser"><h2>どの[字|じ]で やる？</h2>') + src.map(function (s) {
-        return '<button class="big' + (s.list.length ? '' : ' empty') + '" data-id="' + s.id + '"' + (s.list.length ? '' : ' disabled') + '>' + K(s.label) +
+        return '<button class="big' + (s.list.length ? '' : ' empty') + '" data-id="' + s.id + '" data-gate="s.' + s.id + '"' + (s.list.length ? '' : ' disabled') + '>' + K(s.label) +
           '<span class="meta">' + (s.list.length ? s.list.length + K('[問|もん]') + (s.sub ? '・' + K(s.sub) : '') : K('[今|いま]は ないよ')) + '</span></button>';
       }).join('') + '</main>';
     on('#back', menu);
@@ -340,6 +424,7 @@
         startSession(kind, s.list.slice());
       });
     });
+    watchGates();
   }
   function startSession(kind, list) {
     S.session = { kind: kind, items: list, i: 0, results: {}, skipped: {}, startedAt: nowMs() }; // skipped: 「わからない」で答えを見た字（木には数えない）
@@ -568,6 +653,7 @@
     var cached = reuse && S.view && S.view.klass === klass;
     (cached ? Promise.resolve(S.view) : Platform.teacherView(klass)).then(function (view) {
       view.klass = klass; view.pointers = view.pointers || {}; S.view = view;
+      view.gates = Sched.normGates(view.gates);
       var kids = view.students || [], tests = Sched.normTests(view.tests !== undefined ? view.tests : view.test), st = view.stats || { students: 0, perChar: {} };
       // view.grades は見せるタブ全部（かなを含む）。学年タブ・進度・出題順は漢字の学年だけ
       var shown = view.grades, grades = shown.filter(function (g) { return !isKana(g); }).map(Number), pointers = view.pointers;
@@ -590,6 +676,7 @@
         function fold(id, title, now, body) {
           return '<details class="tset" id="' + id + '"' + (S.open[id] ? ' open' : '') + '><summary><span class="ts-title">' + title + '</span><span class="ts-now" id="' + id + '-now">' + now + '</span></summary><div class="ts-body">' + body + '</div></details>';
         }
+        function gatesNow(list) { return list.length ? 'オフ: ' + list.map(function (k) { return GATE_LABEL[k]; }).join('・') : 'ぜんぶ オン'; }
         function gradesNow(list) {
           var gs = list.filter(function (g) { return !isKana(g); }).map(Number), ks = list.filter(isKana).map(function (g) { return KANA_NAME[g]; });
           var gl = gs.length > 1 && gs[gs.length - 1] - gs[0] === gs.length - 1 ? gs[0] + '〜' + gs[gs.length - 1] + '年' : gs.map(function (g) { return g + '年'; }).join('・');
@@ -608,6 +695,9 @@
               ['easy', 'やさしい', 'ずれが大きくても正解にしやすい。3回続けてまちがえるまで待つ（形のちがう字を正解にすることも少し増える）']].map(function (o) {
               return '<label class="opt"><input type="radio" name="wlevel" value="' + o[0] + '"' + ((view.writeLevel || '') === o[0] ? ' checked' : '') + '> <b>' + o[1] + '</b> <span class="hint">' + o[2] + '</span></label>';
             }).join('') + '</div><p class="hint" id="wmsg" aria-live="polite"></p>') +
+          fold('d-gates', '児童画面のボタン', esc(gatesNow(view.gates)),
+            '<p class="hint">「児童画面を ためす」で、ボタンの右上の <b>✓</b>（児童が使える）／<b>✕</b>（使えない）を押して切り替えます（押すたびに自動で保存）。オフのボタンは、この学級の児童の画面で うすくなり、押せなくなります。開いたままの児童の画面にも 30秒ほどで とどきます。メニューのボタンと、読む・書く・カードの「どの字で やる？」の選び方を切り替えられます。</p>' +
+            '<p><button id="gate-try">児童画面を ためして 切り替える</button>' + (view.gates.length ? ' <button id="gate-reset">ぜんぶ オンにもどす</button>' : '') + ' <span id="gate-msg" aria-live="polite"></span></p>') +
           '</section><section class="tsets"><h2>' + tgrade + '年</h2>' + gradeTabs +
           fold('d-test', '漢字テストの範囲', '',
             '<p class="hint">テストごとに 範囲を 作り、児童に見せるテストを 1つ えらびます（押すたびに自動で保存）。上の学年タブを切り替えると、ほかの学年の字も足せます。見せているテストは、児童の「読む・書く・カード」の はじめかたと メニューに出ます。</p>' +
@@ -701,6 +791,11 @@
             // 学年を変えたら、いちばん上の学年を開く
             Platform.setGrades(klass, list).then(function () { view.grades = list; teacher(klass, 0, true); }, function () { cb.checked = !cb.checked; $('#gmsg').textContent = '× 保存できませんでした'; });
           });
+        });
+        on('#gate-try', function () { startTrial(klass); });
+        on('#gate-reset', function () {
+          $('#gate-msg').textContent = '保存中…';
+          Platform.setGates(klass, []).then(function (v) { view.gates = v; teacher(klass, tgrade, true); }, function () { $('#gate-msg').textContent = '× 保存できませんでした'; });
         });
         app.querySelectorAll('input[name="wlevel"]').forEach(function (r) {
           r.addEventListener('change', function () {
@@ -877,6 +972,7 @@
       document.body.insertBefore(bar, app);
     }
     bar.innerHTML = '<span class="tb-label">先生のおためし中（記録は この端末だけ）' + (S.dayOffset ? '・' + S.dayOffset + '日後' : '') + '</span>' +
+      '<span class="tb-gate">ボタンの右上: <b class="on">✓</b>児童が使える <b class="off">✕</b>使えない<span id="tb-msg" aria-live="polite"></span></span>' +
       '<button id="tb-day">1日すすめる</button><button id="tb-reset">はじめから</button><button id="tb-back">先生画面にもどる</button>';
     bar.querySelector('#tb-day').addEventListener('click', function () { S.dayOffset = (S.dayOffset || 0) + 1; trialBar(); menu(); });
     bar.querySelector('#tb-reset').addEventListener('click', function () {
@@ -893,6 +989,7 @@
       S.trial = true;
       S.test = view.test || null;
       applyGrades(view.grades); S.pointers = view.pointers || {}; S.writeLevel = view.writeLevel || '';
+      S.gates = Sched.normGates(view.gates); S.gatesSaved = S.gates.slice();
       S.p = Platform.startTrial(S.info.email);
       S.dayOffset = 0;
       trialBar();
@@ -914,6 +1011,7 @@
     S.test = info.test || null;
     applyGrades(info.grades);
     S.writeLevel = info.writeLevel || '';
+    S.gates = Sched.normGates(info.gates);
     if (info.role === 'teacher') return teacher();
     if (info.role !== 'student') {
       app.innerHTML = '<main class="done"><p>このアカウントでは つかえません。学校のアカウントで ひらいてね。</p></main>';

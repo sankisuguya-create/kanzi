@@ -6,9 +6,9 @@ import vm from 'node:vm';
 
 // calls = スプレッドシートへの呼び出し回数（速さの目安。GAS では1回ごとに通信が入る）
 function makeEnv(sheets, email) {
-  const book = {}, calls = { n: 0 };
+  const book = {}, calls = { n: 0 }, cache = sheets.__cache || (sheets.__cache = {});
   const tick = (f) => (...a) => { calls.n++; return f(...a); };
-  for (const [name, rows] of Object.entries(sheets)) book[name] = rows.map((r) => r.slice());
+  for (const [name, rows] of Object.entries(sheets)) if (name !== '__cache') book[name] = rows.map((r) => r.slice());
   function sheetObj(name) {
     const data = book[name];
     const range = (r, c, nr = 1, nc = 1) => ({
@@ -31,6 +31,7 @@ function makeEnv(sheets, email) {
     SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: tick((n) => (book[n] ? sheetObj(n) : null)), insertSheet: (n) => { book[n] = []; return sheetObj(n); } }) },
     Session: { getActiveUser: () => ({ getEmail: () => email }) },
     LockService: { getUserLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) },
+    CacheService: { getScriptCache: () => ({ get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = String(v); } }) },
     HtmlService: {}
   };
   vm.createContext(ctx);
@@ -222,4 +223,24 @@ test('書く問題の判定: 担当の先生が学級ごとに選び、その学
   assert.throws(() => env.api_setWriteLevel('3-2', 'easy'), /担当学級ではありません/);
   assert.equal(makeEnv(env.book, K1).api_init().writeLevel, 'easy');
   assert.equal(makeEnv(env.book, K3).api_init().writeLevel, '');
+});
+
+test('児童画面のボタンのオン・オフ: 先生が担当学級だけ保存し、その学級の児童に届く（読み直しはキャッシュから）', () => {
+  const s = base(), t = makeEnv(s, T);
+  assert.deepEqual(Array.from(t.api_teacherView('3-1').gates), []);
+  // 知らないキー・重なりは捨て、決まった順に並べる
+  assert.deepEqual(Array.from(t.api_setGates('3-1', ['s.rnd', 'm.write', 'x.bad', 'm.write'])), ['m.write', 's.rnd']);
+  assert.throws(() => t.api_setGates('3-2', ['m.read']), /担当学級ではありません/);
+  assert.equal(t.book['設定'].find((r) => r[0] === 'gates:3-1')[1], 'm.write,s.rnd');
+  assert.deepEqual(Array.from(t.api_teacherView('3-1').gates), ['m.write', 's.rnd']);
+  const kid = makeEnv(Object.assign(t.book, { __cache: s.__cache }), K1);
+  assert.deepEqual(Array.from(kid.api_init().gates), ['m.write', 's.rnd']);
+  assert.deepEqual(Array.from(kid.api_gates()), ['m.write', 's.rnd']);
+  const before = kid.calls.n;
+  assert.deepEqual(Array.from(kid.api_gates()), ['m.write', 's.rnd']);
+  assert.equal(kid.calls.n, before, '2回目からは シートを読まない');
+  t.api_setGates('3-1', []); // 先生が戻すと、キャッシュも すぐ変わる
+  assert.deepEqual(Array.from(kid.api_gates()), []);
+  assert.deepEqual(Array.from(makeEnv(Object.assign(t.book, { __cache: {} }), K3).api_gates()), []); // 3年2組には届かない
+  assert.throws(() => t.api_gates(), /児童のアカウントではありません/);
 });
