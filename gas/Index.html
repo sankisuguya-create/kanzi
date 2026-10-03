@@ -39,6 +39,9 @@ body {
 button { font: inherit; color: inherit; cursor: pointer; }
 input, select, textarea { font-family: inherit; } /* フォーム部品も同じ日本語フォントを引き継ぐ */
 button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
+/* キーボードで進める要素にも同じ太い枠を出す（ブラウザ既定の細い outline との混在を避ける。
+   先生の校務PCと児童のChromebookの両方で Tab 操作をするため。WCAG 2.4.7） */
+summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
 
 /* ---- 見出し */
 .top { display: flex; align-items: baseline; gap: 14px; padding: 4px 4px 8px; }
@@ -449,7 +452,7 @@ button:focus-visible { outline: 4px solid var(--cat-1); outline-offset: 2px; }
   body.trial #trial-bar #tb-back { margin-top: auto; }
 }
 </style>
-<meta name="kanzi-ver" content="81efff4">
+<meta name="kanzi-ver" content="c73a1c5">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
