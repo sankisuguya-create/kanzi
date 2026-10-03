@@ -6,14 +6,14 @@ import vm from 'node:vm';
 
 // calls = スプレッドシートへの呼び出し回数（速さの目安。GAS では1回ごとに通信が入る）
 function makeEnv(sheets, email) {
-  const book = {}, calls = { n: 0 }, cache = sheets.__cache || (sheets.__cache = {});
+  const book = {}, calls = { n: 0, log: [] }, cache = sheets.__cache || (sheets.__cache = {});
   const tick = (f) => (...a) => { calls.n++; return f(...a); };
   for (const [name, rows] of Object.entries(sheets)) if (name !== '__cache') book[name] = rows.map((r) => r.slice());
   function sheetObj(name) {
     const data = book[name];
     const range = (r, c, nr = 1, nc = 1) => ({
       getValues: tick(() => Array.from({ length: nr }, (_, i) => Array.from({ length: nc }, (_, j) => (data[r - 1 + i] || [])[c - 1 + j] ?? ''))),
-      setValues: tick((v) => v.forEach((row, i) => row.forEach((x, j) => { (data[r - 1 + i] = data[r - 1 + i] || [])[c - 1 + j] = x; }))),
+      setValues: tick((v) => { calls.log.push(name); v.forEach((row, i) => row.forEach((x, j) => { (data[r - 1 + i] = data[r - 1 + i] || [])[c - 1 + j] = x; })); }),
       getValue: tick(() => (data[r - 1] || [])[c - 1] ?? ''),
       setValue: tick((x) => { (data[r - 1] = data[r - 1] || [])[c - 1] = x; }),
       setFontWeight: () => {},
@@ -303,6 +303,37 @@ test('過年度の消去: 途中で止まったら残数を出し、同じ番号
   assert.equal(env.book['進捗2025'][1][0], '児童001'); // 名簿と同じ番号に引き継がれる
   assert.equal(env.book['照合2025'], undefined);
   assert.equal(env.api_archiveView('2025').anonymized, true);
+});
+
+test('過年度の消去: 照合表を先に保存してから名簿・進捗を書き換える', () => {
+  const s = base(), env = makeEnv(s, T);
+  env.api_archiveSave('2025');
+  env.calls.log.length = 0; // 消去の呼び出しだけを見る
+  env.api_archiveAnonymize('2025', '2025');
+  const log = env.calls.log, map = log.indexOf('照合2025'), roster = log.indexOf('名簿2025'), prog = log.indexOf('進捗2025');
+  assert.ok(map >= 0 && roster >= 0 && prog >= 0, '書き換え対象: ' + log.join(','));
+  assert.ok(map < roster && map < prog, '照合表の保存が名簿・進捗の書き換えより先（途中で止まっても同じ番号で再開できる）');
+});
+
+test('設定の同時保存: ロックの中で読み直すので、同じキーの行が二つできない', () => {
+  const env = makeEnv(base(), T);
+  env.setting_('order:3'); // この実行の控えを先に埋める（ロック前の値）
+  env.book['設定'].push(['order:3', '先に別の人が保存']); // 控えを読んだあとに別の実行が入れた行
+  env.setSetting_('order:3', '後から保存');
+  const rows = env.book['設定'].filter((r) => r[0] === 'order:3');
+  assert.equal(rows.length, 1); // 同じキーの行が二つできない
+  assert.equal(rows[0][1], '後から保存'); // 先頭行を読むので、後の保存が効く
+  assert.equal(env.setting_('order:3'), '後から保存');
+});
+
+test('ゲート設定: 保存と同じ順番で児童側のキャッシュを書き換える', () => {
+  const s = base(), env = makeEnv(s, T);
+  s.__cache['gates:3-1'] = 'm.read'; // 前の値が残っている状態
+  env.api_setGates('3-1', ['m.write']);
+  assert.equal(s.__cache['gates:3-1'], 'm.write'); // シートの新しい値と同じものがキャッシュに入る
+  assert.equal(env.book['設定'].find((r) => r[0] === 'gates:3-1')[1], 'm.write');
+  const kid = makeEnv(s, K1); // 児童が読むのはキャッシュ（新しい値）
+  assert.deepEqual(Array.from(kid.api_gates()), ['m.write']);
 });
 
 test('書く問題の判定: 担当の先生が学級ごとに選び、その学級の児童に届く', () => {
