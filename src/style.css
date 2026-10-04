@@ -349,6 +349,7 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
 /* 葉の色（背景色）は tree-painter.js の COLORS が正本で、tree.js がインラインで当てる。ここでは形だけ */
 .forest-r { border-radius: 50%; }
 .forest-w { transform: rotate(45deg); }
+.forest-b { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .forest-colors { margin: 0; padding: 0 4px; font-size: 16px; }
 .forest-colors:not([open]) > :not(summary) { display: none; }
 .forest-colors summary { min-height: 56px; padding: 14px 6px; cursor: pointer; }
@@ -447,3 +448,84 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
   body.trial #trial-bar #tb-msg { display: block; margin: 4px 0 0; line-height: 1.4; }
   body.trial #trial-bar #tb-back { margin-top: auto; }
 }
+
+/* ================= ぶんの ぶんかい ================= */
+/* 役割は色でなく語バッジで示す（5役割は色分け上限を超える）。選択・判定・係り先の状態は塗り＋枠＋印で二重に運ぶ */
+.bk { display: grid; gap: 14px; max-width: 980px; margin: 0 auto; width: 100%; }
+.bk-sent { margin: 0; text-align: center; font-size: 30px; letter-spacing: .05em; }
+.bk-sent rt { font-size: .45em; }
+.bk-wrap { position: relative; background: var(--card); border: 2px solid var(--line); border-radius: 18px; padding: 18px 18px 40px; }
+.bk-line { position: relative; display: flex; flex-wrap: wrap; gap: 46px 14px; justify-content: center; padding-bottom: 30px; /* 下余白は係り線レーン */ }
+.bk-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+.bk-svg .lk { fill: none; stroke: var(--cat-2); stroke-width: 3; stroke-linecap: round; }
+.bk-svg .lkhead { fill: var(--cat-2); stroke: none; }
+.bk-chip { position: relative; display: inline-flex; flex-direction: column; align-items: center; gap: 2px; min-width: 88px; min-height: 88px; padding: 8px 16px 6px; font-size: 30px; font-weight: 700; font-family: inherit; background: var(--card); border: 3px solid var(--line); border-radius: 14px; cursor: pointer; touch-action: pan-y; }
+.bk-chip .bkt { line-height: 1.3; }
+.bk-chip rt { font-size: .45em; font-weight: 400; }
+.bk-chip .badge { display: block; white-space: nowrap; line-height: 1.1; min-height: 17px; font-size: 13px; font-weight: 700; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 8px; padding: 2px 7px; background: var(--paper); }
+.bk-chip .badge rt { font-size: .62em; }
+.bk-chip .badge .bka { font-style: normal; color: var(--cat-2); }
+.bk-chip .badge:empty::before { content: '\00a0'; }
+.bk-chip.sel { background: var(--fill-a); border-width: 4px; outline: 3px solid var(--cat-1); }
+.bk-chip.locked { border-color: var(--cat-1); cursor: default; }
+.bk-chip.locked .badge { border-color: var(--cat-1); color: var(--cat-1); }
+.bk-chip.pickme { animation: bkpulse 1s infinite; }
+.bk-line.picking .bk-chip:not(.sel) { border-style: dashed; border-color: var(--cat-2); } /* 係り先モード中はロック済みも係り先として有効 */
+body.bk-dragging .bk-chip { border-style: dashed; border-color: var(--cat-2); }
+.bk-chip.drop-ok { background: var(--fill-b); border-color: var(--cat-2); border-width: 4px; }
+.bk-chip.flash-bad { animation: bkbad .6s; }
+.bk-chip .badx { position: absolute; top: -14px; right: -10px; font-size: 18px; font-weight: 700; color: #fff; background: var(--ink-alert); border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; z-index: 4; }
+@keyframes bkbad { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+@keyframes bkpulse { 50% { border-color: var(--cat-2); } }
+.bk-hint { margin: 0; text-align: center; min-height: 1.6em; font-size: 22px; font-weight: 700; }
+.bk-hint.err { color: var(--ink-alert); }
+.bk-hint.good { color: var(--cat-1); }
+.bk-pal { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.bk-pal[hidden] { display: none; }
+.bk-role { min-height: 76px; padding: 6px 4px; font-size: 24px; font-weight: 700; font-family: inherit; border-radius: 14px; background: var(--card); border: 3px solid var(--ink); cursor: grab; touch-action: none; }
+.bk-role rt { font-size: .5em; font-weight: 400; }
+.bk-role[disabled] { opacity: .45; cursor: default; }
+.bk-role:active { transform: translateY(2px); }
+.bk-tools { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.bk-tools .big { width: auto; min-width: 220px; }
+.bk-erase { min-height: 56px; padding: 0 22px; font-size: 20px; font-family: inherit; background: var(--card); border: 3px solid var(--ink); border-radius: 12px; cursor: pointer; }
+.bk-erase[disabled] { opacity: .45; cursor: default; }
+.bk-tools .btn-mada { min-height: 60px; padding: 0 22px; font-size: 20px; border-radius: 12px; }
+.next-row { display: flex; justify-content: center; }
+.next-row .big { width: auto; min-width: 260px; }
+.bk-ghost { position: fixed; transform: translate(-50%, -60%); pointer-events: none; z-index: 100; opacity: .85; background: var(--card); border: 3px solid var(--cat-2); border-radius: 14px; padding: 8px 16px; font-size: 24px; font-weight: 700; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+.endlist.bunkai { grid-template-columns: 1fr; }
+.endlist.bunkai li { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+.endlist.bunkai .bs { font-size: 22px; font-weight: 700; }
+.endlist.bunkai .bs rt { font-size: .45em; font-weight: 400; }
+/* 先生の作る画面で使う入力 */
+.bk-input { display: flex; flex-direction: column; gap: 8px; }
+.bk-input input { font-size: 20px; padding: 10px 12px; border: 2px solid var(--line); border-radius: 10px; font-family: inherit; }
+/* 横長の画面ではスクロールなしを目標（メニューと同じ仕組みで縮める） */
+@media (min-aspect-ratio: 1/1) and (min-width: 761px) and (min-height: 480px) {
+  body.bunkai-screen { height: 100vh; height: 100dvh; overflow: hidden; }
+  body.bunkai-screen #app { height: 100%; box-sizing: border-box; }
+  body.bunkai-screen .bk { gap: 8px; }
+  body.bunkai-screen .bk-sent { font-size: clamp(20px, 4.2vh, 30px); }
+  body.bunkai-screen .bk-wrap { padding: 10px 14px 34px; }
+  body.bunkai-screen .bk-line { gap: 40px 12px; padding-bottom: 26px; }
+  body.bunkai-screen .bk-chip { min-height: 72px; min-width: 76px; font-size: clamp(20px, 4vh, 28px); }
+  body.bunkai-screen .bk-hint { font-size: clamp(16px, 3vh, 22px); }
+  body.bunkai-screen .bk-role { min-height: 56px; font-size: clamp(16px, 3.4vh, 24px); }
+  body.bunkai-screen .bk-tools { padding-top: 2px; }
+  body.bunkai-screen .bk-tools .btn-mada, body.bunkai-screen .bk-erase { min-height: 48px; font-size: 17px; }
+}
+@media (max-width: 760px) {
+  .bk-pal { grid-template-columns: repeat(3, 1fr); }
+  .bk-chip { font-size: 26px; }
+  .bk-sent { font-size: 24px; }
+}
+/* 先生のぶんかい区画の一覧行（ol.hard を問題文の幅に合わせた版） */
+ol.hard.bk { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+ol.hard.bk li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 10px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+ol.hard.bk .bs { font-style: normal; font-size: 20px; font-weight: 700; }
+ol.hard.bk .bs rt { font-size: .5em; font-weight: 400; }
+ol.hard.bk .bp { font-weight: 700; }
+ol.hard.bk .bp2 { color: var(--ink-sub); font-size: 15px; }
+ol.hard.bk .bk-del { margin-left: auto; min-height: 40px; padding: 0 14px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); cursor: pointer; font-size: 15px; }
+#bk-editor .bk { padding-top: 10px; }

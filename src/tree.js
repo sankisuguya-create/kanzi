@@ -58,7 +58,7 @@
           type: id % 5,
           modes: regionLog
             .slice((id % AREA) * STEP, (id % AREA + 1) * STEP)
-            .replace(/[prwky]/g, (c) => ({ p: '0', r: '1', w: '2', k: '3', y: '3' })[c]) // カードは2種類とも同じ色
+            .replace(/[prwkyb]/g, (c) => ({ p: '0', r: '1', w: '2', k: '3', y: '3', b: '3' })[c]) // カードは2種類とも同じ色。ぶんかいもカードと同じ色
         });
       return records.get(id);
     }
@@ -72,7 +72,8 @@
       '<details class="forest-colors"><summary>葉の色</summary><div class="forest-legend" aria-label="学習モードと葉の色">' +
       '<span><i class="forest-r" style="background:' + root.TreePainter.COLORS[1] + '" aria-hidden="true"></i>よむ</span>' +
       '<span><i class="forest-w" style="background:' + root.TreePainter.COLORS[2] + '" aria-hidden="true"></i>かく</span>' +
-      '</div><p class="forest-note">読む・書くで 育つよ。カードでは 育たないよ。</p></details>';
+      '<span><i class="forest-b" style="background:' + root.TreePainter.COLORS[3] + '" aria-hidden="true"></i>ぶんかい</span>' +
+      '</div><p class="forest-note">よむ・かく・ぶんかいで 育つよ。カードでは 育たないよ。</p></details>';
     const canvas = host.querySelector('canvas'),
       ctx = canvas.getContext('2d', { alpha: false });
     const status = host.querySelector('.forest-status'),

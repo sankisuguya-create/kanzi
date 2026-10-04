@@ -232,7 +232,7 @@ await page.waitForSelector('#d-grades');
 check((await page.textContent('.top .sub')).startsWith('3年1組'), '先生: 担当学級（3年1組）で開く');
 check((await page.$$('.kids tbody tr')).length === 30 && (await page.textContent('.kids thead')).includes('おぼえた字'), '先生: 担当学級の子どもごとの記録（30人）');
 check(await page.evaluate(() => document.querySelector('.kids').getBoundingClientRect().top < document.querySelector('.tsets').getBoundingClientRect().top), '先生: いまの進捗（記録）は設定より上');
-check(await page.evaluate(() => [...document.querySelectorAll('details.tset')].every((d) => !d.open) && document.querySelectorAll('details.tset').length === 6), '先生: 設定6つは はじめ たたんである');
+check(await page.evaluate(() => [...document.querySelectorAll('details.tset')].every((d) => !d.open) && document.querySelectorAll('details.tset').length === 8), '先生: 設定8つは はじめ たたんである');
 check((await page.textContent('#d-grades-now')) === '1〜3年' && (await page.textContent('#d-test-now')) === 'なし', '先生: たたんでも いまの値が見出しに出る');
 await shot('10-teacher-folded');
 await page.click('#d-grades summary');

@@ -5,6 +5,7 @@
   "scripts": {
     "build": "node tools/build-data.mjs && node tools/build-gas.mjs",
     "build:data": "node tools/build-data.mjs",
+    "build:bunkai": "node tools/build-bunkai.mjs",
     "build:gas": "node tools/build-gas.mjs",
     "test": "node --test tests/*.test.mjs",
     "e2e": "node tests/e2e.mjs",

@@ -137,7 +137,7 @@ test('保存: 本人の行だけを更新し、meta に えらんだ漢字・終
   const m = JSON.parse(env.api_save(JSON.stringify(p)));
   assert.ok(m.read['暗']);
   const row = env.book['進捗'].find((r) => r[0] === K2);
-  assert.deepEqual(JSON.parse(row[3]), { sel: { 暗: [1, 5] }, done: {}, old: [JSON.parse(row[3]).old[0], 1, 5] }); // 古い回は合計にまとめる
+  assert.deepEqual(JSON.parse(row[3]), { sel: { 暗: [1, 5] }, done: {}, old: [JSON.parse(row[3]).old[0], 1, 5], bunkai: {} }); // 古い回は合計にまとめる
   assert.throws(() => makeEnv(base(), T).api_save('{}'), /児童のアカウントではありません/);
 });
 
@@ -412,4 +412,32 @@ test('過年度の消去: メールの列が見つからなければ、何も書
   assert.throws(() => env.api_archiveAnonymize('2025', '2025'), /「メール」の列が見つかりません/);
   assert.equal(JSON.stringify(env.book['名簿2025']), before);
   assert.equal(env.book['設定'].find((r) => r[0] === 'archLog:2025'), undefined);
+});
+
+test('ぶんかい: 先生が自作問題を保存すると学級の児童へ届く（キャッシュ経由・他学級は見えない）', () => {
+  const s = base(), t = makeEnv(s, T);
+  const list = [{ id: 'cx1', segs: [{ t: 'あした', r: '修', m: 3 }, { t: 'はなが', r: '主', m: 0 }, { t: 'さいた。', r: '述', m: 0 }] }];
+  assert.equal(t.api_setBunkai('3-1', JSON.stringify(list)).length, 1);
+  // 設定シートに bunkai:<学級> のキーで入っている
+  assert.equal(t.book['設定'].find((r) => r[0] === 'bunkai:3-1')[1], JSON.stringify(list));
+  const kid = makeEnv(Object.assign(t.book, { __cache: s.__cache }), K1);
+  assert.deepEqual(kid.api_bunkai()[0].segs[1].r, '主');
+  const kid2 = makeEnv(Object.assign(t.book, { __cache: {} }), K3);
+  assert.equal(kid2.api_bunkai().length, 0); // 3年2組には届かない
+  assert.throws(() => t.api_bunkai(), /児童のアカウントではありません/);
+  assert.throws(() => makeEnv(t.book, K1).api_setBunkai('3-1', '[]'), /担当学級|先生のアカウント/);
+});
+
+test('ぶんかい: 形の違う自作問題は落とす（述語2つ・係り先なしの修飾語など）', () => {
+  const t = makeEnv(base(), T);
+  const bad = [{ id: 'cx2', segs: [{ t: 'a', r: '述', m: 0 }, { t: 'b', r: '述', m: 0 }] }];
+  assert.equal(t.api_setBunkai('3-1', JSON.stringify(bad)).length, 0);
+});
+
+test('先生の集計: ぶんかいの問題ごとに [答えた人数, 最後がまちがいの人数, 役割まちがい, 係り先まちがい]', () => {
+  const s = base();
+  s.進捗[1] = [K1, '{}', '{}', JSON.stringify({ sel: {}, done: {}, bunkai: { b01: [3, 2, 1790000000000, 1790000000000, 5, 7] } })];
+  const v = makeEnv(s, T).api_teacherView('3-1');
+  assert.deepEqual(JSON.parse(JSON.stringify(v.stats.perProblem['b01'])), [1, 1, 5, 7]);
+  assert.equal(v.bunkai.length, 0);
 });
