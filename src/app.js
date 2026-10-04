@@ -600,7 +600,7 @@
   }
 
   // ================= ぶんの ぶんかい（その他画面から入る。設計書 §25）====================
-  // 文節チップに役割を当て（判定）→ 修飾語の係り先をつなぐ（判定）の2段。タップでもドラッグでもできる（利用者の指定）
+  // 文節チップに役割を当て（判定）→ 修飾語の係り先をつなぐ（判定）の2段。操作はおすだけ（ドラッグは使わない: 利用者の指定）
   // 役割は色でなく語バッジで示す（5役割は色分けの上限4色を超えるため）。漢字の学年は3年まで（正本側で機械検査）
   var BK_ROLE = ['主', '述', '修', '接', '独'];
   var BK_KANA = { '主': 'しゅご', '述': 'じゅつご', '修': 'しゅうしょくご', '接': 'せつぞくご', '独': 'どくりつご' };
@@ -609,55 +609,6 @@
   function plain(s) { return String(s).replace(/\{([^|}]+)\|([^}]+)\}/g, '$1'); }
   function bunkaiSentence(prob) { return prob.segs.map(function (s) { return s.t; }).join(' '); }
   function roleBadge(r) { return '<ruby>' + BK_NAME[r] + '<rt>' + BK_KANA[r] + '</rt></ruby>'; }
-
-  // タップに加えてドラッグも受け付ける（先生の作る画面と共用）。pointer 系で統一し、8px以内はタップとして click に任せる
-  var dragEndAt = 0;
-  function tapOk() { return Date.now() - dragEndAt > 300; }
-  function enableDrag(src, opts) {
-    src.addEventListener('pointerdown', function (e) {
-      if (opts.disabled && opts.disabled()) return;
-      var ghost = null, moved = false, overEl = null;
-      function pos(ev) { ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px'; }
-      function over(ev) {
-        var t = opts.over(ev) || null;
-        if (overEl === t) return;
-        if (overEl) overEl.classList.remove('drop-ok');
-        overEl = t;
-        if (overEl) overEl.classList.add('drop-ok');
-      }
-      function mv(ev) {
-        if (!moved) {
-          if (Math.abs(ev.clientX - e.clientX) + Math.abs(ev.clientY - e.clientY) < 10) return;
-          moved = true;
-          ghost = opts.ghost();
-          document.body.appendChild(ghost);
-          document.body.classList.add('bk-dragging');
-          pos(ev);
-        } else pos(ev);
-        over(ev);
-        ev.preventDefault(); // ドラッグ中はスクロールさせない
-      }
-      function up(ev) {
-        src.removeEventListener('pointermove', mv);
-        src.removeEventListener('pointerup', up);
-        src.removeEventListener('pointercancel', up);
-        if (!moved) return;
-        dragEndAt = Date.now();
-        over(ev);
-        var t = overEl;
-        overEl = null;
-        if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
-        document.body.classList.remove('bk-dragging');
-        if (t) t.classList.remove('drop-ok');
-        if (t) opts.drop(t);
-      }
-      src.addEventListener('pointermove', mv);
-      src.addEventListener('pointerup', up);
-      src.addEventListener('pointercancel', up);
-      try { src.setPointerCapture(e.pointerId); } catch (er) {}
-    });
-  }
-  function chipAt(ev) { var t = document.elementFromPoint(ev.clientX, ev.clientY); return t && t.closest ? t.closest('.bk-chip') : null; }
 
   // その他画面: 今後の活動の入口を並べる chooser 型の画面
   function otherMenu() {
@@ -730,13 +681,14 @@
         el.disabled = st.done;
         if (st.role[i]) {
           badge.hidden = false;
+          badge.className = 'badge r' + BK_ROLE.indexOf(st.role[i]);
           badge.innerHTML = (st.locked[i] && !author ? '✓ ' : '') + roleBadge(st.role[i]) + (st.role[i] === '修' && st.target[i] === null && !st.done ? '<i class="bka">→？</i>' : '');
         } else badge.hidden = true;
       });
       $('#bkerase').disabled = st.sel < 0 || st.done || st.locked[st.sel] || (st.phase === 'link' && st.role[st.sel] !== '修');
       pal.hidden = st.phase !== 'role' || st.done;
       app.querySelectorAll('.bk-role').forEach(function (b) {
-        // 文節を選んでいない間はタップで当てられないのでうすくする（disabled は使わない: 置くとドラッグも始められない。うすくてもドラッグはできる）
+        // 文節を選んでいない間はタップで当てられないのでうすくする（disabled は使わない: 置くとタップも止まる。うすくてもおせる見た目に）
         var dim = st.sel < 0 || st.done || st.locked[st.sel];
         b.classList.toggle('dim', dim);
         b.setAttribute('aria-disabled', dim ? 'true' : 'false');
@@ -958,14 +910,13 @@
       setTimeout(function () { if (!moved && document.body.contains($('#bknext'))) go(); }, ok ? 1500 : 3200);
     }
 
-    // ---- 操作（タップでもドラッグでも。ドラッグの後のクリックは抑える）----
+    // ---- 操作（おすだけ。ドラッグは使わない: 利用者の指定）----
     prob.segs.forEach(function (s, i) {
       chipEl(i).addEventListener('click', function () {
-        if (st.done || !tapOk()) return;
+        if (st.done) return;
         if (st.phase === 'link') {
           if (st.picking && i !== st.sel) { st.target[st.sel] = i; st.picking = false; st.sel = -1; say(K('つぎの しゅうしょくごを おそう')); paint(); if (phaseComplete()) judge(); return; }
           if (st.role[i] !== '修') { st.sel = -1; st.picking = false; paint(); return; }
-          st.sel = i === st.sel && !st.picking ? i : i;
           st.picking = i === st.sel ? !st.picking : true;
           st.sel = i;
           say(st.picking ? '『' + plain(s.t) + '』が くわしくする ことばを おそう' : K('しゅうしょくご が くわしくする ことばを つないで'));
@@ -977,42 +928,17 @@
         say(st.sel >= 0 ? '『' + plain(s.t) + '』の やくわりを えらぼう' : K('ことばを おして、やくわりを えらぼう'));
         paint();
       });
-      // 修飾語チップを係り先へドラッグして線を引く（つなぎの段）
-      enableDrag(chipEl(i), {
-        disabled: function () { return st.done || st.phase !== 'link' || st.role[i] !== '修'; },
-        ghost: function () { var g = chipEl(i).cloneNode(true); g.className += ' bk-ghost'; return g; },
-        over: function (ev) { var c = chipAt(ev); return c && +c.dataset.i !== i ? c : null; },
-        drop: function (t) {
-          if (st.done || st.phase !== 'link' || st.role[i] !== '修') return;
-          st.target[i] = +t.dataset.i; st.sel = -1; st.picking = false;
-          say(K('つぎの しゅうしょくごを おそう')); paint();
-          if (phaseComplete()) judge();
-        }
-      });
     });
-    // 役割パレット: タップで選択中の文節に当てる／ドラッグして文節の上ではなす
+    // 役割パレット: おしたら選択中の文節に当てる
     app.querySelectorAll('.bk-role').forEach(function (b) {
       b.addEventListener('click', function () {
-        if (!tapOk() || st.sel < 0 || st.done || st.locked[st.sel] || st.phase !== 'role') return;
+        if (st.sel < 0 || st.done || st.locked[st.sel] || st.phase !== 'role') return;
         var i = st.sel;
         if (st.role[i] === '修' && b.dataset.r !== '修') st.target[i] = null; // 修飾語以外に変えたら自分の線を消す
         st.role[i] = b.dataset.r;
         say(K('ことばを おして、やくわりを えらぼう'));
         paint();
         if (phaseComplete()) judge();
-      });
-      enableDrag(b, {
-        disabled: function () { return st.done || st.phase !== 'role'; },
-        ghost: function () { var g = document.createElement('div'); g.className = 'bk-ghost bk-ghost-role'; g.textContent = BK_NAME[b.dataset.r]; return g; },
-        over: chipAt,
-        drop: function (t) {
-          var i = +t.dataset.i;
-          if (st.done || st.phase !== 'role' || st.locked[i]) return;
-          if (st.role[i] === '修' && b.dataset.r !== '修') st.target[i] = null;
-          st.role[i] = b.dataset.r; st.sel = -1;
-          paint();
-          if (phaseComplete()) judge();
-        }
       });
     });
     $('#bkerase').addEventListener('click', function () {

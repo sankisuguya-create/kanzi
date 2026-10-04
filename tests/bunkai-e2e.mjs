@@ -1,6 +1,6 @@
 // ぶんかいの通し確認（CHROMIUM=/path/to/chrome node tests/bunkai-e2e.mjs）。
 // メニュー → その他 → ぶんの ぶんかい → 役割を当てる（判定）→ 係り先をつなぐ（判定）→ おわり
-// 失敗して直す流れ・ドラッグ操作・先生の作る画面（登録→一覧）も確かめる。
+// 失敗して直す流れ・役割色（おしたまま移動は効かない）・先生の作る画面（登録→一覧）も確かめる。
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -147,7 +147,7 @@ await shot('bunkai-done');
 await page.locator('#menu').click();
 await page.waitForSelector('#app .menu');
 
-// ドラッグ操作: 役割チップ → 文節 へのドロップ（つなぎはクリックで代替済み）
+// おすだけ操作: 役割チップをおしたまま移動（ドラッグ）しても役割はつかない（利用者の指定でドラッグは廃止）
 await page.locator('#go-other').click();
 await page.locator('.chooser .big[data-id="bunkai"]').click();
 await page.waitForSelector('.bk-chip[data-i="0"]');
@@ -158,9 +158,20 @@ await page.mouse.down();
 await page.mouse.move(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2, { steps: 8 });
 await page.mouse.up();
 await page.waitForTimeout(300);
+check(await page.locator('.bk-chip[data-i="0"] .badge').isHidden(), 'おしたまま移動では役割がつかない（ドラッグ廃止）');
+// 役割チップは色分け（主=赤 述=緑 修=青 接=紫 独=茶。利用者の指定）、文節のバッジも同じ色
+const palColors = await page.evaluate(() =>
+  [...document.querySelectorAll('.bk-role')].map((b) => getComputedStyle(b).borderTopColor));
+check(palColors.join() === 'rgb(198, 40, 40),rgb(46, 125, 50),rgb(15, 94, 168),rgb(208, 92, 227),rgb(110, 67, 16)',
+  '役割チップが 赤・緑・青・紫・茶 の順で色分けされている');
+await page.locator('.bk-chip[data-i="0"]').click();
+await page.locator('.bk-role[data-r="主"]').click();
+await page.waitForTimeout(200);
 const badge0 = page.locator('.bk-chip[data-i="0"] .badge');
-check(await badge0.isVisible() && (await badge0.innerText()).includes('主語'), '役割チップのドラッグで文節に役割がつく（バッジに「主語」）');
-await shot('bunkai-drag');
+check(await badge0.isVisible() && (await badge0.innerText()).includes('主語'), 'おすだけで文節に役割がつく（バッジに「主語」）');
+const badgeColor = await page.evaluate(() => getComputedStyle(document.querySelector('.bk-chip[data-i="0"] .badge')).borderTopColor);
+check(badgeColor === 'rgb(198, 40, 40)', 'バッジも主語の色（赤）になる');
+await shot('bunkai-colors');
 await page.locator('#back').click();
 await page.waitForSelector('#app .menu');
 
