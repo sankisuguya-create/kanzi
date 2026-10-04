@@ -48,7 +48,7 @@ const same = (a, b) => JSON.stringify(a.map(({ hit, ...r }) => r)) === JSON.stri
 await t.click('#try'); await t.waitForSelector('#trial-bar');
 check(await t.evaluate(() => Math.max(...[...document.querySelectorAll('#app *')].map((e) => e.getBoundingClientRect().bottom)) <= innerHeight + 1), 'おためし: 帯があっても メニューは画面の高さに収まる');
 const n = await t.locator('.actions .gate-chip').count();
-check(n === 7, `おためし: メニューの7つのボタンにチップ（${n}）`);
+check(n === 8, `おためし: メニューの8つのボタンにチップ（${n}）`);
 const withChip = await boxes(t, '.actions [data-gate]');
 await t.evaluate(() => document.querySelectorAll('.gate-chip').forEach((c) => c.remove()));
 const noChip = await boxes(t, '.actions [data-gate]');

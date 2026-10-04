@@ -100,7 +100,7 @@ try {
   await page.waitForTimeout(100);
   assert.equal(await page.evaluate(()=>KanziState.treeView.metrics().completedPaints),paints);
   assert.equal(await page.locator('canvas.tree').evaluate(c=>c.toDataURL()),archived);
-  assert.equal(await page.locator('.forest-legend').textContent(),'よむかく');
+  assert.equal(await page.locator('.forest-legend').textContent(),'よむかくぶんかい');
   await page.screenshot({path:path.join(SHOTS,'forest-archive.png')});
   // 繰り返しメニューを作っても画像キャッシュを使い回し、破棄後に描画しない。
   const timings=await page.evaluate(async()=>{

@@ -2,7 +2,7 @@
 // tree = {type: 樹種番号, modes: パーツごとの色番号文字列}。同じ入力は同じ画像になる。
 (function (root) {
   'use strict';
-  // 葉の色（これまで・よむ・かく・カード）。背景・色覚の型をまたいで見分けられる4色（color-coding の check-palette で確認）。
+  // 葉の色（これまで・よむ・かく・カード）。背景・色覚の型をまたいで見分けられる4色（color-coding の check-palette で確認）。ぶんかいの葉はカードと同じ茶色（利用者の決定）。
   // この16進表記が正本（凡例・プログレスバーの色もここから取る）。canvas の hsl() 指定向けに MODE_HSL へ換算して使う
   const MODE_COLORS = ['#3F7D3A', '#0F5EA8', '#C86A00', '#6E4310'];
   const MODE_HSL = MODE_COLORS.map((hex) => {

@@ -209,7 +209,7 @@ function parseProgress_(read, write, meta) {
   var p = Sched.newProgress();
   try { p.read = JSON.parse(read || '{}'); } catch (e) {}
   try { p.write = JSON.parse(write || '{}'); } catch (e) {}
-  try { var m = JSON.parse(meta || '{}'); p.sel = m.sel || {}; p.done = m.done || {}; if (m.old) p.old = m.old; } catch (e) {} // 旧版の行（D列が日付）は無視
+  try { var m = JSON.parse(meta || '{}'); p.sel = m.sel || {}; p.done = m.done || {}; if (m.old) p.old = m.old; if (m.bunkai) p.bunkai = m.bunkai; } catch (e) {} // 旧版の行（D列が日付）は無視
   return Sched.norm(p);
 }
 
@@ -239,7 +239,7 @@ function api_save(json) {
   try {
     var cur = loadProgress_(me.email);
     var m = Sched.compact(Sched.merge(cur.p, incoming), Sched.compactBefore(new Date()));
-    var row = [me.email, JSON.stringify(m.read), JSON.stringify(m.write), JSON.stringify({ sel: m.sel, done: m.done, old: m.old }), new Date()];
+    var row = [me.email, JSON.stringify(m.read), JSON.stringify(m.write), JSON.stringify({ sel: m.sel, done: m.done, old: m.old, bunkai: m.bunkai }), new Date()];
     if (row[1].length >= 50000 || row[2].length >= 50000 || row[3].length >= 50000) throw new Error('進捗が大きすぎます'); // I6
     writeProgress_(progressSheet_(), cur.row, row, m.forest);
     return JSON.stringify(m);
@@ -263,11 +263,20 @@ function api_teacherView(klass) {
   var kids = roster_().filter(function (x) { return x.klass === klass; });
   var rows = {}, sh = progressSheet_(), m = sh.getLastRow() - 1;
   if (m > 0) sh.getRange(2, 1, m, 4).getValues().forEach(function (r) { rows[String(r[0]).toLowerCase()] = r; });
-  var per = {};
+  var per = {}, perP = {};
   var students = kids.map(function (k) {
     var r = rows[k.email], out = { no: k.no, name: k.name || k.email.split('@')[0], last: 0, sessions: 0, items: 0, learned: 0, miss: [] };
     if (!r) return out;
     var p = parseProgress_(r[1], r[2], r[3]), miss = [], c, d;
+    // ぶんかい: 問題ごとに [答えた人数, 最後の答えがまちがいの人数, 役割まちがいの累計, 係り先まちがいの累計]
+    for (var pid in p.bunkai) {
+      var be = p.bunkai[pid];
+      if (!(be[0] > 0)) continue;
+      var bp = perP[pid] || (perP[pid] = [0, 0, 0, 0]);
+      bp[0]++;
+      if (be[3] > 0) bp[1]++;
+      bp[2] += be[4] || 0; bp[3] += be[5] || 0;
+    }
     [p.read, p.write].forEach(function (t) { for (c in t) { if (t[c][3] > out.last) out.last = t[c][3]; } });
     for (c in p.read) {
       var e = p.read[c];
@@ -287,7 +296,7 @@ function api_teacherView(klass) {
     return out;
   }).sort(function (a, b) { return (Number(a.no) || 999) - (Number(b.no) || 999); });
   var tests = tests_(klass);
-  return { grades: grades_(klass), pointers: pointers_(klass), tests: tests, test: Sched.activeTest(tests), writeLevel: writeLevel_(klass), gates: gates_(klass), students: students, stats: { students: kids.length, perChar: per } };
+  return { grades: grades_(klass), pointers: pointers_(klass), tests: tests, test: Sched.activeTest(tests), writeLevel: writeLevel_(klass), gates: gates_(klass), students: students, bunkai: bunkai_(klass), stats: { students: kids.length, perChar: per, perProblem: perP } };
 }
 
 function api_setGrades(klass, list) {
@@ -530,4 +539,24 @@ function api_gates() {
   var v = cache.get('gates:' + klass);
   if (v === null) { v = gates_(klass).join(','); cache.put('gates:' + klass, v, GATE_CACHE_SEC_); }
   return Sched.normGates(v);
+}
+
+// ぶんかいの自作問題（学級ごと）。届け方はゲートと同じ: 設定シートの bunkai:<学級> にJSONで保存し、児童はキャッシュ経由で読む
+function bunkai_(klass) { return Sched.normBunkai(setting_('bunkai:' + klass)); }
+function api_setBunkai(klass, json) {
+  requireClass_(klass);
+  var v = Sched.normBunkai(JSON.parse(json || 'null'));
+  setSetting_('bunkai:' + klass, v ? JSON.stringify(v) : '', function () {
+    CacheService.getScriptCache().put('bunkai:' + klass, v ? JSON.stringify(v) : '', GATE_CACHE_SEC_);
+  });
+  return v;
+}
+function api_bunkai() {
+  var me = begin_();
+  if (me.role !== 'student') throw new Error('児童のアカウントではありません');
+  var cache = CacheService.getScriptCache(), kk = 'klass:' + me.email, klass = cache.get(kk);
+  if (klass === null) { klass = classOf_(me.email); if (!klass) return []; cache.put(kk, klass, GATE_CACHE_SEC_); }
+  var v = cache.get('bunkai:' + klass);
+  if (v === null) { v = JSON.stringify(bunkai_(klass)); cache.put('bunkai:' + klass, v, GATE_CACHE_SEC_); }
+  return Sched.normBunkai(v ? JSON.parse(v) : null);
 }

@@ -25,8 +25,15 @@
 
   // ---- デモの設定（先生画面で変える）: { grades: { 組: [学年...] }, pointers: { '組:学年': n }, orders: { 学年: 並び } }
   var SKEY = 'kanzi.settings';
-  function demoSettings() { var s = store.get(SKEY) || {}; s.grades = s.grades || {}; s.pointers = s.pointers || {}; s.orders = s.orders || {}; s.tests = s.tests || {}; s.writeLevels = s.writeLevels || {}; s.gates = s.gates || {}; return s; }
+  function demoSettings() { var s = store.get(SKEY) || {}; s.grades = s.grades || {}; s.pointers = s.pointers || {}; s.orders = s.orders || {}; s.tests = s.tests || {}; s.writeLevels = s.writeLevels || {}; s.gates = s.gates || {}; s.bunkai = s.bunkai || {}; return s; }
   function saveDemo(s) { store.set(SKEY, s); }
+  // デモの自作問題（先生が作った形のものを1件、既定で持っておく。消せば空になる）
+  var DEMO_BUNKAI = [{ id: 'cdemo1', segs: [{ t: 'うんどうかいに', r: '修', m: 4 }, { t: 'みんなが', r: '主', m: 0 }, { t: 'たくさん', r: '修', m: 4 }, { t: 'はしった。', r: '述', m: 0 }] }];
+  function demoBunkai(klass) {
+    var s = demoSettings();
+    if (!(klass in s.bunkai)) { s.bunkai[klass] = Sched.normBunkai(DEMO_BUNKAI); saveDemo(s); }
+    return s.bunkai[klass];
+  }
   function demoGrades(klass) { return demoSettings().grades[klass] || [1, 2, 3]; }
   function demoPointers(klass) {
     var s = demoSettings(), out = {};
@@ -95,7 +102,7 @@
     if (isGas) return gas('api_teacherView', klass);
     var s = demoSettings();
     var tests = Sched.normTests(s.tests[klass]);
-    return Promise.resolve({ grades: demoGrades(klass), pointers: demoPointers(klass), tests: tests, test: Sched.activeTest(tests), writeLevel: s.writeLevels[klass] || '', gates: Sched.normGates(s.gates[klass]), students: demoStudents(), stats: demoStats() });
+    return Promise.resolve({ grades: demoGrades(klass), pointers: demoPointers(klass), tests: tests, test: Sched.activeTest(tests), writeLevel: s.writeLevels[klass] || '', gates: Sched.normGates(s.gates[klass]), bunkai: demoBunkai(klass), students: demoStudents(), stats: demoStats() });
   }
   function demoStats() {
     var seed = 7, out = {}, g, i;
@@ -107,7 +114,13 @@
         out[order.charAt(i)] = [started, Math.round(started * rnd() * 0.5)];
       }
     }
-    return { students: 30, perChar: out };
+    // ぶんかい問題ごとの集計 { id: [答えた人数, 最後がまちがいの人数, 役割まちがい累計, 係り先まちがい累計] }。後半の問題ほど誤りが多い見本
+    var perProblem = {}, bank = typeof KANZI_BUNKAI !== 'undefined' ? KANZI_BUNKAI : [];
+    bank.forEach(function (p, pi) {
+      var n = Math.max(4, 27 - pi - Math.round(rnd() * 6));
+      perProblem[p.id] = [n, Math.min(n, Math.round(n * (0.1 + pi * 0.04 + rnd() * 0.3))), Math.round(rnd() * 4 + pi), Math.round(rnd() * 4 + pi * 1.5)];
+    });
+    return { students: 30, perChar: out, perProblem: perProblem };
   }
   function demoStudents() {
     var seed = 11, out = [], now = Date.now(), chars = KANZI_DATA.grades[3].order;
@@ -142,6 +155,19 @@
   function gates() {
     if (isGas) return gas('api_gates').then(Sched.normGates);
     return Promise.resolve(Sched.normGates(demoSettings().gates['3-1']));
+  }
+
+  // ぶんかいの自作問題（児童用: 自分の学級のもの。通信できない時は前回の控え）
+  var BKEY = 'kanzi.bunkai';
+  function bunkai() {
+    if (isGas) return gas('api_bunkai').then(function (v) { var l = Sched.normBunkai(v); store.set(BKEY, l); return l; }, function () { return Sched.normBunkai(store.get(BKEY)); });
+    return Promise.resolve(demoBunkai('3-1'));
+  }
+  // 先生用: 学級の自作問題をまるごと保存（自作の一覧からの追加・消去もこれ1本）
+  function setBunkai(klass, list) {
+    list = Sched.normBunkai(list);
+    if (isGas) return gas('api_setBunkai', klass, JSON.stringify(list));
+    var s = demoSettings(); s.bunkai[klass] = list; saveDemo(s); return Promise.resolve(list);
   }
   function setPointer(klass, grade, n) {
     if (isGas) return gas('api_setPointer', klass, grade, n);
@@ -203,6 +229,6 @@
   }
 
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
-    teacherView: teacherView, setTests: setTests, setWriteLevel: setWriteLevel, setGates: setGates, gates: gates, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder,
+    teacherView: teacherView, setTests: setTests, setWriteLevel: setWriteLevel, setGates: setGates, gates: gates, bunkai: bunkai, setBunkai: setBunkai, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder,
     archiveYears: archiveYears, archiveView: archiveView, archiveSave: archiveSave, archiveAnonymize: archiveAnonymize, store: store };
 })(this);

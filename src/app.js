@@ -103,7 +103,7 @@
   //   児童: オフのボタンは押せず、うすく見える（disabled。「選んだ漢字がない」時と同じ見た目）
   //   先生のおためし: ボタンの右上にチップを重ねる（ボタンの外にも中の文字にも場所を取らないので、並びは児童画面と同じ）
   var GATE_LABEL = { 'm.browse': 'ぜんぶ見る', 'm.read': '読む', 'm.write': '書く', 'm.fk': 'カード（漢字→読み）', 'm.fy': 'カード（読み→漢字）',
-    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
+    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': 'ぶんかい', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
     's.sel': '出す字: 選んだ漢字', 's.rnd': '出す字: ランダム', 's.miss': '出す字: まちがいの多い漢字' };
   var GATE_POLL_MS = 30000;
   function gateOff(k) { return S.gates.indexOf(k) >= 0; }
@@ -215,6 +215,7 @@
           K('<button class="big" id="go-fy" data-gate="m.fy">カード<span class="meta">[読|よ]み → [漢|かん][字|じ]</span></button></div>') +
           (testChars().length ? '<button class="big test" id="go-test" data-gate="m.test">' + K('[次|つぎ]の[漢|かん][字|じ]テストの はんいを [見|み]る') + '<span class="meta">' + (S.test.label ? esc(S.test.label) + '・' : '') + testChars().length + K('[字|じ]') + '</span></button>' : '')) +
       '<button class="big" id="go-seen" data-gate="m.seen"' + (nSel ? '' : ' disabled') + '>' + K('[選|えら]んだ') + noun + K('を[見|み]る') + '<span class="meta">' + (nSel ? nSel + K('[字|じ]') : K('まだ [選|えら]んでいないよ')) + '</span></button>' +
+      '<button class="big" id="go-other" data-gate="m.other">' + K('その[他|た]') + '<span class="meta">ぶんかい など</span></button>' +
       '</section></main>' + (S.info.demo && !S.trial ? '<p class="demo-note">デモ（この端末にだけ保存）</p>' : '');
     // メニューは画面の高さに収める（スクロールしない）。ほかの画面に移る時に外す
     document.body.classList.add('menu-screen');
@@ -229,6 +230,7 @@
     on('#go-fk', function () { chooser('fk'); });
     on('#go-fy', function () { chooser('fy'); });
     on('#go-test', testOverview);
+    on('#go-other', otherMenu);
     on('#go-seen', function () { var l = Sched.selected(S.p, orderOf(S.grade)); if (l.length) viewChars(l, 0, menu); });
     watchGates();
   }
@@ -432,7 +434,7 @@
     if (s.i >= s.items.length) return sessionDone();
     var c = s.items[s.i];
     s.cur = c;
-    if (s.kind === 'read') readCard(c); else if (s.kind === 'write') writeCard(c); else flashCard(c, s.kind === 'fk' ? 'k' : 'y');
+    if (s.kind === 'read') readCard(c); else if (s.kind === 'write') writeCard(c); else if (s.kind === 'bunkai') bunkaiCard(c); else flashCard(c, s.kind === 'fk' ? 'k' : 'y');
   }
   function bar() {
     var s = S.session;
@@ -597,9 +599,368 @@
     onKey(function (ev) { if (ev.key === ' ' || ev.key === 'Enter' || ev.key === 'ArrowRight') { ev.preventDefault(); step(); } });
   }
 
+  // ================= ぶんの ぶんかい（その他画面から入る。設計書 §25）====================
+  // 文節チップに役割を当て（判定）→ 修飾語の係り先をつなぐ（判定）の2段。タップでもドラッグでもできる（利用者の指定）
+  // 役割は色でなく語バッジで示す（5役割は色分けの上限4色を超えるため）。漢字の学年は3年まで（正本側で機械検査）
+  var BK_ROLE = ['主', '述', '修', '接', '独'];
+  var BK_KANA = { '主': 'しゅご', '述': 'じゅつご', '修': 'しゅうしょくご', '接': 'せつぞくご', '独': 'どくりつご' };
+  function rubyText(s) { return esc(String(s)).replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>'); } // 文節の {字|よみ} をルビに
+  function plain(s) { return String(s).replace(/\{([^|}]+)\|([^}]+)\}/g, '$1'); }
+  function bunkaiSentence(prob) { return prob.segs.map(function (s) { return s.t; }).join(' '); }
+  function roleBadge(r) { return '<ruby>' + r + '語<rt>' + BK_KANA[r] + '</rt></ruby>'; }
+
+  // タップに加えてドラッグも受け付ける（先生の作る画面と共用）。pointer 系で統一し、8px以内はタップとして click に任せる
+  var dragEndAt = 0;
+  function tapOk() { return Date.now() - dragEndAt > 300; }
+  function enableDrag(src, opts) {
+    src.addEventListener('pointerdown', function (e) {
+      if (opts.disabled && opts.disabled()) return;
+      var ghost = null, moved = false, overEl = null;
+      function pos(ev) { ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px'; }
+      function over(ev) {
+        var t = opts.over(ev) || null;
+        if (overEl === t) return;
+        if (overEl) overEl.classList.remove('drop-ok');
+        overEl = t;
+        if (overEl) overEl.classList.add('drop-ok');
+      }
+      function mv(ev) {
+        if (!moved) {
+          if (Math.abs(ev.clientX - e.clientX) + Math.abs(ev.clientY - e.clientY) < 10) return;
+          moved = true;
+          ghost = opts.ghost();
+          document.body.appendChild(ghost);
+          document.body.classList.add('bk-dragging');
+          pos(ev);
+        } else pos(ev);
+        over(ev);
+        ev.preventDefault(); // ドラッグ中はスクロールさせない
+      }
+      function up(ev) {
+        src.removeEventListener('pointermove', mv);
+        src.removeEventListener('pointerup', up);
+        src.removeEventListener('pointercancel', up);
+        if (!moved) return;
+        dragEndAt = Date.now();
+        over(ev);
+        var t = overEl;
+        overEl = null;
+        if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
+        document.body.classList.remove('bk-dragging');
+        if (t) t.classList.remove('drop-ok');
+        if (t) opts.drop(t);
+      }
+      src.addEventListener('pointermove', mv);
+      src.addEventListener('pointerup', up);
+      src.addEventListener('pointercancel', up);
+      try { src.setPointerCapture(e.pointerId); } catch (er) {}
+    });
+  }
+  function chipAt(ev) { var t = document.elementFromPoint(ev.clientX, ev.clientY); return t && t.closest ? t.closest('.bk-chip') : null; }
+
+  // その他画面: 今後の活動の入口を並べる chooser 型の画面
+  function otherMenu() {
+    clearScreen();
+    document.body.classList.add('chooser-screen');
+    cleanup.push(function () { document.body.classList.remove('chooser-screen'); });
+    var acts = [{ id: 'bunkai', label: 'ぶんの ぶんかい', sub: 'ぶんを 5つの やくわりに わける' }];
+    app.innerHTML =
+      '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + K('その[他|た]') + '</span><span></span></header>' +
+      K('<main class="chooser"><h2>その[他|た]</h2>') + acts.map(function (a) {
+        return '<button class="big" data-id="' + a.id + '" data-gate="o.' + a.id + '">' + a.label + '<span class="meta">' + a.sub + '</span></button>';
+      }).join('') + '</main>';
+    on('#back', menu);
+    app.querySelectorAll('.chooser .big').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (b.dataset.id !== 'bunkai') return;
+        b.disabled = true;
+        // 内蔵の問題集 + 学級の自作問題（取れなければ内蔵だけ）
+        Platform.bunkai().then(function (custom) {
+          startSession('bunkai', KANZI_BUNKAI.concat(custom || []));
+        }, function () { startSession('bunkai', KANZI_BUNKAI); });
+      });
+    });
+    watchGates();
+  }
+
+  // ぶんかいの1問。author=true なら先生の作る画面（当てた内容がそのまま答えになる。判定・わからないはなし）。host は描く先（既定は app 全体）
+  function bunkaiCard(prob, opts, host) {
+    opts = opts || {};
+    host = host || app;
+    var author = !!opts.author;
+    // 横長の画面ではスクロールなしを目標にする（メニューと同じ仕組み。先生の作る画面はページ内なので対象外）
+    if (!author) {
+      document.body.classList.add('bunkai-screen');
+      cleanup.push(function () { document.body.classList.remove('bunkai-screen'); });
+    }
+    var n = prob.segs.length;
+    var st = { phase: 'role', role: [], target: [], locked: [], tries: 0, done: false, sel: -1, picking: false, errs: { role: 0, link: 0 }, revealed: false };
+    for (var i = 0; i < n; i++) { st.role[i] = null; st.target[i] = null; st.locked[i] = false; }
+
+    host.innerHTML = (author ? '' : bar()) +
+      '<main class="bk">' +
+      '<p class="bk-sent">' + rubyText(bunkaiSentence(prob)) + '</p>' +
+      '<div class="bk-wrap"><div class="bk-line" id="bkline">' +
+        prob.segs.map(function (s, i) { return '<button type="button" class="bk-chip" data-i="' + i + '"><span class="bkt">' + rubyText(s.t) + '</span><span class="badge" hidden></span></button>'; }).join('') +
+        '<svg class="bk-svg" id="bksvg"></svg>' +
+      '</div></div>' +
+      '<p class="bk-hint" id="bkhint" aria-live="polite"></p>' +
+      '<div class="bk-pal" id="bkpal">' + BK_ROLE.map(function (r) {
+        return '<button type="button" class="bk-role" data-r="' + r + '">' + roleBadge(r) + '</button>';
+      }).join('') + '</div>' +
+      '<div class="bk-tools"><button type="button" class="bk-erase" id="bkerase" disabled>' + K('けす') + '</button>' +
+      (author ? '<button type="button" class="bk-erase" id="bkrole" hidden>やくわりに もどる</button><button type="button" class="big primary" id="bksave" disabled>この文を登録</button>'
+              : '<button type="button" class="btn-mada" id="bkidk">わからない（こたえを 見る）</button>') + '</div>' +
+      (author ? '<p class="hint" id="bkmsg" aria-live="polite"></p>' : '<div class="next-row" id="bknextrow"></div>') +
+      '</main>';
+    on('#back', author ? (opts.onBack || function () {}) : quit);
+
+    var line = $('#bkline'), hint = $('#bkhint'), svg = $('#bksvg'), pal = $('#bkpal');
+    function chipEl(i) { return line.querySelector('.bk-chip[data-i="' + i + '"]'); }
+    function say(t, cls) { hint.textContent = t; hint.className = 'bk-hint' + (cls ? ' ' + cls : ''); }
+    function needLinks() { return st.role.indexOf('修') >= 0; } // 修飾語が1つでも当てられていれば つなぎの段へ
+    function paint() {
+      line.classList.toggle('picking', st.picking);
+      prob.segs.forEach(function (s, i) {
+        var el = chipEl(i), badge = el.querySelector('.badge');
+        el.classList.toggle('sel', st.sel === i);
+        el.classList.toggle('locked', st.locked[i]);
+        el.classList.toggle('pickme', st.picking && st.sel === i);
+        el.disabled = st.done;
+        if (st.role[i]) {
+          badge.hidden = false;
+          badge.innerHTML = (st.locked[i] && !author ? '✓ ' : '') + roleBadge(st.role[i]) + (st.role[i] === '修' && st.target[i] === null && !st.done ? '<i class="bka">→？</i>' : '');
+        } else badge.hidden = true;
+      });
+      $('#bkerase').disabled = st.sel < 0 || st.done || st.locked[st.sel] || (st.phase === 'link' && st.role[st.sel] !== '修');
+      pal.hidden = st.phase !== 'role' || st.done;
+      app.querySelectorAll('.bk-role').forEach(function (b) { b.disabled = st.sel < 0 || st.done || st.locked[st.sel]; });
+      if (author) { $('#bksave').disabled = !(st.phase === 'link' && phaseComplete()); $('#bkrole').hidden = st.phase !== 'link'; }
+      drawLinks();
+    }
+
+    // 係り線（下ブラケット）。同じ係り先へ集まる線は共通レーン（出し手ごとの垂線＋係り先に矢じり1つ）。
+    // 係り先の違う線はレーンを分け、短い線ほど文節に近い浅いレーン（教科書の括弧の置き方どおり）。行をまたぐ線は出し手の行の下を通る
+    function drawLinks() {
+      var wrap = line.getBoundingClientRect(), out = [], rows = [];
+      prob.segs.forEach(function (s, i) {
+        var r = chipEl(i).getBoundingClientRect(), top = Math.round(r.top - wrap.top);
+        var row = rows.filter(function (x) { return Math.abs(x.top - top) < 4; })[0];
+        if (!row) { row = { top: top, bottom: r.bottom - wrap.top }; rows.push(row); }
+        row.bottom = Math.max(row.bottom, r.bottom - wrap.top);
+      });
+      function rowOf(i) { var r = chipEl(i).getBoundingClientRect(), t = Math.round(r.top - wrap.top); return rows.filter(function (x) { return Math.abs(x.top - t) < 4; })[0]; }
+      function cx(i) { var r = chipEl(i).getBoundingClientRect(); return r.left + r.width / 2 - wrap.left; }
+      function arrow(x, y, dir) { var s = dir === 'up' ? 1 : -1; return 'M' + (x - 6) + ' ' + (y + 8 * s) + ' L' + x + ' ' + y + ' L' + (x + 6) + ' ' + (y + 8 * s) + ' Z'; }
+      var perRow = {};
+      prob.segs.forEach(function (s, i) {
+        if (st.role[i] !== '修' || st.target[i] === null) return;
+        var ri = rows.indexOf(rowOf(i)), j = st.target[i];
+        var key = (rows.indexOf(rowOf(j)) === ri ? 's' : 'x') + j;
+        var g = (perRow[ri] = perRow[ri] || {})[key] || (perRow[ri][key] = { dst: j, srcs: [], cross: rows.indexOf(rowOf(j)) !== ri });
+        g.srcs.push(i);
+      });
+      Object.keys(perRow).forEach(function (ri) {
+        var row = rows[ri];
+        var groups = Object.keys(perRow[ri]).map(function (k) { return perRow[ri][k]; });
+        groups.forEach(function (g) { g.left = Math.min.apply(null, g.srcs.map(cx).concat([cx(g.dst)])); g.right = Math.max.apply(null, g.srcs.map(cx).concat([cx(g.dst)])); });
+        groups.sort(function (a, b) { return (a.right - a.left) - (b.right - b.left); });
+        groups.forEach(function (g, li) { g.lane = row.bottom + 12 + li * 15; });
+        groups.forEach(function (g) {
+          var dx = cx(g.dst), b = chipEl(g.dst).getBoundingClientRect(), endY = g.cross ? b.top - wrap.top : b.bottom - wrap.top;
+          g.srcs.forEach(function (i) { out.push('<path class="lk" d="M' + cx(i) + ' ' + (chipEl(i).getBoundingClientRect().bottom - wrap.top) + ' L' + cx(i) + ' ' + g.lane + '"/>'); });
+          out.push('<path class="lk" d="M' + g.left + ' ' + g.lane + ' L' + dx + ' ' + g.lane + ' L' + dx + ' ' + endY + '"/>');
+          out.push('<path class="lkhead" d="' + arrow(dx, endY, g.cross ? 'down' : 'up') + '"/>');
+        });
+      });
+      svg.innerHTML = out.join('');
+    }
+    var onResize = function () { drawLinks(); };
+    window.addEventListener('resize', onResize);
+    cleanup.push(function () { window.removeEventListener('resize', onResize); });
+
+    function phaseComplete() {
+      if (st.phase === 'role') { for (var i = 0; i < n; i++) if (!st.role[i]) return false; return true; }
+      for (var j = 0; j < n; j++) if (st.role[j] === '修' && st.target[j] === null) return false;
+      return true;
+    }
+    function flashBad(i) {
+      var el = chipEl(i); el.classList.add('flash-bad');
+      var x = document.createElement('span'); x.className = 'badx'; x.textContent = '×'; el.appendChild(x);
+      setTimeout(function () { el.classList.remove('flash-bad'); if (x.parentNode) x.remove(); }, 900);
+    }
+    // 段の入力がそろった時の判定。author では判定せず、そろえば次へ進む（当てた内容がそのまま答え）
+    function judge() {
+      if (author) { if (st.phase === 'role') goLink(); else paint(); return; }
+      if (st.phase === 'role') {
+        var wrong = [];
+        prob.segs.forEach(function (s, i) { if (st.role[i] !== s.r) wrong.push(i); });
+        if (!wrong.length) return goLink();
+        st.errs.role += wrong.length;
+        if (++st.tries >= 2) return reveal(false);
+        prob.segs.forEach(function (s, i) { if (wrong.indexOf(i) < 0) st.locked[i] = true; else { st.role[i] = null; flashBad(i); } });
+        st.sel = -1;
+        say(K('× の ところを なおしてね'), 'err');
+        paint();
+      } else {
+        var wrongL = [];
+        prob.segs.forEach(function (s, i) { if (s.r === '修' && st.target[i] !== s.m - 1) wrongL.push(i); }); // st.target は0始まり、s.m は1始まりの係り先番号
+        if (!wrongL.length) return finishProblem();
+        st.errs.link += wrongL.length;
+        if (++st.tries >= 2) return reveal(false);
+        wrongL.forEach(function (i) { st.target[i] = null; flashBad(i); });
+        st.sel = -1; st.picking = false;
+        say(K('× の せんを なおしてね'), 'err');
+        paint();
+      }
+    }
+    function goLink() {
+      prob.segs.forEach(function (s, i) { if (!author) st.locked[i] = true; });
+      st.sel = -1; st.picking = false;
+      if (!needLinks()) return finishProblem();
+      st.phase = 'link'; st.tries = 0;
+      say(K('しゅうしょくご が くわしくする ことばを つないで'), 'good');
+      paint();
+    }
+    // 答えを見せる。役割の段で見せたら係り先の段へ進み、係り先の段なら終える
+    function reveal(skipped) {
+      st.revealed = true;
+      if (skipped) S.session.skipped[prob.id] = true;
+      if (st.phase === 'role') {
+        prob.segs.forEach(function (s, i) { st.role[i] = s.r; if (!author) st.locked[i] = true; });
+        st.sel = -1; st.picking = false;
+        if (!needLinks()) return finishProblem();
+        st.phase = 'link'; st.tries = 0;
+        say(K('やくわりの こたえ。つぎは しゅうしょくごの つながりを しよう'), 'err');
+        paint();
+      } else {
+        prob.segs.forEach(function (s, i) { if (s.r === '修') st.target[i] = s.m - 1; });
+        st.sel = -1; st.picking = false;
+        finishProblem();
+      }
+    }
+    function finishProblem() {
+      if (author) { st.sel = -1; st.picking = false; paint(); return; } // 登録ボタンを押すまでは直せる
+      if (st.done) return;
+      st.done = true; st.sel = -1; st.picking = false;
+      var ok = !st.revealed;
+      S.session.results[prob.id] = ok;
+      Sched.answerBunkai(S.p, prob.id, ok, { role: st.errs.role, link: st.errs.link }, nowMs());
+      commit();
+      if (ok) { prob.segs.forEach(function (s, i) { st.locked[i] = true; }); say('✓ せいかい！', 'good'); }
+      else say(K('こたえを みよう'), 'err');
+      paint();
+      $('#bknextrow').innerHTML = '<button type="button" class="big primary" id="bknext">つぎへ</button>';
+      var moved = false, go = function () { if (!moved) { moved = true; S.session.i++; nextItem(); } };
+      on('#bknext', go);
+      $('#bknext').focus();
+      setTimeout(function () { if (!moved && document.body.contains($('#bknext'))) go(); }, ok ? 1500 : 3200);
+    }
+
+    // ---- 操作（タップでもドラッグでも。ドラッグの後のクリックは抑える）----
+    prob.segs.forEach(function (s, i) {
+      chipEl(i).addEventListener('click', function () {
+        if (st.done || !tapOk()) return;
+        if (st.phase === 'link') {
+          if (st.picking && i !== st.sel) { st.target[st.sel] = i; st.picking = false; st.sel = -1; say(K('つぎの しゅうしょくごを おそう')); paint(); if (phaseComplete()) judge(); return; }
+          if (st.role[i] !== '修') { st.sel = -1; st.picking = false; paint(); return; }
+          st.sel = i === st.sel && !st.picking ? i : i;
+          st.picking = i === st.sel ? !st.picking : true;
+          st.sel = i;
+          say(st.picking ? '『' + plain(s.t) + '』が くわしくする ことばを おそう' : K('しゅうしょくご が くわしくする ことばを つないで'));
+          paint();
+          return;
+        }
+        if (st.locked[i]) return;
+        st.sel = i === st.sel ? -1 : i;
+        say(st.sel >= 0 ? '『' + plain(s.t) + '』の やくわりを えらぼう' : K('ことばを おして、やくわりを えらぼう'));
+        paint();
+      });
+      // 修飾語チップを係り先へドラッグして線を引く（つなぎの段）
+      enableDrag(chipEl(i), {
+        disabled: function () { return st.done || st.phase !== 'link' || st.role[i] !== '修'; },
+        ghost: function () { var g = chipEl(i).cloneNode(true); g.className += ' bk-ghost'; return g; },
+        over: function (ev) { var c = chipAt(ev); return c && +c.dataset.i !== i ? c : null; },
+        drop: function (t) {
+          if (st.done || st.phase !== 'link' || st.role[i] !== '修') return;
+          st.target[i] = +t.dataset.i; st.sel = -1; st.picking = false;
+          say(K('つぎの しゅうしょくごを おそう')); paint();
+          if (phaseComplete()) judge();
+        }
+      });
+    });
+    // 役割パレット: タップで選択中の文節に当てる／ドラッグして文節の上ではなす
+    app.querySelectorAll('.bk-role').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (!tapOk() || st.sel < 0 || st.done || st.locked[st.sel] || st.phase !== 'role') return;
+        var i = st.sel;
+        if (st.role[i] === '修' && b.dataset.r !== '修') st.target[i] = null; // 修飾語以外に変えたら自分の線を消す
+        st.role[i] = b.dataset.r;
+        say(K('ことばを おして、やくわりを えらぼう'));
+        paint();
+        if (phaseComplete()) judge();
+      });
+      enableDrag(b, {
+        disabled: function () { return b.disabled; },
+        ghost: function () { var g = document.createElement('div'); g.className = 'bk-ghost bk-ghost-role'; g.textContent = b.dataset.r + '語'; return g; },
+        over: chipAt,
+        drop: function (t) {
+          var i = +t.dataset.i;
+          if (st.done || st.phase !== 'role' || st.locked[i]) return;
+          if (st.role[i] === '修' && b.dataset.r !== '修') st.target[i] = null;
+          st.role[i] = b.dataset.r; st.sel = -1;
+          paint();
+          if (phaseComplete()) judge();
+        }
+      });
+    });
+    $('#bkerase').addEventListener('click', function () {
+      if (st.sel < 0 || st.done || st.locked[st.sel]) return;
+      var i = st.sel;
+      if (st.phase === 'role') st.role[i] = null;
+      else if (st.role[i] === '修') st.target[i] = null;
+      st.picking = false;
+      say(st.phase === 'role' ? K('ことばを おして、やくわりを えらぼう') : K('つぎの しゅうしょくごを おそう'));
+      paint();
+    });
+    if (author) {
+      say('ぶんせつを おして、やくわりを つけよう');
+      $('#bkrole').addEventListener('click', function () { st.phase = 'role'; st.sel = -1; st.picking = false; say('ぶんせつを おして、やくわりを つけよう'); paint(); });
+      $('#bksave').addEventListener('click', function () {
+        if (st.phase !== 'link' || !phaseComplete()) return;
+        var ans = { id: 'c' + Date.now().toString(36), segs: prob.segs.map(function (s, i) { return { t: s.t, r: st.role[i], m: st.target[i] === null ? 0 : st.target[i] + 1 }; }) };
+        if (opts.onSave) opts.onSave(ans);
+      });
+    } else {
+      say(K('ことばを おして、やくわりを えらぼう'));
+      $('#bkidk').addEventListener('click', function () { if (!st.done) reveal(true); });
+    }
+    paint();
+  }
+
+  // ぶんかいを最後まで終えた時: 文ごとの でき・まちがい・わからない を一覧で（選ぶ漢字のチェックはないので別画面）
+  function bunkaiDone() {
+    var s = S.session;
+    var nSkip = s.items.filter(function (p) { return s.skipped[p.id]; }).length;
+    Sched.finishSession(S.p, s.startedAt, s.items.length - nSkip, 'bunkai');
+    Platform.save(S.p);
+    flush();
+    app.innerHTML =
+      '<main class="done wide"><p class="done-big">おわり！ ' + s.items.length + K('[問|もん] やったよ</p>') +
+      (nSkip ? '<p class="hint">' + K('「わからない」の ') + nSkip + K('[問|もん]は、[木|き]には [入|はい]らないよ') + '</p>' : '') +
+      '<ul class="endlist bunkai">' + s.items.map(function (p) {
+        var ok = s.results[p.id];
+        return '<li><span class="er ' + (ok ? 'good' : 'again') + '">' + (ok ? '○ できた' : s.skipped[p.id] ? K('？ わからない') : '× まちがい') + '</span> <span class="bs">' + rubyText(bunkaiSentence(p)) + '</span></li>';
+      }).join('') + '</ul>' +
+      '<button class="big primary" id="menu">メニューへ</button></main>';
+    on('#menu', menu);
+  }
+
   // 最後まで終えた時: 学習を記録（読む・書くなら木も育つ）し、出た字の一覧とチェックを出す
   function sessionDone() {
-    var s = S.session, graded = s.kind === 'read' || s.kind === 'write';
+    var s = S.session;
+    if (s.kind === 'bunkai') return bunkaiDone();
+    var graded = s.kind === 'read' || s.kind === 'write';
     // 読む・書くの「わからない」以外の問題数が成長対象。カードは集計だけ残す。
     var nSkip = s.items.filter(function (c) { return s.skipped[c]; }).length;
     Sched.finishSession(S.p, s.startedAt, s.items.length - nSkip, s.kind);
@@ -721,7 +1082,7 @@
       (function () {
         var order = orderOf(tgrade), pointer = pointers[tgrade] || 0, isTop = tgrade === Math.max.apply(null, grades);
         var classes = (S.info.classes || []).length > 1 ? '<p><label>学級 <select id="klass">' + S.info.classes.map(function (k) { return '<option value="' + esc(k) + '"' + (k === klass ? ' selected' : '') + '>' + esc(klassLabel(k)) + '</option>'; }).join('') + '</select></label></p>' : '';
-        var kidsHtml = '<section><h2>子どもごとの記録（' + kids.length + '人）</h2><p class="hint">この画面だけに出します（児童の画面には出しません）。「終えた回」は よむ・かく・カードを最後までやった回数、「おぼえた字」は よむで続けて正解して箱3以上になった字の数。</p>' +
+        var kidsHtml = '<section><h2>子どもごとの記録（' + kids.length + '人）</h2><p class="hint">この画面だけに出します（児童の画面には出しません）。「終えた回」は よむ・かく・カード・ぶんかいを最後までやった回数、「おぼえた字」は よむで続けて正解して箱3以上になった字の数。</p>' +
           (kids.length ? '<div class="kids-wrap"><table class="kids"><thead><tr><th>番号</th><th>名前</th><th>最後に使った日</th><th>終えた回（問題数）</th><th>おぼえた字</th><th>まちがいの多い字</th></tr></thead><tbody>' +
             kids.map(function (k) {
               var idle = !k.last || (Date.now() - k.last) > 7 * 86400000;
@@ -778,6 +1139,15 @@
             '<textarea id="order" rows="5">' + esc(order) + '</textarea><p><button id="save-order">この順番にする</button> <span id="order-msg" aria-live="polite"></span></p>') +
           '<h3>学級でつまずいている字</h3><p class="hint">よむで答えたことのある児童のうち、最後の答えがまちがいだった児童の割合が高い字（' + st.students + '人中。児童名は出しません）。</p>' +
           (hard.length ? '<ol class="hard">' + hard.map(function (x) { return '<li><span class="hc">' + esc(x.c) + '</span>' + x.s + '人中 ' + x.b + '人（' + Math.round(x.r * 100) + '%）</li>'; }).join('') + '</ol>' : '<p>まだ データが ありません。</p>') +
+          '</section><section class="tsets"><h2>ぶんかい（ぶんの文せつ分け）</h2>' +
+          '<p class="hint">児童は「その他 → ぶんの ぶんかい」で解きます。「まちがい」は、いま最後の答えがまちがいの児童の数（児童名は出しません）。</p>' +
+          '<div id="bk-probs"></div>' +
+          fold('d-bk-list', 'つくった問題の一覧', '<span id="d-bk-list-now"></span>', '<div id="bk-list"></div>') +
+          fold('d-bk-new', 'ぶんかいの 問題を つくる', '',
+            '<p class="hint">文を書きます。文節（ことばのかたまり）の間に 空白を入れます（例: ぼくは あした ともだちに 手紙を かく。）。漢字は「{字|よみ}」でルビがつけられます（例: {泳|およ}いだ）。つぎに、児童と同じ操作で 役割と 係り先をつけて登録します。</p>' +
+            '<div class="bk-input"><p><input id="bk-new" placeholder="例: ぼくは あした ともだちに 手紙を かく。" maxlength="200"></p>' +
+            '<p><button id="bk-edit" type="button">文節に分けて 役割をつける</button> <span id="bkmsg2" aria-live="polite"></span></p></div>' +
+            '<div id="bk-editor"></div>') +
           '</section><section class="tsets"><h2>過年度データ</h2><div id="arch"><p class="hint">よみこみ中…</p></div></section>';
         app.querySelectorAll('details.tset').forEach(function (d) { d.addEventListener('toggle', function () { S.open[d.id] = d.open; }); });
         var sel = $('#klass'); if (sel) sel.addEventListener('change', function () { teacher(sel.value); });
@@ -856,6 +1226,56 @@
         on('#gate-reset', function () {
           $('#gate-msg').textContent = '保存中…';
           Platform.setGates(klass, []).then(function (v) { view.gates = v; teacher(klass, tgrade, true); }, function () { $('#gate-msg').textContent = '× 保存できませんでした'; });
+        });
+        // ---- ぶんかい: 問題ごとのまちがい集計・つくる画面・自作一覧 ----
+        var bkAll = KANZI_BUNKAI.concat(view.bunkai || []), perP = st.perProblem || {};
+        var hardP = Object.keys(perP).map(function (pid) {
+          var v = perP[pid], pr = bkAll.filter(function (p) { return p.id === pid; })[0];
+          return pr && v[0] > 0 && v[1] > 0 ? { p: pr, s: v[0], b: v[1], roleErr: v[2], linkErr: v[3], r: v[1] / v[0] } : null;
+        }).filter(Boolean).sort(function (a, b) { return (b.r - a.r) || (b.b - a.b) || (a.p.id < b.p.id ? -1 : 1); }).slice(0, 10);
+        $('#bk-probs').innerHTML =
+          '<h3>まちがいの多い問題</h3>' +
+          (hardP.length ? '<ol class="hard bk">' + hardP.map(function (x) {
+            var seg = x.p.segs.map(function (s) { return '<i class="bs" data-r="' + s.r + '">' + rubyText(s.t) + '</i>'; }).join(' ');
+            return '<li>' + seg + '<span class="bp">' + x.s + '人中 ' + x.b + '人まちがい（' + Math.round(x.r * 100) + '%）</span>' +
+              '<span class="bp2">役割まちがい ' + x.roleErr + '・係り先まちがい ' + x.linkErr + '</span></li>';
+          }).join('') + '</ol>' : '<p>まだ データが ありません。</p>');
+        // つくる画面: 文 → 空白で文節に分ける → 児童と同じ操作で 役割・係り先をつける → 登録
+        var bkMsg = function (t) { $('#bkmsg2').textContent = t; };
+        function paintBkList() {
+          var list = Sched.normBunkai(view.bunkai);
+          $('#d-bk-list-now').textContent = list.length ? list.length + '問' : 'なし';
+          $('#bk-list').innerHTML = list.length ? '<ol class="hard bk">' + list.map(function (p) {
+            return '<li>' + p.segs.map(function (s) { return '<i class="bs" data-r="' + s.r + '">' + rubyText(s.t) + '</i>'; }).join(' ') +
+              '<button class="bk-del" data-id="' + esc(p.id) + '">消す</button></li>';
+          }).join('') + '</ol>' : '<p>まだ 自作の問題は ありません。</p>';
+          app.querySelectorAll('.bk-del').forEach(function (b) {
+            b.addEventListener('click', function () {
+              var next = Sched.normBunkai(view.bunkai).filter(function (p) { return p.id !== b.dataset.id; });
+              $('#bk-list').innerHTML = '<p class="hint">保存中…</p>';
+              Platform.setBunkai(klass, next).then(function (v) { view.bunkai = v; paintBkList(); }, function () { paintBkList(); });
+            });
+          });
+        }
+        paintBkList();
+        on('#bk-edit', function () {
+          var segs = $('#bk-new').value.trim().split(/[\s　]+/).filter(Boolean).map(function (t) { return { t: t }; });
+          if (segs.length < 2 || segs.length > 8) { bkMsg('× 文節は2〜8つに分けてください'); return; }
+          bkMsg('');
+          bunkaiCard({ id: '', segs: segs }, { author: true, onSave: function (ans) {
+            var merged = Sched.normBunkai(Sched.normBunkai(view.bunkai).concat([ans]));
+            if (!merged || merged.length !== Sched.normBunkai(view.bunkai).length + 1) {
+              bkMsg('× この形では登録できません（述語は1つ・主語は1つまで・修飾語には係り先が要ります）');
+              return;
+            }
+            if (merged.length > 50) { bkMsg('× 自作の問題は50問までです'); return; }
+            bkMsg('保存中…');
+            Platform.setBunkai(klass, merged).then(function (v) {
+              view.bunkai = v; paintBkList();
+              $('#bk-new').value = ''; $('#bk-editor').innerHTML = '';
+              bkMsg('✓ 登録しました（30秒ほどで 児童に とどきます）');
+            }, function () { bkMsg('× 保存できませんでした'); });
+          } }, $('#bk-editor'));
         });
         app.querySelectorAll('input[name="wlevel"]').forEach(function (r) {
           r.addEventListener('change', function () {
