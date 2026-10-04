@@ -461,23 +461,29 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
 .bk-wrap { position: relative; background: var(--card); border: 2px solid var(--line); border-radius: 18px; padding: 18px 18px 40px; }
 .bk-line { position: relative; display: flex; flex-wrap: wrap; gap: 46px 14px; justify-content: center; padding-bottom: 30px; /* 下余白は係り線レーン */ }
 .bk-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
-.bk-svg .lk { fill: none; stroke: var(--cat-2); stroke-width: 3; stroke-linecap: round; }
-.bk-svg .lkhead { fill: var(--cat-2); stroke: none; }
-.bk-chip { position: relative; display: inline-flex; flex-direction: column; align-items: center; gap: 2px; min-width: 88px; min-height: 88px; padding: 8px 16px 6px; font-size: 30px; font-weight: 700; font-family: inherit; background: var(--card); border: 3px solid var(--line); border-radius: 14px; cursor: pointer; touch-action: pan-y; }
+/* 係り線は係り先ごとに色を変える（見分けはまずレーンの置き方で、色は補助）。どうしても触れ合う並びは破線 */
+.bk-svg .lk { fill: none; stroke-width: 3; stroke-linecap: round; }
+.bk-svg .lk.c1 { stroke: var(--cat-1); } .bk-svg .lk.c2 { stroke: var(--cat-2); }
+.bk-svg .lk.c3 { stroke: var(--cat-3); } .bk-svg .lk.c4 { stroke: var(--cat-4); }
+.bk-svg .lk.bad { stroke-dasharray: 7 5; }
+.bk-svg .lkhead { stroke: none; }
+.bk-svg .lkhead.c1 { fill: var(--cat-1); } .bk-svg .lkhead.c2 { fill: var(--cat-2); }
+.bk-svg .lkhead.c3 { fill: var(--cat-3); } .bk-svg .lkhead.c4 { fill: var(--cat-4); }
+.bk-chip { position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 88px; min-height: 88px; padding: 8px 16px 30px; font-size: 30px; font-weight: 700; font-family: inherit; background: var(--card); border: 3px solid var(--line); border-radius: 14px; cursor: pointer; touch-action: pan-y; }
+.bk-chip:has(.badge:not([hidden])) { z-index: 1; } /* バッジは狭いチップからはみ出ることがあるので隣に隠れないように */
 .bk-chip .bkt { line-height: 1.3; }
 .bk-chip rt { font-size: .45em; font-weight: 400; }
-.bk-chip .badge { display: block; white-space: nowrap; line-height: 1.1; min-height: 17px; font-size: 13px; font-weight: 700; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 8px; padding: 2px 7px; background: var(--paper); }
+/* バッジは絶対配置: 中身（修飾語→？ など）の幅でチップの寸法・位置が変わらないように（利用者の不具合報告） */
+.bk-chip .badge { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); white-space: nowrap; line-height: 1.1; font-size: 13px; font-weight: 700; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 8px; padding: 2px 7px; background: var(--paper); }
 .bk-chip .badge rt { font-size: .62em; }
 .bk-chip .badge .bka { font-style: normal; color: var(--cat-2); }
-.bk-chip .badge[hidden] { visibility: hidden; } /* display:block が UA の [hidden]{display:none} を上書きするので明示。場所は取ってチップの高さを変えない */
-.bk-chip .badge:empty::before { content: '\00a0'; }
-.bk-chip.sel { background: var(--fill-a); border-width: 4px; outline: 3px solid var(--cat-1); }
+.bk-chip.sel { background: var(--fill-a); outline: 3px solid var(--cat-1); }
 .bk-chip.locked { border-color: var(--cat-1); cursor: default; }
 .bk-chip.locked .badge { border-color: var(--cat-1); color: var(--cat-1); }
 .bk-chip.pickme { animation: bkpulse 1s infinite; }
 .bk-line.picking .bk-chip:not(.sel) { border-style: dashed; border-color: var(--cat-2); } /* 係り先モード中はロック済みも係り先として有効 */
 body.bk-dragging .bk-chip { border-style: dashed; border-color: var(--cat-2); }
-.bk-chip.drop-ok { background: var(--fill-b); border-color: var(--cat-2); border-width: 4px; }
+.bk-chip.drop-ok { background: var(--fill-b); border-color: var(--cat-2); }
 .bk-chip.flash-bad { animation: bkbad .6s; }
 .bk-chip .badx { position: absolute; top: -14px; right: -10px; font-size: 18px; font-weight: 700; color: #fff; background: var(--ink-alert); border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; z-index: 4; }
 @keyframes bkbad { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
@@ -535,7 +541,7 @@ ol.hard.bk .bp2 { color: var(--ink-sub); font-size: 15px; }
 ol.hard.bk .bk-del { margin-left: auto; min-height: 40px; padding: 0 14px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); cursor: pointer; font-size: 15px; }
 #bk-editor .bk { padding-top: 10px; }
 </style>
-<meta name="kanzi-ver" content="3b90f3c">
+<meta name="kanzi-ver" content="76eb6cd">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -643,6 +649,19 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     var out = [];
     for (var i = 0; i < order.length; i++) if (isSel(p, order.charAt(i))) out.push(order.charAt(i));
     return out;
+  }
+
+  // ぶんかいは1回5問（利用者の指定）。まだ答えたことがない問題から（問題集は易→難の並び）、
+  // 全部に答えたあとは 最後に答えた時刻の古い順に回す
+  var BUNKAI_PER_SESSION = 5;
+  function bunkaiPick(list, p) {
+    var rest = [], done = [];
+    for (var i = 0; i < list.length; i++) {
+      var e = p.bunkai && p.bunkai[list[i].id];
+      (e && e[0] > 0 ? done : rest).push(list[i]);
+    }
+    done.sort(function (a, b) { return (p.bunkai[a.id][2] || 0) - (p.bunkai[b.id][2] || 0); });
+    return rest.concat(done).slice(0, BUNKAI_PER_SESSION);
   }
 
   // まちがいの多い字（児童個人）: 答えたことがあり、まちがいが1回以上ある字を、累積まちがい率 e[4]/e[2] の高い順に
@@ -961,7 +980,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, forestGrowth: forestGrowth, forestActivity: forestActivity, forestRegionLog: forestRegionLog,
     compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check, checkEntry: checkEntry,
-    normTests: normTests, activeTest: activeTest, GATE_KEYS: GATE_KEYS, normGates: normGates, normBunkai: normBunkai
+    normTests: normTests, activeTest: activeTest, GATE_KEYS: GATE_KEYS, normGates: normGates, normBunkai: normBunkai, bunkaiPick: bunkaiPick
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sched = api;
@@ -4098,10 +4117,10 @@ var KANZI_BUNKAI = [
       b.addEventListener('click', function () {
         if (b.dataset.id !== 'bunkai') return;
         b.disabled = true;
-        // 内蔵の問題集 + 学級の自作問題（取れなければ内蔵だけ）
+        // 内蔵の問題集 + 学級の自作問題（取れなければ内蔵だけ）。1回5問
         Platform.bunkai().then(function (custom) {
-          startSession('bunkai', KANZI_BUNKAI.concat(custom || []));
-        }, function () { startSession('bunkai', KANZI_BUNKAI); });
+          startSession('bunkai', Sched.bunkaiPick(KANZI_BUNKAI.concat(custom || []), S.p));
+        }, function () { startSession('bunkai', Sched.bunkaiPick(KANZI_BUNKAI, S.p)); });
       });
     });
     watchGates();
@@ -4168,39 +4187,134 @@ var KANZI_BUNKAI = [
       drawLinks();
     }
 
-    // 係り線（下ブラケット）。同じ係り先へ集まる線は共通レーン（出し手ごとの垂線＋係り先に矢じり1つ）。
-    // 係り先の違う線はレーンを分け、短い線ほど文節に近い浅いレーン（教科書の括弧の置き方どおり）。行をまたぐ線は出し手の行の下を通る
+    // 係り線。同じ係り先（かつ出し手が同じ行）へ向かう線は共通レーンに束ねる（出し手ごとの垂線＋係り先へ矢じり1つ）。
+    // 係り先の違う線は束ねない: まず行の下にレーンを取り、短い線ほど文節に近い浅いレーン（教科書の括弧どおり）。
+    // 垂線が他の線の横線を突き抜けてしまう並びは行の上側へ回し、行をまたぐ線は行と行の間を通る。
+    // 上下どちらに回しても触れ合うときだけ破線にする（線色は係り先ごとに変える: 利用者より許可。見分けはまず形と置き場で、色は補助）
+    var LANE0 = 12, LANE = 15;
     function drawLinks() {
-      var wrap = line.getBoundingClientRect(), out = [], rows = [];
-      prob.segs.forEach(function (s, i) {
-        var r = chipEl(i).getBoundingClientRect(), top = Math.round(r.top - wrap.top);
-        var row = rows.filter(function (x) { return Math.abs(x.top - top) < 4; })[0];
-        if (!row) { row = { top: top, bottom: r.bottom - wrap.top }; rows.push(row); }
-        row.bottom = Math.max(row.bottom, r.bottom - wrap.top);
-      });
-      function rowOf(i) { var r = chipEl(i).getBoundingClientRect(), t = Math.round(r.top - wrap.top); return rows.filter(function (x) { return Math.abs(x.top - t) < 4; })[0]; }
-      function cx(i) { var r = chipEl(i).getBoundingClientRect(); return r.left + r.width / 2 - wrap.left; }
-      function arrow(x, y, dir) { var s = dir === 'up' ? 1 : -1; return 'M' + (x - 6) + ' ' + (y + 8 * s) + ' L' + x + ' ' + y + ' L' + (x + 6) + ' ' + (y + 8 * s) + ' Z'; }
-      var perRow = {};
+      var wrap, rows = [], chip = [];
+      function measure() {
+        wrap = line.getBoundingClientRect(); rows = []; chip = [];
+        prob.segs.forEach(function (s, i) {
+          var r = chipEl(i).getBoundingClientRect();
+          chip[i] = { x: r.left + r.width / 2 - wrap.left, top: r.top - wrap.top, bottom: r.bottom - wrap.top, ri: -1 };
+          var top = Math.round(chip[i].top), row = rows.filter(function (x) { return Math.abs(x.top - top) < 4; })[0];
+          if (!row) { row = { top: top, bottom: chip[i].bottom }; rows.push(row); }
+          row.bottom = Math.max(row.bottom, chip[i].bottom);
+        });
+        rows.sort(function (a, b) { return a.top - b.top; });
+        chip.forEach(function (c) { c.ri = rows.indexOf(rows.filter(function (x) { return Math.abs(x.top - Math.round(c.top)) < 4; })[0]); });
+      }
+      // 既定の余白に戻してから測る（前回の係り線用の余白が残っていると行の判定が狂う）
+      line.style.gap = ''; line.style.paddingTop = ''; line.style.paddingBottom = '';
+      measure();
+
+      // 出し手の行と係り先が同じ線は1グループに束ねる
+      var groups = [];
       prob.segs.forEach(function (s, i) {
         if (st.role[i] !== '修' || st.target[i] === null) return;
-        var ri = rows.indexOf(rowOf(i)), j = st.target[i];
-        var key = (rows.indexOf(rowOf(j)) === ri ? 's' : 'x') + j;
-        var g = (perRow[ri] = perRow[ri] || {})[key] || (perRow[ri][key] = { dst: j, srcs: [], cross: rows.indexOf(rowOf(j)) !== ri });
+        var j = st.target[i], g = groups.filter(function (x) { return x.dst === j && chip[x.srcs[0]].ri === chip[i].ri; })[0];
+        if (!g) { g = { dst: j, srcs: [] }; groups.push(g); }
         g.srcs.push(i);
       });
-      Object.keys(perRow).forEach(function (ri) {
-        var row = rows[ri];
-        var groups = Object.keys(perRow[ri]).map(function (k) { return perRow[ri][k]; });
-        groups.forEach(function (g) { g.left = Math.min.apply(null, g.srcs.map(cx).concat([cx(g.dst)])); g.right = Math.max.apply(null, g.srcs.map(cx).concat([cx(g.dst)])); });
-        groups.sort(function (a, b) { return (a.right - a.left) - (b.right - b.left); });
-        groups.forEach(function (g, li) { g.lane = row.bottom + 12 + li * 15; });
-        groups.forEach(function (g) {
-          var dx = cx(g.dst), b = chipEl(g.dst).getBoundingClientRect(), endY = g.cross ? b.top - wrap.top : b.bottom - wrap.top;
-          g.srcs.forEach(function (i) { out.push('<path class="lk" d="M' + cx(i) + ' ' + (chipEl(i).getBoundingClientRect().bottom - wrap.top) + ' L' + cx(i) + ' ' + g.lane + '"/>'); });
-          out.push('<path class="lk" d="M' + g.left + ' ' + g.lane + ' L' + dx + ' ' + g.lane + ' L' + dx + ' ' + endY + '"/>');
-          out.push('<path class="lkhead" d="' + arrow(dx, endY, g.cross ? 'down' : 'up') + '"/>');
+      groups.forEach(function (g) {
+        g.dx = chip[g.dst].x;
+        g.vxs = g.srcs.map(function (i) { return chip[i].x; });
+        g.left = Math.min.apply(null, g.vxs.concat([g.dx])); g.right = Math.max.apply(null, g.vxs.concat([g.dx]));
+        g.sri = chip[g.srcs[0]].ri; g.dri = chip[g.dst].ri;
+        g.span = g.right - g.left;
+        g.flag = false;
+        // side: 'b' 行の下（既定） / 't' 行の上 / 'x' 行またぎ（行間のレーン）。gap = レーンが収まる行間の番号（行 i の下が i、上が i-1）
+        if (g.sri === g.dri) { g.side = 'b'; g.gap = g.sri; }
+        else { g.side = 'x'; g.gap = Math.min(g.sri, g.dri); }
+      });
+      if (!groups.length) { svg.innerHTML = ''; return; }
+
+      // レーンの割り当て。gap g の中の順: 上の行の下レーン → またぎレーン → 下の行の上レーン
+      var nb = rows.map(function () { return 0; }), nt = rows.map(function () { return 0; });
+      var xc = rows.map(function () { return 0; });
+      var placed = {}; // gap番号 → 置いた順のグループ
+      function laneY(g) {
+        if (g.side === 'b') return rows[g.sri].bottom + LANE0 + g.slot * LANE;
+        if (g.side === 't') return rows[g.sri].top - LANE0 - g.slot * LANE;
+        return rows[g.gap].bottom + LANE0 + (nb[g.gap] + g.slot) * LANE;
+      }
+      // g の垂線（出し手＋係り先への筋）。y0 < y1 にそろえる
+      function verticals(g, y) {
+        var v = [], e;
+        if (g.side === 'b' || (g.side === 'x' && g.dri > g.sri)) {
+          g.srcs.forEach(function (i) { v.push({ x: chip[i].x, y0: chip[i].bottom, y1: y }); });
+          e = g.side === 'x' ? chip[g.dst].top : chip[g.dst].bottom;
+        } else {
+          g.srcs.forEach(function (i) { v.push({ x: chip[i].x, y0: y, y1: chip[i].top }); });
+          e = g.side === 'x' ? chip[g.dst].bottom : chip[g.dst].top;
+        }
+        v.push({ x: g.dx, y0: Math.min(y, e), y1: Math.max(y, e) });
+        return v;
+      }
+      // 垂線が横線を突き抜けるか（レーンの端＝線の合流点はOK、係り先のジョイント上を通る入れ子の係り受けもOKとして1px内側で見る）
+      function crosses(vs, h, hy) {
+        return vs.some(function (v) { return Math.abs(v.x - h.dx) > 2 && v.x >= h.left - 1 && v.x <= h.right + 1 && hy > v.y0 + 1 && hy < v.y1 - 1; });
+      }
+      function conflicts(g, y) {
+        var vs = verticals(g, y);
+        return (placed[g.gap] || []).some(function (h) {
+          return crosses(vs, h, h.laneY) || crosses(verticals(h, h.laneY), g, y);
         });
+      }
+      function put(g) { g.laneY = laneY(g); (placed[g.gap] = placed[g.gap] || []).push(g); }
+      function tryBottom(g) { g.side = 'b'; g.gap = g.sri; g.slot = nb[g.sri]; var y = laneY(g); if (conflicts(g, y)) return false; nb[g.sri]++; put(g); return true; }
+      function tryTop(g) { g.side = 't'; g.gap = g.sri - 1; g.slot = nt[g.sri]; var y = laneY(g); if (conflicts(g, y)) return false; nt[g.sri]++; put(g); return true; }
+
+      var same = groups.filter(function (g) { return g.side !== 'x'; });
+      var cross = groups.filter(function (g) { return g.side === 'x'; });
+      same.sort(function (a, b) { return a.span - b.span; });
+      same.forEach(function (g) { if (!tryBottom(g) && !tryTop(g)) { g.side = 'b'; g.gap = g.sri; g.slot = nb[g.sri]++; g.flag = true; put(g); } });
+      cross.sort(function (a, b) { return a.span - b.span; });
+      cross.forEach(function (g) {
+        g.slot = xc[g.gap]; var y = laneY(g);
+        if (conflicts(g, y)) g.flag = true; // またぎ線は回す先がない。触れ合う並びだけ破線に
+        xc[g.gap]++; put(g);
+        if (Math.abs(g.dri - g.sri) > 1) g.flag = true; // 行を2つ以上またぐ筋は途中の行を通ってしまう
+      });
+
+      // 行間・上下の余白をレーンの本数に合わせる（線が文節にかぶらないように）
+      var rowGap = 46, padT = 0, padB = 30;
+      for (var gi = 0; gi < rows.length - 1; gi++) {
+        var need = LANE0 + (nb[gi] + xc[gi]) * LANE + nt[gi + 1] * LANE + LANE0 + 4;
+        if (need > rowGap) rowGap = need;
+      }
+      if (nt[0]) padT = LANE0 + nt[0] * LANE + 4;
+      if ((nb[rows.length - 1] + xc[rows.length - 1]) * LANE + LANE0 + 8 > padB) padB = (nb[rows.length - 1] + xc[rows.length - 1]) * LANE + LANE0 + 8;
+      if (rowGap > 46) line.style.gap = rowGap + 'px 14px';
+      if (padT) line.style.paddingTop = padT + 'px';
+      if (padB > 30) line.style.paddingBottom = padB + 'px';
+      void line.offsetHeight; // 余白を反映させてから測り直す
+      measure();
+      groups.forEach(function (g) { g.laneY = laneY(g); });
+      // 本番の座標で最終確認: ここで触れ合う並びは破線に（レーン追加で順序が変わることはないので滅多に起きない）
+      Object.keys(placed).forEach(function (k) {
+        placed[k].forEach(function (g) {
+          placed[k].forEach(function (h) {
+            if (g !== h && !g.flag && (crosses(verticals(g, g.laneY), h, h.laneY) || crosses(verticals(h, h.laneY), g, g.laneY))) g.flag = true;
+          });
+        });
+      });
+
+      function arrow(x, y, dir) { var s = dir === 'up' ? 1 : -1; return 'M' + (x - 6) + ' ' + (y + 8 * s) + ' L' + x + ' ' + y + ' L' + (x + 6) + ' ' + (y + 8 * s) + ' Z'; }
+      var out = [];
+      groups.forEach(function (g, gi) {
+        var cls = 'lk c' + (gi % 4 + 1) + (g.flag ? ' bad' : '');
+        var y = g.laneY, up = g.side === 't' || (g.side === 'x' && g.dri < g.sri);
+        g.srcs.forEach(function (i) {
+          var e = up ? chip[i].top : chip[i].bottom;
+          out.push('<path class="' + cls + '" d="M' + chip[i].x + ' ' + e + ' L' + chip[i].x + ' ' + y + '"/>');
+        });
+        out.push('<path class="' + cls + '" d="M' + g.left + ' ' + y + ' L' + g.right + ' ' + y + '"/>');
+        var de = up ? chip[g.dst].bottom : (g.side === 'x' ? chip[g.dst].top : chip[g.dst].bottom);
+        out.push('<path class="' + cls + '" d="M' + g.dx + ' ' + y + ' L' + g.dx + ' ' + de + '"/>');
+        out.push('<path class="lkhead c' + (gi % 4 + 1) + (g.flag ? ' bad' : '') + '" d="' + arrow(g.dx, de, up ? 'up' : 'down') + '"/>');
       });
       svg.innerHTML = out.join('');
     }

@@ -457,23 +457,29 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
 .bk-wrap { position: relative; background: var(--card); border: 2px solid var(--line); border-radius: 18px; padding: 18px 18px 40px; }
 .bk-line { position: relative; display: flex; flex-wrap: wrap; gap: 46px 14px; justify-content: center; padding-bottom: 30px; /* 下余白は係り線レーン */ }
 .bk-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
-.bk-svg .lk { fill: none; stroke: var(--cat-2); stroke-width: 3; stroke-linecap: round; }
-.bk-svg .lkhead { fill: var(--cat-2); stroke: none; }
-.bk-chip { position: relative; display: inline-flex; flex-direction: column; align-items: center; gap: 2px; min-width: 88px; min-height: 88px; padding: 8px 16px 6px; font-size: 30px; font-weight: 700; font-family: inherit; background: var(--card); border: 3px solid var(--line); border-radius: 14px; cursor: pointer; touch-action: pan-y; }
+/* 係り線は係り先ごとに色を変える（見分けはまずレーンの置き方で、色は補助）。どうしても触れ合う並びは破線 */
+.bk-svg .lk { fill: none; stroke-width: 3; stroke-linecap: round; }
+.bk-svg .lk.c1 { stroke: var(--cat-1); } .bk-svg .lk.c2 { stroke: var(--cat-2); }
+.bk-svg .lk.c3 { stroke: var(--cat-3); } .bk-svg .lk.c4 { stroke: var(--cat-4); }
+.bk-svg .lk.bad { stroke-dasharray: 7 5; }
+.bk-svg .lkhead { stroke: none; }
+.bk-svg .lkhead.c1 { fill: var(--cat-1); } .bk-svg .lkhead.c2 { fill: var(--cat-2); }
+.bk-svg .lkhead.c3 { fill: var(--cat-3); } .bk-svg .lkhead.c4 { fill: var(--cat-4); }
+.bk-chip { position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 88px; min-height: 88px; padding: 8px 16px 30px; font-size: 30px; font-weight: 700; font-family: inherit; background: var(--card); border: 3px solid var(--line); border-radius: 14px; cursor: pointer; touch-action: pan-y; }
+.bk-chip:has(.badge:not([hidden])) { z-index: 1; } /* バッジは狭いチップからはみ出ることがあるので隣に隠れないように */
 .bk-chip .bkt { line-height: 1.3; }
 .bk-chip rt { font-size: .45em; font-weight: 400; }
-.bk-chip .badge { display: block; white-space: nowrap; line-height: 1.1; min-height: 17px; font-size: 13px; font-weight: 700; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 8px; padding: 2px 7px; background: var(--paper); }
+/* バッジは絶対配置: 中身（修飾語→？ など）の幅でチップの寸法・位置が変わらないように（利用者の不具合報告） */
+.bk-chip .badge { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); white-space: nowrap; line-height: 1.1; font-size: 13px; font-weight: 700; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 8px; padding: 2px 7px; background: var(--paper); }
 .bk-chip .badge rt { font-size: .62em; }
 .bk-chip .badge .bka { font-style: normal; color: var(--cat-2); }
-.bk-chip .badge[hidden] { visibility: hidden; } /* display:block が UA の [hidden]{display:none} を上書きするので明示。場所は取ってチップの高さを変えない */
-.bk-chip .badge:empty::before { content: '\00a0'; }
-.bk-chip.sel { background: var(--fill-a); border-width: 4px; outline: 3px solid var(--cat-1); }
+.bk-chip.sel { background: var(--fill-a); outline: 3px solid var(--cat-1); }
 .bk-chip.locked { border-color: var(--cat-1); cursor: default; }
 .bk-chip.locked .badge { border-color: var(--cat-1); color: var(--cat-1); }
 .bk-chip.pickme { animation: bkpulse 1s infinite; }
 .bk-line.picking .bk-chip:not(.sel) { border-style: dashed; border-color: var(--cat-2); } /* 係り先モード中はロック済みも係り先として有効 */
 body.bk-dragging .bk-chip { border-style: dashed; border-color: var(--cat-2); }
-.bk-chip.drop-ok { background: var(--fill-b); border-color: var(--cat-2); border-width: 4px; }
+.bk-chip.drop-ok { background: var(--fill-b); border-color: var(--cat-2); }
 .bk-chip.flash-bad { animation: bkbad .6s; }
 .bk-chip .badx { position: absolute; top: -14px; right: -10px; font-size: 18px; font-weight: 700; color: #fff; background: var(--ink-alert); border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; z-index: 4; }
 @keyframes bkbad { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
