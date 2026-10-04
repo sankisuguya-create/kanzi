@@ -474,12 +474,9 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
 .bk-chip .badge rt { font-size: .62em; }
 .bk-chip .badge .bka { font-style: normal; color: var(--cat-2); }
 .bk-chip.sel { background: var(--fill-a); outline: 3px solid var(--cat-1); }
-.bk-chip.locked { border-color: var(--cat-1); cursor: default; }
-.bk-chip.locked .badge { border-color: var(--cat-1); color: var(--cat-1); }
+.bk-chip.locked { border-color: var(--cat-1); cursor: default; } /* 正解の印は ✓ と青い枠。バッジは役割の色のまま */
 .bk-chip.pickme { animation: bkpulse 1s infinite; }
 .bk-line.picking .bk-chip:not(.sel) { border-style: dashed; border-color: var(--cat-2); } /* 係り先モード中はロック済みも係り先として有効 */
-body.bk-dragging .bk-chip { border-style: dashed; border-color: var(--cat-2); }
-.bk-chip.drop-ok { background: var(--fill-b); border-color: var(--cat-2); }
 .bk-chip.flash-bad { animation: bkbad .6s; }
 .bk-chip .badx { position: absolute; top: -14px; right: -10px; font-size: 18px; font-weight: 700; color: #fff; background: var(--ink-alert); border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; z-index: 4; }
 @keyframes bkbad { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
@@ -489,9 +486,27 @@ body.bk-dragging .bk-chip { border-style: dashed; border-color: var(--cat-2); }
 .bk-hint.good { color: var(--cat-1); }
 .bk-pal { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
 .bk-pal[hidden] { display: none; }
-.bk-role { min-height: 76px; padding: 6px 4px; font-size: 24px; font-weight: 700; font-family: inherit; border-radius: 14px; background: var(--card); border: 3px solid var(--ink); cursor: grab; touch-action: none; }
+/* 役割は教科書の色分けに合わせる（利用者の指定: 主=赤 述=緑 修=青 接=紫 独=茶）。バッジも同じ色で、パレットと文節が対応すると分かるように */
+:root {
+  --role-0: #C62828; /* 主語 赤 */
+  --role-1: #2E7D32; /* 述語 緑 */
+  --role-2: #0F5EA8; /* 修飾語 青 */
+  --role-3: #D05CE3; /* 接続語 紫 */
+  --role-4: #6E4310; /* 独立語 茶 */
+}
+.bk-role { min-height: 76px; padding: 6px 4px; font-size: 24px; font-weight: 700; font-family: inherit; border-radius: 14px; background: var(--card); border: 3px solid var(--ink); cursor: pointer; }
+.bk-role[data-r="主"] { border-color: var(--role-0); color: var(--role-0); }
+.bk-role[data-r="述"] { border-color: var(--role-1); color: var(--role-1); }
+.bk-role[data-r="修"] { border-color: var(--role-2); color: var(--role-2); }
+.bk-role[data-r="接"] { border-color: var(--role-3); color: var(--role-3); }
+.bk-role[data-r="独"] { border-color: var(--role-4); color: var(--role-4); }
+.bk-chip .badge.r0 { border-color: var(--role-0); color: var(--role-0); }
+.bk-chip .badge.r1 { border-color: var(--role-1); color: var(--role-1); }
+.bk-chip .badge.r2 { border-color: var(--role-2); color: var(--role-2); }
+.bk-chip .badge.r3 { border-color: var(--role-3); color: var(--role-3); }
+.bk-chip .badge.r4 { border-color: var(--role-4); color: var(--role-4); }
 .bk-role rt { font-size: .5em; font-weight: 400; }
-.bk-role.dim { opacity: .45; } /* disabled 属性は使わない（置くとドラッグも始められない。タップは st.sel を見て拒否する） */
+.bk-role.dim { opacity: .45; } /* disabled 属性は使わない（置くとタップも止まる。タップは st.sel を見て拒否する） */
 .bk-role:active { transform: translateY(2px); }
 .bk-tools { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .bk-tools .big { width: auto; min-width: 220px; }
@@ -500,7 +515,6 @@ body.bk-dragging .bk-chip { border-style: dashed; border-color: var(--cat-2); }
 .bk-tools .btn-mada { min-height: 60px; padding: 0 22px; font-size: 20px; border-radius: 12px; }
 .next-row { display: flex; justify-content: center; }
 .next-row .big { width: auto; min-width: 260px; }
-.bk-ghost { position: fixed; transform: translate(-50%, -60%); pointer-events: none; z-index: 100; opacity: .85; background: var(--card); border: 3px solid var(--cat-2); border-radius: 14px; padding: 8px 16px; font-size: 24px; font-weight: 700; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
 .endlist.bunkai { grid-template-columns: 1fr; }
 .endlist.bunkai li { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
 .endlist.bunkai .bs { font-size: 22px; font-weight: 700; }

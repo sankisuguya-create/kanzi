@@ -478,12 +478,9 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
 .bk-chip .badge rt { font-size: .62em; }
 .bk-chip .badge .bka { font-style: normal; color: var(--cat-2); }
 .bk-chip.sel { background: var(--fill-a); outline: 3px solid var(--cat-1); }
-.bk-chip.locked { border-color: var(--cat-1); cursor: default; }
-.bk-chip.locked .badge { border-color: var(--cat-1); color: var(--cat-1); }
+.bk-chip.locked { border-color: var(--cat-1); cursor: default; } /* 正解の印は ✓ と青い枠。バッジは役割の色のまま */
 .bk-chip.pickme { animation: bkpulse 1s infinite; }
 .bk-line.picking .bk-chip:not(.sel) { border-style: dashed; border-color: var(--cat-2); } /* 係り先モード中はロック済みも係り先として有効 */
-body.bk-dragging .bk-chip { border-style: dashed; border-color: var(--cat-2); }
-.bk-chip.drop-ok { background: var(--fill-b); border-color: var(--cat-2); }
 .bk-chip.flash-bad { animation: bkbad .6s; }
 .bk-chip .badx { position: absolute; top: -14px; right: -10px; font-size: 18px; font-weight: 700; color: #fff; background: var(--ink-alert); border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; z-index: 4; }
 @keyframes bkbad { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
@@ -493,9 +490,27 @@ body.bk-dragging .bk-chip { border-style: dashed; border-color: var(--cat-2); }
 .bk-hint.good { color: var(--cat-1); }
 .bk-pal { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
 .bk-pal[hidden] { display: none; }
-.bk-role { min-height: 76px; padding: 6px 4px; font-size: 24px; font-weight: 700; font-family: inherit; border-radius: 14px; background: var(--card); border: 3px solid var(--ink); cursor: grab; touch-action: none; }
+/* 役割は教科書の色分けに合わせる（利用者の指定: 主=赤 述=緑 修=青 接=紫 独=茶）。バッジも同じ色で、パレットと文節が対応すると分かるように */
+:root {
+  --role-0: #C62828; /* 主語 赤 */
+  --role-1: #2E7D32; /* 述語 緑 */
+  --role-2: #0F5EA8; /* 修飾語 青 */
+  --role-3: #D05CE3; /* 接続語 紫 */
+  --role-4: #6E4310; /* 独立語 茶 */
+}
+.bk-role { min-height: 76px; padding: 6px 4px; font-size: 24px; font-weight: 700; font-family: inherit; border-radius: 14px; background: var(--card); border: 3px solid var(--ink); cursor: pointer; }
+.bk-role[data-r="主"] { border-color: var(--role-0); color: var(--role-0); }
+.bk-role[data-r="述"] { border-color: var(--role-1); color: var(--role-1); }
+.bk-role[data-r="修"] { border-color: var(--role-2); color: var(--role-2); }
+.bk-role[data-r="接"] { border-color: var(--role-3); color: var(--role-3); }
+.bk-role[data-r="独"] { border-color: var(--role-4); color: var(--role-4); }
+.bk-chip .badge.r0 { border-color: var(--role-0); color: var(--role-0); }
+.bk-chip .badge.r1 { border-color: var(--role-1); color: var(--role-1); }
+.bk-chip .badge.r2 { border-color: var(--role-2); color: var(--role-2); }
+.bk-chip .badge.r3 { border-color: var(--role-3); color: var(--role-3); }
+.bk-chip .badge.r4 { border-color: var(--role-4); color: var(--role-4); }
 .bk-role rt { font-size: .5em; font-weight: 400; }
-.bk-role.dim { opacity: .45; } /* disabled 属性は使わない（置くとドラッグも始められない。タップは st.sel を見て拒否する） */
+.bk-role.dim { opacity: .45; } /* disabled 属性は使わない（置くとタップも止まる。タップは st.sel を見て拒否する） */
 .bk-role:active { transform: translateY(2px); }
 .bk-tools { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .bk-tools .big { width: auto; min-width: 220px; }
@@ -504,7 +519,6 @@ body.bk-dragging .bk-chip { border-style: dashed; border-color: var(--cat-2); }
 .bk-tools .btn-mada { min-height: 60px; padding: 0 22px; font-size: 20px; border-radius: 12px; }
 .next-row { display: flex; justify-content: center; }
 .next-row .big { width: auto; min-width: 260px; }
-.bk-ghost { position: fixed; transform: translate(-50%, -60%); pointer-events: none; z-index: 100; opacity: .85; background: var(--card); border: 3px solid var(--cat-2); border-radius: 14px; padding: 8px 16px; font-size: 24px; font-weight: 700; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
 .endlist.bunkai { grid-template-columns: 1fr; }
 .endlist.bunkai li { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
 .endlist.bunkai .bs { font-size: 22px; font-weight: 700; }
@@ -541,7 +555,7 @@ ol.hard.bk .bp2 { color: var(--ink-sub); font-size: 15px; }
 ol.hard.bk .bk-del { margin-left: auto; min-height: 40px; padding: 0 14px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); cursor: pointer; font-size: 15px; }
 #bk-editor .bk { padding-top: 10px; }
 </style>
-<meta name="kanzi-ver" content="76eb6cd">
+<meta name="kanzi-ver" content="3500972">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -4042,7 +4056,7 @@ var KANZI_BUNKAI = [
   }
 
   // ================= ぶんの ぶんかい（その他画面から入る。設計書 §25）====================
-  // 文節チップに役割を当て（判定）→ 修飾語の係り先をつなぐ（判定）の2段。タップでもドラッグでもできる（利用者の指定）
+  // 文節チップに役割を当て（判定）→ 修飾語の係り先をつなぐ（判定）の2段。操作はおすだけ（ドラッグは使わない: 利用者の指定）
   // 役割は色でなく語バッジで示す（5役割は色分けの上限4色を超えるため）。漢字の学年は3年まで（正本側で機械検査）
   var BK_ROLE = ['主', '述', '修', '接', '独'];
   var BK_KANA = { '主': 'しゅご', '述': 'じゅつご', '修': 'しゅうしょくご', '接': 'せつぞくご', '独': 'どくりつご' };
@@ -4051,55 +4065,6 @@ var KANZI_BUNKAI = [
   function plain(s) { return String(s).replace(/\{([^|}]+)\|([^}]+)\}/g, '$1'); }
   function bunkaiSentence(prob) { return prob.segs.map(function (s) { return s.t; }).join(' '); }
   function roleBadge(r) { return '<ruby>' + BK_NAME[r] + '<rt>' + BK_KANA[r] + '</rt></ruby>'; }
-
-  // タップに加えてドラッグも受け付ける（先生の作る画面と共用）。pointer 系で統一し、8px以内はタップとして click に任せる
-  var dragEndAt = 0;
-  function tapOk() { return Date.now() - dragEndAt > 300; }
-  function enableDrag(src, opts) {
-    src.addEventListener('pointerdown', function (e) {
-      if (opts.disabled && opts.disabled()) return;
-      var ghost = null, moved = false, overEl = null;
-      function pos(ev) { ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px'; }
-      function over(ev) {
-        var t = opts.over(ev) || null;
-        if (overEl === t) return;
-        if (overEl) overEl.classList.remove('drop-ok');
-        overEl = t;
-        if (overEl) overEl.classList.add('drop-ok');
-      }
-      function mv(ev) {
-        if (!moved) {
-          if (Math.abs(ev.clientX - e.clientX) + Math.abs(ev.clientY - e.clientY) < 10) return;
-          moved = true;
-          ghost = opts.ghost();
-          document.body.appendChild(ghost);
-          document.body.classList.add('bk-dragging');
-          pos(ev);
-        } else pos(ev);
-        over(ev);
-        ev.preventDefault(); // ドラッグ中はスクロールさせない
-      }
-      function up(ev) {
-        src.removeEventListener('pointermove', mv);
-        src.removeEventListener('pointerup', up);
-        src.removeEventListener('pointercancel', up);
-        if (!moved) return;
-        dragEndAt = Date.now();
-        over(ev);
-        var t = overEl;
-        overEl = null;
-        if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
-        document.body.classList.remove('bk-dragging');
-        if (t) t.classList.remove('drop-ok');
-        if (t) opts.drop(t);
-      }
-      src.addEventListener('pointermove', mv);
-      src.addEventListener('pointerup', up);
-      src.addEventListener('pointercancel', up);
-      try { src.setPointerCapture(e.pointerId); } catch (er) {}
-    });
-  }
-  function chipAt(ev) { var t = document.elementFromPoint(ev.clientX, ev.clientY); return t && t.closest ? t.closest('.bk-chip') : null; }
 
   // その他画面: 今後の活動の入口を並べる chooser 型の画面
   function otherMenu() {
@@ -4172,13 +4137,14 @@ var KANZI_BUNKAI = [
         el.disabled = st.done;
         if (st.role[i]) {
           badge.hidden = false;
+          badge.className = 'badge r' + BK_ROLE.indexOf(st.role[i]);
           badge.innerHTML = (st.locked[i] && !author ? '✓ ' : '') + roleBadge(st.role[i]) + (st.role[i] === '修' && st.target[i] === null && !st.done ? '<i class="bka">→？</i>' : '');
         } else badge.hidden = true;
       });
       $('#bkerase').disabled = st.sel < 0 || st.done || st.locked[st.sel] || (st.phase === 'link' && st.role[st.sel] !== '修');
       pal.hidden = st.phase !== 'role' || st.done;
       app.querySelectorAll('.bk-role').forEach(function (b) {
-        // 文節を選んでいない間はタップで当てられないのでうすくする（disabled は使わない: 置くとドラッグも始められない。うすくてもドラッグはできる）
+        // 文節を選んでいない間はタップで当てられないのでうすくする（disabled は使わない: 置くとタップも止まる。うすくてもおせる見た目に）
         var dim = st.sel < 0 || st.done || st.locked[st.sel];
         b.classList.toggle('dim', dim);
         b.setAttribute('aria-disabled', dim ? 'true' : 'false');
@@ -4400,14 +4366,13 @@ var KANZI_BUNKAI = [
       setTimeout(function () { if (!moved && document.body.contains($('#bknext'))) go(); }, ok ? 1500 : 3200);
     }
 
-    // ---- 操作（タップでもドラッグでも。ドラッグの後のクリックは抑える）----
+    // ---- 操作（おすだけ。ドラッグは使わない: 利用者の指定）----
     prob.segs.forEach(function (s, i) {
       chipEl(i).addEventListener('click', function () {
-        if (st.done || !tapOk()) return;
+        if (st.done) return;
         if (st.phase === 'link') {
           if (st.picking && i !== st.sel) { st.target[st.sel] = i; st.picking = false; st.sel = -1; say(K('つぎの しゅうしょくごを おそう')); paint(); if (phaseComplete()) judge(); return; }
           if (st.role[i] !== '修') { st.sel = -1; st.picking = false; paint(); return; }
-          st.sel = i === st.sel && !st.picking ? i : i;
           st.picking = i === st.sel ? !st.picking : true;
           st.sel = i;
           say(st.picking ? '『' + plain(s.t) + '』が くわしくする ことばを おそう' : K('しゅうしょくご が くわしくする ことばを つないで'));
@@ -4419,42 +4384,17 @@ var KANZI_BUNKAI = [
         say(st.sel >= 0 ? '『' + plain(s.t) + '』の やくわりを えらぼう' : K('ことばを おして、やくわりを えらぼう'));
         paint();
       });
-      // 修飾語チップを係り先へドラッグして線を引く（つなぎの段）
-      enableDrag(chipEl(i), {
-        disabled: function () { return st.done || st.phase !== 'link' || st.role[i] !== '修'; },
-        ghost: function () { var g = chipEl(i).cloneNode(true); g.className += ' bk-ghost'; return g; },
-        over: function (ev) { var c = chipAt(ev); return c && +c.dataset.i !== i ? c : null; },
-        drop: function (t) {
-          if (st.done || st.phase !== 'link' || st.role[i] !== '修') return;
-          st.target[i] = +t.dataset.i; st.sel = -1; st.picking = false;
-          say(K('つぎの しゅうしょくごを おそう')); paint();
-          if (phaseComplete()) judge();
-        }
-      });
     });
-    // 役割パレット: タップで選択中の文節に当てる／ドラッグして文節の上ではなす
+    // 役割パレット: おしたら選択中の文節に当てる
     app.querySelectorAll('.bk-role').forEach(function (b) {
       b.addEventListener('click', function () {
-        if (!tapOk() || st.sel < 0 || st.done || st.locked[st.sel] || st.phase !== 'role') return;
+        if (st.sel < 0 || st.done || st.locked[st.sel] || st.phase !== 'role') return;
         var i = st.sel;
         if (st.role[i] === '修' && b.dataset.r !== '修') st.target[i] = null; // 修飾語以外に変えたら自分の線を消す
         st.role[i] = b.dataset.r;
         say(K('ことばを おして、やくわりを えらぼう'));
         paint();
         if (phaseComplete()) judge();
-      });
-      enableDrag(b, {
-        disabled: function () { return st.done || st.phase !== 'role'; },
-        ghost: function () { var g = document.createElement('div'); g.className = 'bk-ghost bk-ghost-role'; g.textContent = BK_NAME[b.dataset.r]; return g; },
-        over: chipAt,
-        drop: function (t) {
-          var i = +t.dataset.i;
-          if (st.done || st.phase !== 'role' || st.locked[i]) return;
-          if (st.role[i] === '修' && b.dataset.r !== '修') st.target[i] = null;
-          st.role[i] = b.dataset.r; st.sel = -1;
-          paint();
-          if (phaseComplete()) judge();
-        }
       });
     });
     $('#bkerase').addEventListener('click', function () {
