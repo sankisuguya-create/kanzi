@@ -30,12 +30,14 @@ const shot = (name) => page.screenshot({ path: path.join(SHOTS, name + '.png') }
 await page.goto(URL0);
 await page.waitForSelector('#app .menu', { timeout: 10000 });
 
-// セッションを2問に縮める（通し検査のため。正本の50問は bunkai.test.mjs が検査）
+// セッションを3問に縮める（通し検査のため。正本の50問は bunkai.test.mjs が検査）
+// bx3 は係り先の違う線が交差する並び（あおい→はなが と やさしい→さいた。）→ 片方は行の上側を通るはず
 await page.evaluate(() => {
   Platform.bunkai = async () => []; // デモの自作問題（cdemo1）を混ぜない
   window.KANZI_BUNKAI = [
     { id: 'bx1', segs: [{ t: 'はなが', r: '主', m: 0 }, { t: 'さいた。', r: '述', m: 0 }] },
-    { id: 'bx2', segs: [{ t: 'あおい', r: '修', m: 2 }, { t: '{空|そら}に', r: '修', m: 4 }, { t: 'とりが', r: '主', m: 0 }, { t: 'とぶ。', r: '述', m: 0 }] }
+    { id: 'bx2', segs: [{ t: 'あおい', r: '修', m: 2 }, { t: '{空|そら}に', r: '修', m: 4 }, { t: 'とりが', r: '主', m: 0 }, { t: 'とぶ。', r: '述', m: 0 }] },
+    { id: 'bx3', segs: [{ t: 'あおい', r: '修', m: 3 }, { t: 'やさしい', r: '修', m: 4 }, { t: 'はなが', r: '主', m: 0 }, { t: 'さいた。', r: '述', m: 0 }] }
   ];
 });
 
@@ -70,6 +72,9 @@ await page.locator('#bknext').click();
 // 問題2（修飾語あり → 役割の段 → つなぎの段）
 await page.waitForSelector('.bk-chip[data-i="0"]');
 await page.waitForTimeout(200);
+// チップの位置を控える: 役割バッジ（修飾語→？ など）がついてもチップの寸法・位置は変わらないはず
+const chipsBefore = await page.evaluate(() =>
+  [...document.querySelectorAll('.bk-chip')].map((c) => { const r = c.getBoundingClientRect(); return [r.left, r.width]; }));
 // 役割を当てる: あおい=修 / 空に=修 / とりが=主 / とぶ。=述
 await page.locator('.bk-chip[data-i="0"]').click();
 await page.locator('.bk-role[data-r="修"]').click();
@@ -80,6 +85,10 @@ await page.locator('.bk-role[data-r="主"]').click();
 await page.locator('.bk-chip[data-i="3"]').click();
 await page.locator('.bk-role[data-r="述"]').click();
 await page.waitForTimeout(400);
+const chipsAfter = await page.evaluate(() =>
+  [...document.querySelectorAll('.bk-chip')].map((c) => { const r = c.getBoundingClientRect(); return [r.left, r.width]; }));
+check(chipsBefore.every((b, i) => Math.abs(chipsAfter[i][0] - b[0]) <= 1 && Math.abs(chipsAfter[i][1] - b[1]) <= 1),
+  '役割バッジがついてもチップはずれない');
 check(await page.locator('#bkpal').isHidden(), '役割の判定が済むと 役割パレットが閉じる');
 check((await page.locator('.bk-hint').innerText()).includes('くわしくする'), 'つなぎの段の案内が出る');
 // まちがった係り先: あおい → とぶ。
@@ -102,11 +111,38 @@ check(linkHeads === 2, '係り線が ' + linkHeads + ' 本 描かれている（
 await shot('bunkai-p2-done');
 await page.locator('#bknext').click();
 
+// 問題3（係り先の違う線が交差する並び → 触れ合わないよう片方は行の上側を通る）
+await page.waitForSelector('.bk-chip[data-i="0"]');
+await page.waitForTimeout(200);
+for (const [chip, role] of [[0, '修'], [1, '修'], [2, '主'], [3, '述']]) {
+  await page.locator('.bk-chip[data-i="' + chip + '"]').click();
+  await page.locator('.bk-role[data-r="' + role + '"]').click();
+}
+await page.waitForTimeout(300);
+await page.locator('.bk-chip[data-i="0"]').click(); // あおい → はなが
+await page.locator('.bk-chip[data-i="2"]').click();
+await page.locator('.bk-chip[data-i="1"]').click(); // やさしい → さいた。
+await page.locator('.bk-chip[data-i="3"]').click();
+await page.waitForTimeout(400);
+check((await page.locator('.bk-hint').innerText()).includes('せいかい'), '交差する係り先でも せいかい になる');
+const geo = await page.evaluate(() => {
+  const lt = document.querySelector('#bkline').getBoundingClientRect().top;
+  const rowTop = Math.min(...[...document.querySelectorAll('.bk-chip')].map((c) => c.getBoundingClientRect().top)) - lt;
+  const ys = [...document.querySelectorAll('.bk-svg .lk')].flatMap((p) =>
+    (p.getAttribute('d').match(/-?\d+\.?\d*/g) || []).map(Number).filter((_, i) => i % 2 === 1));
+  return { rowTop: rowTop, minY: Math.min.apply(null, ys), heads: document.querySelectorAll('.bk-svg .lkhead').length, bad: document.querySelectorAll('.bk-svg .bad').length };
+});
+check(geo.heads === 2, '係り先の違う線は束ねない（矢じり2本のまま）');
+check(geo.minY < geo.rowTop, '下側で触れ合う線は行の上側を通る（線が文節より上にある）');
+check(geo.bad === 0, '触れ合い（破線）は出ない');
+await shot('bunkai-p3-top');
+await page.locator('#bknext').click();
+
 // おわり画面
 await page.waitForSelector('.done');
 check((await page.locator('.done-big').innerText()).includes('おわり'), 'おわり画面が出る');
 const rows = await page.locator('.endlist.bunkai li').count();
-check(rows === 2, 'おわりの一覧に2問ある');
+check(rows === 3, 'おわりの一覧に3問ある');
 await shot('bunkai-done');
 await page.locator('#menu').click();
 await page.waitForSelector('#app .menu');
@@ -125,6 +161,39 @@ await page.waitForTimeout(300);
 const badge0 = page.locator('.bk-chip[data-i="0"] .badge');
 check(await badge0.isVisible() && (await badge0.innerText()).includes('主語'), '役割チップのドラッグで文節に役割がつく（バッジに「主語」）');
 await shot('bunkai-drag');
+await page.locator('#back').click();
+await page.waitForSelector('#app .menu');
+
+// 1回5問: 6問ある問題集でもセッションは5問になる。同じ係り先へ向かう線は1本に束ねる確認も
+await page.evaluate(() => {
+  window.KANZI_BUNKAI = [
+    { id: 'bm1', segs: [{ t: 'あかい', r: '修', m: 3 }, { t: 'おおきい', r: '修', m: 3 }, { t: 'はなが', r: '主', m: 0 }, { t: 'さいた。', r: '述', m: 0 }] },
+    { id: 'bm2', segs: [{ t: 'ねこが', r: '主', m: 0 }, { t: 'いる。', r: '述', m: 0 }] },
+    { id: 'bm3', segs: [{ t: 'いぬが', r: '主', m: 0 }, { t: 'いる。', r: '述', m: 0 }] },
+    { id: 'bm4', segs: [{ t: 'とりが', r: '主', m: 0 }, { t: 'いる。', r: '述', m: 0 }] },
+    { id: 'bm5', segs: [{ t: 'うさぎが', r: '主', m: 0 }, { t: 'いる。', r: '述', m: 0 }] },
+    { id: 'bm6', segs: [{ t: 'しかが', r: '主', m: 0 }, { t: 'いる。', r: '述', m: 0 }] }
+  ];
+});
+await page.locator('#go-other').click();
+await page.locator('.chooser .big[data-id="bunkai"]').click();
+await page.waitForSelector('.bk-chip[data-i="0"]');
+check((await page.locator('.prog').innerText()).trim() === '1 / 5', '問題が6問あっても1回は5問');
+// 同じ係り先（はなが）へ向かう2本は1つに束ねる → 矢じりは1つ
+for (const [chip, role] of [[0, '修'], [1, '修'], [2, '主'], [3, '述']]) {
+  await page.locator('.bk-chip[data-i="' + chip + '"]').click();
+  await page.locator('.bk-role[data-r="' + role + '"]').click();
+}
+await page.waitForTimeout(300);
+await page.locator('.bk-chip[data-i="0"]').click();
+await page.locator('.bk-chip[data-i="2"]').click();
+await page.locator('.bk-chip[data-i="1"]').click();
+await page.locator('.bk-chip[data-i="2"]').click();
+await page.waitForTimeout(400);
+check(await page.locator('.bk-svg .lkhead').count() === 1, '同じ係り先の線は1つに束なる（矢じり1つ）');
+await shot('bunkai-merge');
+await page.locator('#back').click();
+await page.waitForSelector('#app .menu');
 
 // 先生画面: ぶんかい区画（集計・つくる画面・一覧）
 await page.goto(URL0 + '?teacher=1');

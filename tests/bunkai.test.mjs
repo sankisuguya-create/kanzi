@@ -85,6 +85,20 @@ test('normBunkai: 正しい自作問題を通し、壊れたものを落とす',
   assert.deepEqual(mixed.map((x) => x.id), ['b01', 'c1']);
 });
 
+test('ぶんかいは1回5問: まだ答えていない問題から（問題集の並び）→ 全部答えたら 最後に答えた時刻の古い順', () => {
+  const p = S.newProgress();
+  const list = [1, 2, 3, 4, 5, 6, 7, 8].map((i) => ({ id: 'q' + i }));
+  assert.deepEqual(S.bunkaiPick(list, p).map((x) => x.id), ['q1', 'q2', 'q3', 'q4', 'q5']);
+  // 答えた問題は後に回る: q1(10時)・q2(5時)・q7(30時) を答えた → 残りの先頭5問
+  S.answerBunkai(p, 'q1', true, { role: 0, link: 0 }, 10);
+  S.answerBunkai(p, 'q2', true, { role: 0, link: 0 }, 5);
+  S.answerBunkai(p, 'q7', true, { role: 0, link: 0 }, 30);
+  assert.deepEqual(S.bunkaiPick(list, p).map((x) => x.id), ['q3', 'q4', 'q5', 'q6', 'q8']);
+  // 全部に答えたあとは 最後に答えた時刻の古い順に回す（5時の q2 がいちばん古い）
+  ['q3', 'q4', 'q5', 'q6', 'q8'].forEach((id, i) => S.answerBunkai(p, id, true, { role: 0, link: 0 }, 40 + i));
+  assert.deepEqual(S.bunkaiPick(list, p).map((x) => x.id), ['q2', 'q1', 'q7', 'q3', 'q4']);
+});
+
 test('終えた回の記録に bunkai を含められる', () => {
   const p = S.newProgress();
   S.finishSession(p, 100, 3, 'bunkai');

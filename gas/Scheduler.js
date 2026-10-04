@@ -94,6 +94,19 @@
     return out;
   }
 
+  // ぶんかいは1回5問（利用者の指定）。まだ答えたことがない問題から（問題集は易→難の並び）、
+  // 全部に答えたあとは 最後に答えた時刻の古い順に回す
+  var BUNKAI_PER_SESSION = 5;
+  function bunkaiPick(list, p) {
+    var rest = [], done = [];
+    for (var i = 0; i < list.length; i++) {
+      var e = p.bunkai && p.bunkai[list[i].id];
+      (e && e[0] > 0 ? done : rest).push(list[i]);
+    }
+    done.sort(function (a, b) { return (p.bunkai[a.id][2] || 0) - (p.bunkai[b.id][2] || 0); });
+    return rest.concat(done).slice(0, BUNKAI_PER_SESSION);
+  }
+
   // まちがいの多い字（児童個人）: 答えたことがあり、まちがいが1回以上ある字を、累積まちがい率 e[4]/e[2] の高い順に
   // 「まちがいの多い字」は2系統ある（design.md §13）。こちらは児童個人の累積まちがい率。学級の集計は classMissTop
   function missList(p, kind, order) {
@@ -410,11 +423,11 @@
     FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, forestGrowth: forestGrowth, forestActivity: forestActivity, forestRegionLog: forestRegionLog,
     compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check, checkEntry: checkEntry,
-    normTests: normTests, activeTest: activeTest, GATE_KEYS: GATE_KEYS, normGates: normGates, normBunkai: normBunkai
+    normTests: normTests, activeTest: activeTest, GATE_KEYS: GATE_KEYS, normGates: normGates, normBunkai: normBunkai, bunkaiPick: bunkaiPick
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sched = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 // GAS 版ずれ検知の版（tools/build-gas.mjs が埋め込む）
-Sched.VER = "3b90f3c";
+Sched.VER = "76eb6cd";
