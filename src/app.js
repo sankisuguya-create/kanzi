@@ -653,7 +653,11 @@
       '<main class="bk">' +
       '<p class="bk-sent">' + rubyText(bunkaiSentence(prob)) + '</p>' +
       '<div class="bk-wrap"><div class="bk-line" id="bkline">' +
-        prob.segs.map(function (s, i) { return '<button type="button" class="bk-chip" data-i="' + i + '"><span class="bkt">' + rubyText(s.t) + '</span><span class="badge" hidden></span></button>'; }).join('') +
+        prob.segs.map(function (s, i) {
+          // 箱は5文字分で統一。それより長い文節は文字を縮めて箱の幅を揃える（利用者の指定）
+          var len = plain(s.t).length, fs = len > 5 ? ' style="font-size:' + Math.floor(150 / len) + 'px"' : '';
+          return '<button type="button" class="bk-chip" data-i="' + i + '"' + fs + '><span class="bkt">' + rubyText(s.t) + '</span><span class="badge" hidden></span></button>';
+        }).join('') +
         '<svg class="bk-svg" id="bksvg"></svg>' +
       '</div></div>' +
       '<p class="bk-hint" id="bkhint" aria-live="polite"></p>' +

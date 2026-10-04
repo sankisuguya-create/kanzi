@@ -455,7 +455,7 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
 .bk-sent { margin: 0; text-align: center; font-size: 30px; letter-spacing: .05em; }
 .bk-sent rt { font-size: .45em; }
 .bk-wrap { position: relative; background: var(--card); border: 2px solid var(--line); border-radius: 18px; padding: 18px 18px 40px; }
-.bk-line { position: relative; display: flex; flex-wrap: wrap; gap: 46px 14px; justify-content: center; padding-bottom: 30px; /* 下余白は係り線レーン */ }
+.bk-line { position: relative; display: flex; flex-wrap: wrap; gap: 46px 14px; justify-content: flex-start; padding-bottom: 30px; /* 下余白は係り線レーン。左揃え: どの問題でも先頭の文節が同じ位置に出るように（利用者の指定） */ }
 .bk-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
 /* 係り線は係り先ごとに色を変える（見分けはまずレーンの置き方で、色は補助）。どうしても触れ合う並びは破線 */
 .bk-svg .lk { fill: none; stroke-width: 3; stroke-linecap: round; }
@@ -465,9 +465,10 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
 .bk-svg .lkhead { stroke: none; }
 .bk-svg .lkhead.c1 { fill: var(--cat-1); } .bk-svg .lkhead.c2 { fill: var(--cat-2); }
 .bk-svg .lkhead.c3 { fill: var(--cat-3); } .bk-svg .lkhead.c4 { fill: var(--cat-4); }
-.bk-chip { position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 88px; min-height: 88px; padding: 8px 16px 30px; font-size: 30px; font-weight: 700; font-family: inherit; background: var(--card); border: 3px solid var(--line); border-radius: 14px; cursor: pointer; touch-action: pan-y; }
+/* 横幅は5文字分で統一（188px = 30px×5文字＋余白・利用者の指定）。6文字以上の文節は文字を縮めて箱を揃える（app.js で style 指定） */
+.bk-chip { position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 188px; min-height: 88px; padding: 8px 16px 30px; font-size: 30px; font-weight: 700; font-family: inherit; background: var(--card); border: 3px solid var(--line); border-radius: 14px; cursor: pointer; touch-action: pan-y; }
+.bk-chip .bkt { line-height: 1.3; white-space: nowrap; }
 .bk-chip:has(.badge:not([hidden])) { z-index: 1; } /* バッジは狭いチップからはみ出ることがあるので隣に隠れないように */
-.bk-chip .bkt { line-height: 1.3; }
 .bk-chip rt { font-size: .45em; font-weight: 400; }
 /* バッジは絶対配置: 中身（修飾語→？ など）の幅でチップの寸法・位置が変わらないように（利用者の不具合報告） */
 .bk-chip .badge { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); white-space: nowrap; line-height: 1.1; font-size: 13px; font-weight: 700; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 8px; padding: 2px 7px; background: var(--paper); }
