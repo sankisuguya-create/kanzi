@@ -393,7 +393,7 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
      body を縦flexにしておくと、先生のおためしバーがあっても下に伸びずに収まる */
   body.chooser-screen { overflow: hidden; height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
   body.chooser-screen #trial-bar { flex: none; }
-  body.chooser-screen #app { flex: 1 1 0; min-height: 0; box-sizing: border-box; padding: 8px 16px 6px; display: flex; flex-direction: column; }
+  body.chooser-screen #app { flex: 1 1 0; min-height: 0; box-sizing: border-box; padding: 8px 16px 6px; display: flex; flex-direction: column; width: 100%; /* flex アイテムの auto マージンは stretch を止めて縮むので幅を明示 */ }
   body.chooser-screen .bar { flex: none; margin-bottom: 6px; }
   body.chooser-screen .bar button { min-height: 48px; }
   body.chooser-screen .chooser { flex: 1 1 0; min-height: 0; width: 100%; display: flex; flex-direction: column; gap: clamp(8px, 1.8vh, 14px); }
@@ -469,6 +469,7 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
 .bk-chip .badge { display: block; white-space: nowrap; line-height: 1.1; min-height: 17px; font-size: 13px; font-weight: 700; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 8px; padding: 2px 7px; background: var(--paper); }
 .bk-chip .badge rt { font-size: .62em; }
 .bk-chip .badge .bka { font-style: normal; color: var(--cat-2); }
+.bk-chip .badge[hidden] { visibility: hidden; } /* display:block が UA の [hidden]{display:none} を上書きするので明示。場所は取ってチップの高さを変えない */
 .bk-chip .badge:empty::before { content: '\00a0'; }
 .bk-chip.sel { background: var(--fill-a); border-width: 4px; outline: 3px solid var(--cat-1); }
 .bk-chip.locked { border-color: var(--cat-1); cursor: default; }
@@ -488,7 +489,7 @@ body.bk-dragging .bk-chip { border-style: dashed; border-color: var(--cat-2); }
 .bk-pal[hidden] { display: none; }
 .bk-role { min-height: 76px; padding: 6px 4px; font-size: 24px; font-weight: 700; font-family: inherit; border-radius: 14px; background: var(--card); border: 3px solid var(--ink); cursor: grab; touch-action: none; }
 .bk-role rt { font-size: .5em; font-weight: 400; }
-.bk-role[disabled] { opacity: .45; cursor: default; }
+.bk-role.dim { opacity: .45; } /* disabled 属性は使わない（置くとドラッグも始められない。タップは st.sel を見て拒否する） */
 .bk-role:active { transform: translateY(2px); }
 .bk-tools { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .bk-tools .big { width: auto; min-width: 220px; }
@@ -534,7 +535,7 @@ ol.hard.bk .bp2 { color: var(--ink-sub); font-size: 15px; }
 ol.hard.bk .bk-del { margin-left: auto; min-height: 40px; padding: 0 14px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); cursor: pointer; font-size: 15px; }
 #bk-editor .bk { padding-top: 10px; }
 </style>
-<meta name="kanzi-ver" content="147935a">
+<meta name="kanzi-ver" content="3b90f3c">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -4026,10 +4027,11 @@ var KANZI_BUNKAI = [
   // 役割は色でなく語バッジで示す（5役割は色分けの上限4色を超えるため）。漢字の学年は3年まで（正本側で機械検査）
   var BK_ROLE = ['主', '述', '修', '接', '独'];
   var BK_KANA = { '主': 'しゅご', '述': 'じゅつご', '修': 'しゅうしょくご', '接': 'せつぞくご', '独': 'どくりつご' };
+  var BK_NAME = { '主': '主語', '述': '述語', '修': '修飾語', '接': '接続語', '独': '独立語' };
   function rubyText(s) { return esc(String(s)).replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>'); } // 文節の {字|よみ} をルビに
   function plain(s) { return String(s).replace(/\{([^|}]+)\|([^}]+)\}/g, '$1'); }
   function bunkaiSentence(prob) { return prob.segs.map(function (s) { return s.t; }).join(' '); }
-  function roleBadge(r) { return '<ruby>' + r + '語<rt>' + BK_KANA[r] + '</rt></ruby>'; }
+  function roleBadge(r) { return '<ruby>' + BK_NAME[r] + '<rt>' + BK_KANA[r] + '</rt></ruby>'; }
 
   // タップに加えてドラッグも受け付ける（先生の作る画面と共用）。pointer 系で統一し、8px以内はタップとして click に任せる
   var dragEndAt = 0;
@@ -4156,7 +4158,12 @@ var KANZI_BUNKAI = [
       });
       $('#bkerase').disabled = st.sel < 0 || st.done || st.locked[st.sel] || (st.phase === 'link' && st.role[st.sel] !== '修');
       pal.hidden = st.phase !== 'role' || st.done;
-      app.querySelectorAll('.bk-role').forEach(function (b) { b.disabled = st.sel < 0 || st.done || st.locked[st.sel]; });
+      app.querySelectorAll('.bk-role').forEach(function (b) {
+        // 文節を選んでいない間はタップで当てられないのでうすくする（disabled は使わない: 置くとドラッグも始められない。うすくてもドラッグはできる）
+        var dim = st.sel < 0 || st.done || st.locked[st.sel];
+        b.classList.toggle('dim', dim);
+        b.setAttribute('aria-disabled', dim ? 'true' : 'false');
+      });
       if (author) { $('#bksave').disabled = !(st.phase === 'link' && phaseComplete()); $('#bkrole').hidden = st.phase !== 'link'; }
       drawLinks();
     }
@@ -4226,7 +4233,7 @@ var KANZI_BUNKAI = [
         paint();
       } else {
         var wrongL = [];
-        prob.segs.forEach(function (s, i) { if (s.r === '修' && st.target[i] !== s.m) wrongL.push(i); });
+        prob.segs.forEach(function (s, i) { if (s.r === '修' && st.target[i] !== s.m - 1) wrongL.push(i); }); // st.target は0始まり、s.m は1始まりの係り先番号
         if (!wrongL.length) return finishProblem();
         st.errs.link += wrongL.length;
         if (++st.tries >= 2) return reveal(false);
@@ -4256,7 +4263,7 @@ var KANZI_BUNKAI = [
         say(K('やくわりの こたえ。つぎは しゅうしょくごの つながりを しよう'), 'err');
         paint();
       } else {
-        prob.segs.forEach(function (s, i) { if (s.r === '修') st.target[i] = s.m; });
+        prob.segs.forEach(function (s, i) { if (s.r === '修') st.target[i] = s.m - 1; });
         st.sel = -1; st.picking = false;
         finishProblem();
       }
@@ -4323,8 +4330,8 @@ var KANZI_BUNKAI = [
         if (phaseComplete()) judge();
       });
       enableDrag(b, {
-        disabled: function () { return b.disabled; },
-        ghost: function () { var g = document.createElement('div'); g.className = 'bk-ghost bk-ghost-role'; g.textContent = b.dataset.r + '語'; return g; },
+        disabled: function () { return st.done || st.phase !== 'role'; },
+        ghost: function () { var g = document.createElement('div'); g.className = 'bk-ghost bk-ghost-role'; g.textContent = BK_NAME[b.dataset.r]; return g; },
         over: chipAt,
         drop: function (t) {
           var i = +t.dataset.i;

@@ -122,7 +122,8 @@ await page.mouse.down();
 await page.mouse.move(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2, { steps: 8 });
 await page.mouse.up();
 await page.waitForTimeout(300);
-check(await page.locator('.bk-chip[data-i="0"] .badge').isVisible(), '役割チップのドラッグで文節に役割がつく');
+const badge0 = page.locator('.bk-chip[data-i="0"] .badge');
+check(await badge0.isVisible() && (await badge0.innerText()).includes('主語'), '役割チップのドラッグで文節に役割がつく（バッジに「主語」）');
 await shot('bunkai-drag');
 
 // 先生画面: ぶんかい区画（集計・つくる画面・一覧）
