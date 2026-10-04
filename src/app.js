@@ -604,10 +604,11 @@
   // 役割は色でなく語バッジで示す（5役割は色分けの上限4色を超えるため）。漢字の学年は3年まで（正本側で機械検査）
   var BK_ROLE = ['主', '述', '修', '接', '独'];
   var BK_KANA = { '主': 'しゅご', '述': 'じゅつご', '修': 'しゅうしょくご', '接': 'せつぞくご', '独': 'どくりつご' };
+  var BK_NAME = { '主': '主語', '述': '述語', '修': '修飾語', '接': '接続語', '独': '独立語' };
   function rubyText(s) { return esc(String(s)).replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>'); } // 文節の {字|よみ} をルビに
   function plain(s) { return String(s).replace(/\{([^|}]+)\|([^}]+)\}/g, '$1'); }
   function bunkaiSentence(prob) { return prob.segs.map(function (s) { return s.t; }).join(' '); }
-  function roleBadge(r) { return '<ruby>' + r + '語<rt>' + BK_KANA[r] + '</rt></ruby>'; }
+  function roleBadge(r) { return '<ruby>' + BK_NAME[r] + '<rt>' + BK_KANA[r] + '</rt></ruby>'; }
 
   // タップに加えてドラッグも受け付ける（先生の作る画面と共用）。pointer 系で統一し、8px以内はタップとして click に任せる
   var dragEndAt = 0;
@@ -734,7 +735,12 @@
       });
       $('#bkerase').disabled = st.sel < 0 || st.done || st.locked[st.sel] || (st.phase === 'link' && st.role[st.sel] !== '修');
       pal.hidden = st.phase !== 'role' || st.done;
-      app.querySelectorAll('.bk-role').forEach(function (b) { b.disabled = st.sel < 0 || st.done || st.locked[st.sel]; });
+      app.querySelectorAll('.bk-role').forEach(function (b) {
+        // 文節を選んでいない間はタップで当てられないのでうすくする（disabled は使わない: 置くとドラッグも始められない。うすくてもドラッグはできる）
+        var dim = st.sel < 0 || st.done || st.locked[st.sel];
+        b.classList.toggle('dim', dim);
+        b.setAttribute('aria-disabled', dim ? 'true' : 'false');
+      });
       if (author) { $('#bksave').disabled = !(st.phase === 'link' && phaseComplete()); $('#bkrole').hidden = st.phase !== 'link'; }
       drawLinks();
     }
@@ -901,8 +907,8 @@
         if (phaseComplete()) judge();
       });
       enableDrag(b, {
-        disabled: function () { return b.disabled; },
-        ghost: function () { var g = document.createElement('div'); g.className = 'bk-ghost bk-ghost-role'; g.textContent = b.dataset.r + '語'; return g; },
+        disabled: function () { return st.done || st.phase !== 'role'; },
+        ghost: function () { var g = document.createElement('div'); g.className = 'bk-ghost bk-ghost-role'; g.textContent = BK_NAME[b.dataset.r]; return g; },
         over: chipAt,
         drop: function (t) {
           var i = +t.dataset.i;
