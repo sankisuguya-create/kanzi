@@ -52,6 +52,11 @@ await page.locator('.chooser .big[data-id="bunkai"]').click();
 // 問題1（修飾語なし → 役割の段だけ）
 await page.waitForSelector('.bk-chip[data-i="0"]');
 check(true, 'ぶんかい画面が出た');
+// チップ幅は5文字分で統一（188px）・左端の位置はどの問題でも同じ（利用者の指定）
+const chipGeo = await page.evaluate(() =>
+  [...document.querySelectorAll('.bk-chip')].map((c) => { const r = c.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.width)]; }));
+check(chipGeo.every((g) => g[1] === 188), '全部の文節チップの横幅が同じ（188px）');
+const firstLeft = chipGeo[0][0];
 await page.locator('.bk-chip[data-i="0"]').click(); // はなが を選択
 await page.locator('.bk-role[data-r="主"]').click();
 // わざとまちがえる: さいた。に 主語
@@ -72,6 +77,7 @@ await page.locator('#bknext').click();
 // 問題2（修飾語あり → 役割の段 → つなぎの段）
 await page.waitForSelector('.bk-chip[data-i="0"]');
 await page.waitForTimeout(200);
+check(Math.round((await page.locator('.bk-chip[data-i="0"]').boundingBox()).x) === firstLeft, '次の問題でも先頭の文節の位置が同じ');
 // チップの位置を控える: 役割バッジ（修飾語→？ など）がついてもチップの寸法・位置は変わらないはず
 const chipsBefore = await page.evaluate(() =>
   [...document.querySelectorAll('.bk-chip')].map((c) => { const r = c.getBoundingClientRect(); return [r.left, r.width]; }));
@@ -192,6 +198,21 @@ await page.locator('.bk-chip[data-i="2"]').click();
 await page.waitForTimeout(400);
 check(await page.locator('.bk-svg .lkhead').count() === 1, '同じ係り先の線は1つに束なる（矢じり1つ）');
 await shot('bunkai-merge');
+await page.locator('#back').click();
+await page.waitForSelector('#app .menu');
+
+// 長い文節（7文字）も箱は同じ幅（文字だけ縮める）・左端の位置も同じ
+await page.evaluate(() => {
+  window.KANZI_BUNKAI = [{ id: 'bl1', segs: [{ t: 'べんきょうを', r: '修', m: 3 }, { t: 'もてなかった', r: '修', m: 3 }, { t: 'こえが', r: '主', m: 0 }, { t: 'ひびいた。', r: '述', m: 0 }] }];
+});
+await page.locator('#go-other').click();
+await page.locator('.chooser .big[data-id="bunkai"]').click();
+await page.waitForSelector('.bk-chip[data-i="0"]');
+const longGeo = await page.evaluate(() =>
+  [...document.querySelectorAll('.bk-chip')].map((c) => { const r = c.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.width)]; }));
+check(longGeo.every((g) => g[1] === 188), '7文字の文節でもチップ幅は統一（文字だけ縮む）');
+check(longGeo[0][0] === firstLeft, '長い文節の問題でも先頭の文節の位置が同じ');
+await shot('bunkai-uniform');
 await page.locator('#back').click();
 await page.waitForSelector('#app .menu');
 
