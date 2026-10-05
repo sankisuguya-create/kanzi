@@ -257,12 +257,12 @@ for (let i = 0; i < lkGeo.v.length; i++) for (let j = i + 1; j < lkGeo.v.length;
   const a = lkGeo.v[i], b = lkGeo.v[j];
   if (Math.abs(a.x - b.x) <= 2 && a.y0 < b.y1 - 1 && b.y0 < a.y1 - 1) vOver++;
 }
-check(vOver === 0, '入れ子の係り受けで垂線が重ならない（同じ辺は1本に合流）');
+check(vOver === 0, '入れ子の係り受けで垂線が重ならない（同じ辺でも別の接続点）');
 check(lkGeo.heads.length === 2 && lkGeo.heads.every((h) => h[3] < Math.min(h[1], h[5]) - 2),
   '矢じりは係り先の文節の辺を指す向き（下から来た線は上向き）');
 await shot('bunkai-nested');
-// 1問セッションは せいかい のあと自動で おわり画面 へ進む（つぎへ が残っていれば押す）
-if (await page.locator('#bknext').isVisible()) await page.locator('#bknext').click();
+// 1問セッションは せいかい のあと自動で おわり画面 へ進む（つぎへ が残っていれば押すが、自動遷移と競合するので失敗は無視）
+try { await page.locator('#bknext').click({ timeout: 2500 }); } catch (e) {}
 await page.waitForSelector('.done');
 await page.locator('#menu').click();
 await page.waitForSelector('#app .menu');
