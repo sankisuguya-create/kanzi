@@ -556,7 +556,7 @@ ol.hard.bk .bp2 { color: var(--ink-sub); font-size: 15px; }
 ol.hard.bk .bk-del { margin-left: auto; min-height: 40px; padding: 0 14px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); cursor: pointer; font-size: 15px; }
 #bk-editor .bk { padding-top: 10px; }
 </style>
-<meta name="kanzi-ver" content="8b0c692">
+<meta name="kanzi-ver" content="c941428">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -4161,9 +4161,9 @@ var KANZI_BUNKAI = [
     // 係り線。同じ係り先（かつ出し手が同じ行）へ向かう線は共通レーンに束ねる（出し手ごとの垂線＋係り先へ矢じり1つ）。
     // 係り先の違う線は束ねない: まず行の下にレーンを取り、短い線ほど文節に近い浅いレーン（教科書の括弧どおり）。
     // 垂線が他の線の横線を突き抜けてしまう並びは行の上側へ回し、行をまたぐ線は行と行の間を通る。
-    // 同じ文節の同じ辺を共有する垂線（入れ子の係り受け）は1本に合流する — 教科書の合流点と同じ見え方。
-    // 線同士の重なり（同じ縦位置を通る線）は出さない。上下どちらに回しても触れ合うときだけ破線にする
-    //（線色は係り先ごとに変える: 利用者より許可。見分けはまず形と置き場で、色は補助）。矢じりは係り先の辺を指す向き。
+    // 文節の辺には接続点を複数設ける: 同じ行間・同じ横位置の辺から出入りする垂線は辺の中でxをずらし、
+    // 垂線どうしが重ならないようにする（入れ子の係り受けで同じ文節に線が出入りするときも別の点）。
+    // それでも触れ合う並びだけ破線にする（線色は係り先ごと: 利用者より許可）。矢じりは係り先の辺を指す向き。
     var LANE0 = 12, LANE = 15;
     function drawLinks() {
       var wrap, rows = [], chip = [];
@@ -4171,7 +4171,7 @@ var KANZI_BUNKAI = [
         wrap = line.getBoundingClientRect(); rows = []; chip = [];
         prob.segs.forEach(function (s, i) {
           var r = chipEl(i).getBoundingClientRect();
-          chip[i] = { x: r.left + r.width / 2 - wrap.left, top: r.top - wrap.top, bottom: r.bottom - wrap.top, ri: -1 };
+          chip[i] = { x: r.left + r.width / 2 - wrap.left, top: r.top - wrap.top, bottom: r.bottom - wrap.top, w: r.width, ri: -1 };
           var top = Math.round(chip[i].top), row = rows.filter(function (x) { return Math.abs(x.top - top) < 4; })[0];
           if (!row) { row = { top: top, bottom: chip[i].bottom }; rows.push(row); }
           row.bottom = Math.max(row.bottom, chip[i].bottom);
@@ -4275,46 +4275,71 @@ var KANZI_BUNKAI = [
       void line.offsetHeight; // 余白を反映させてから測り直す
       measure();
       groups.forEach(function (g) { g.laneY = laneY(g); });
-      // 本番の座標で最終確認: ここで触れ合う並びは破線に（レーン追加で順序が変わることはないので滅多に起きない）
+
+      // 垂線を接続点つきで組み立てる（edge: 't' 文節の上辺 / 'b' 下辺、cx: 相手側のx＝接続点の割り当て順づけ用）
+      var stems = [];
+      groups.forEach(function (g) {
+        var y = g.laneY, up = g.side === 't' || (g.side === 'x' && g.dri < g.sri);
+        g.srcs.forEach(function (i) {
+          var e = up ? chip[i].top : chip[i].bottom;
+          stems.push({ g: g, ci: i, edge: up ? 't' : 'b', x: chip[i].x, cx: chip[g.dst].x, y0: Math.min(e, y), y1: Math.max(e, y) });
+        });
+        var tipTop = g.side === 't' || (g.side === 'x' && g.dri > g.sri);
+        var de = tipTop ? chip[g.dst].top : chip[g.dst].bottom;
+        var mx = 0; g.srcs.forEach(function (i) { mx += chip[i].x; }); mx /= g.srcs.length;
+        stems.push({ g: g, ci: g.dst, edge: tipTop ? 't' : 'b', dst: true, x: chip[g.dst].x, cx: mx, y0: Math.min(y, de), y1: Math.max(y, de) });
+      });
+      // 同じ行間（band）を同じ横位置の文節の辺から出入りする垂線は、辺の内側でxをずらして重複させない
+      var bands = {};
+      stems.forEach(function (s) {
+        var band = s.edge === 'b' ? chip[s.ci].ri : chip[s.ci].ri - 1;
+        var key = band + '|' + Math.round(chip[s.ci].x);
+        (bands[key] = bands[key] || []).push(s);
+      });
+      Object.keys(bands).forEach(function (k) {
+        var ss = bands[k];
+        if (ss.length < 2) return;
+        ss.sort(function (a, b) { return a.cx - b.cx || a.y0 - b.y0; });
+        var w = chip[ss[0].ci].w - 24;
+        var step = Math.min(20, w / (ss.length - 1)), x0 = ss[0].x - step * (ss.length - 1) / 2;
+        ss.forEach(function (s, i) { s.x = x0 + i * step; });
+      });
+      // ずらした接続点で線区を確定し、実座標で最終確認（ここで触れ合う並びは破線に）
+      groups.forEach(function (g) { g.left = Infinity; g.right = -Infinity; });
+      stems.forEach(function (s) {
+        var g = s.g;
+        if (s.x < g.left) g.left = s.x;
+        if (s.x > g.right) g.right = s.x;
+        if (s.dst) g.dax = s.x;
+      });
+      function clashReal(g, h) {
+        var vs = stems.filter(function (s) { return s.g === g; });
+        var hv = stems.filter(function (s) { return s.g === h; });
+        return vs.some(function (v) { return Math.abs(v.x - h.dax) > 2 && v.x >= h.left - 1 && v.x <= h.right + 1 && h.laneY > v.y0 + 1 && h.laneY < v.y1 - 1; }) ||
+          hv.some(function (v) { return Math.abs(v.x - g.dax) > 2 && v.x >= g.left - 1 && v.x <= g.right + 1 && g.laneY > v.y0 + 1 && g.laneY < v.y1 - 1; }) ||
+          vs.some(function (v) { return hv.some(function (w) { return vHit(v, w); }); }) ||
+          (Math.abs(g.laneY - h.laneY) <= 1 && g.left < h.right && h.left < g.right);
+      }
       Object.keys(placed).forEach(function (k) {
         placed[k].forEach(function (g) {
           placed[k].forEach(function (h) {
-            if (g !== h && !g.flag && clash(g, g.laneY, h)) g.flag = true;
+            if (g !== h && !g.flag && clashReal(g, h)) g.flag = true;
           });
         });
       });
 
       function arrow(x, y, dir) { var s = dir === 'up' ? 1 : -1; return 'M' + (x - 6) + ' ' + (y + 8 * s) + ' L' + x + ' ' + y + ' L' + (x + 6) + ' ' + (y + 8 * s) + ' Z'; }
-      var out = [], stems = [];
+      var out = [];
       groups.forEach(function (g, gi) {
         var cls = 'lk c' + (gi % 4 + 1) + (g.flag ? ' bad' : '');
-        var y = g.laneY, up = g.side === 't' || (g.side === 'x' && g.dri < g.sri);
-        g.srcs.forEach(function (i) {
-          var e = up ? chip[i].top : chip[i].bottom;
-          stems.push({ x: chip[i].x, y0: Math.min(e, y), y1: Math.max(e, y), cls: cls });
-        });
-        out.push('<path class="' + cls + '" d="M' + g.left + ' ' + y + ' L' + g.right + ' ' + y + '"/>');
-        // 矢じりは係り先の文節の辺を指す（下から来たら上向き・上から来たら下向き）
-        var tipTop = g.side === 't' || (g.side === 'x' && g.dri > g.sri);
-        var de = tipTop ? chip[g.dst].top : chip[g.dst].bottom;
-        stems.push({ x: g.dx, y0: Math.min(y, de), y1: Math.max(y, de), cls: cls });
-        out.push('<path class="lkhead c' + (gi % 4 + 1) + (g.flag ? ' bad' : '') + '" d="' + arrow(g.dx, de, tipTop ? 'down' : 'up') + '"/>');
+        out.push('<path class="' + cls + '" d="M' + g.left + ' ' + g.laneY + ' L' + g.right + ' ' + g.laneY + '"/>');
       });
-      // 同じxで文節の辺の端を共有する垂線は1本に合流（入れ子の係り受け: 「あおい→そらに」「そらに→とぶ」で そらに の線を共有）
-      var merged = [];
       stems.forEach(function (s) {
-        var kept = null;
-        merged = merged.filter(function (t) {
-          var ok = Math.abs(t.x - s.x) <= 2 && s.y0 < t.y1 - 1 && t.y0 < s.y1 - 1 &&
-            (Math.abs(t.y0 - s.y0) <= 2 || Math.abs(t.y1 - s.y1) <= 2);
-          if (!ok) return true;
-          if (!kept) { kept = t; return true; }
-          kept.y0 = Math.min(kept.y0, t.y0); kept.y1 = Math.max(kept.y1, t.y1); return false;
-        });
-        if (kept) { if (s.y1 - s.y0 > kept.y1 - kept.y0) kept.cls = s.cls; kept.y0 = Math.min(kept.y0, s.y0); kept.y1 = Math.max(kept.y1, s.y1); }
-        else merged.push(s);
+        var gi = groups.indexOf(s.g);
+        var cls = 'lk c' + (gi % 4 + 1) + (s.g.flag ? ' bad' : '');
+        out.push('<path class="' + cls + '" d="M' + s.x + ' ' + s.y0 + ' L' + s.x + ' ' + s.y1 + '"/>');
+        if (s.dst) out.push('<path class="lkhead c' + (gi % 4 + 1) + (s.g.flag ? ' bad' : '') + '" d="' + arrow(s.x, s.edge === 't' ? chip[s.ci].top : chip[s.ci].bottom, s.edge === 't' ? 'down' : 'up') + '"/>');
       });
-      merged.forEach(function (s) { out.push('<path class="' + s.cls + '" d="M' + s.x + ' ' + s.y0 + ' L' + s.x + ' ' + s.y1 + '"/>'); });
       svg.innerHTML = out.join('');
     }
     var onResize = function () { drawLinks(); };
