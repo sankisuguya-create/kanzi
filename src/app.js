@@ -704,7 +704,9 @@
     // 係り線。同じ係り先（かつ出し手が同じ行）へ向かう線は共通レーンに束ねる（出し手ごとの垂線＋係り先へ矢じり1つ）。
     // 係り先の違う線は束ねない: まず行の下にレーンを取り、短い線ほど文節に近い浅いレーン（教科書の括弧どおり）。
     // 垂線が他の線の横線を突き抜けてしまう並びは行の上側へ回し、行をまたぐ線は行と行の間を通る。
-    // 上下どちらに回しても触れ合うときだけ破線にする（線色は係り先ごとに変える: 利用者より許可。見分けはまず形と置き場で、色は補助）
+    // 同じ文節の同じ辺を共有する垂線（入れ子の係り受け）は1本に合流する — 教科書の合流点と同じ見え方。
+    // 線同士の重なり（同じ縦位置を通る線）は出さない。上下どちらに回しても触れ合うときだけ破線にする
+    //（線色は係り先ごとに変える: 利用者より許可。見分けはまず形と置き場で、色は補助）。矢じりは係り先の辺を指す向き。
     var LANE0 = 12, LANE = 15;
     function drawLinks() {
       var wrap, rows = [], chip = [];
@@ -771,11 +773,20 @@
       function crosses(vs, h, hy) {
         return vs.some(function (v) { return Math.abs(v.x - h.dx) > 2 && v.x >= h.left - 1 && v.x <= h.right + 1 && hy > v.y0 + 1 && hy < v.y1 - 1; });
       }
+      // 垂線どうしの重なり（同じxで縦区間がかぶる）。文節の辺の端を共有する組は合流点として1本にするので衝突ではない
+      function vHit(v, w) {
+        return Math.abs(v.x - w.x) <= 2 && v.y0 < w.y1 - 1 && w.y0 < v.y1 - 1 &&
+          Math.abs(v.y0 - w.y0) > 2 && Math.abs(v.y1 - w.y1) > 2;
+      }
+      // 置くと線が触れ合うか（突き抜け・重なり）
+      function clash(g, y, h) {
+        var vs = verticals(g, y), hv = verticals(h, h.laneY);
+        return crosses(vs, h, h.laneY) || crosses(hv, g, y) ||
+          vs.some(function (v) { return hv.some(function (w) { return vHit(v, w); }); }) ||
+          (Math.abs(y - h.laneY) <= 1 && g.left < h.right && h.left < g.right);
+      }
       function conflicts(g, y) {
-        var vs = verticals(g, y);
-        return (placed[g.gap] || []).some(function (h) {
-          return crosses(vs, h, h.laneY) || crosses(verticals(h, h.laneY), g, y);
-        });
+        return (placed[g.gap] || []).some(function (h) { return clash(g, y, h); });
       }
       function put(g) { g.laneY = laneY(g); (placed[g.gap] = placed[g.gap] || []).push(g); }
       function tryBottom(g) { g.side = 'b'; g.gap = g.sri; g.slot = nb[g.sri]; var y = laneY(g); if (conflicts(g, y)) return false; nb[g.sri]++; put(g); return true; }
@@ -811,25 +822,42 @@
       Object.keys(placed).forEach(function (k) {
         placed[k].forEach(function (g) {
           placed[k].forEach(function (h) {
-            if (g !== h && !g.flag && (crosses(verticals(g, g.laneY), h, h.laneY) || crosses(verticals(h, h.laneY), g, g.laneY))) g.flag = true;
+            if (g !== h && !g.flag && clash(g, g.laneY, h)) g.flag = true;
           });
         });
       });
 
       function arrow(x, y, dir) { var s = dir === 'up' ? 1 : -1; return 'M' + (x - 6) + ' ' + (y + 8 * s) + ' L' + x + ' ' + y + ' L' + (x + 6) + ' ' + (y + 8 * s) + ' Z'; }
-      var out = [];
+      var out = [], stems = [];
       groups.forEach(function (g, gi) {
         var cls = 'lk c' + (gi % 4 + 1) + (g.flag ? ' bad' : '');
         var y = g.laneY, up = g.side === 't' || (g.side === 'x' && g.dri < g.sri);
         g.srcs.forEach(function (i) {
           var e = up ? chip[i].top : chip[i].bottom;
-          out.push('<path class="' + cls + '" d="M' + chip[i].x + ' ' + e + ' L' + chip[i].x + ' ' + y + '"/>');
+          stems.push({ x: chip[i].x, y0: Math.min(e, y), y1: Math.max(e, y), cls: cls });
         });
         out.push('<path class="' + cls + '" d="M' + g.left + ' ' + y + ' L' + g.right + ' ' + y + '"/>');
-        var de = up ? chip[g.dst].bottom : (g.side === 'x' ? chip[g.dst].top : chip[g.dst].bottom);
-        out.push('<path class="' + cls + '" d="M' + g.dx + ' ' + y + ' L' + g.dx + ' ' + de + '"/>');
-        out.push('<path class="lkhead c' + (gi % 4 + 1) + (g.flag ? ' bad' : '') + '" d="' + arrow(g.dx, de, up ? 'up' : 'down') + '"/>');
+        // 矢じりは係り先の文節の辺を指す（下から来たら上向き・上から来たら下向き）
+        var tipTop = g.side === 't' || (g.side === 'x' && g.dri > g.sri);
+        var de = tipTop ? chip[g.dst].top : chip[g.dst].bottom;
+        stems.push({ x: g.dx, y0: Math.min(y, de), y1: Math.max(y, de), cls: cls });
+        out.push('<path class="lkhead c' + (gi % 4 + 1) + (g.flag ? ' bad' : '') + '" d="' + arrow(g.dx, de, tipTop ? 'down' : 'up') + '"/>');
       });
+      // 同じxで文節の辺の端を共有する垂線は1本に合流（入れ子の係り受け: 「あおい→そらに」「そらに→とぶ」で そらに の線を共有）
+      var merged = [];
+      stems.forEach(function (s) {
+        var kept = null;
+        merged = merged.filter(function (t) {
+          var ok = Math.abs(t.x - s.x) <= 2 && s.y0 < t.y1 - 1 && t.y0 < s.y1 - 1 &&
+            (Math.abs(t.y0 - s.y0) <= 2 || Math.abs(t.y1 - s.y1) <= 2);
+          if (!ok) return true;
+          if (!kept) { kept = t; return true; }
+          kept.y0 = Math.min(kept.y0, t.y0); kept.y1 = Math.max(kept.y1, t.y1); return false;
+        });
+        if (kept) { if (s.y1 - s.y0 > kept.y1 - kept.y0) kept.cls = s.cls; kept.y0 = Math.min(kept.y0, s.y0); kept.y1 = Math.max(kept.y1, s.y1); }
+        else merged.push(s);
+      });
+      merged.forEach(function (s) { out.push('<path class="' + s.cls + '" d="M' + s.x + ' ' + s.y0 + ' L' + s.x + ' ' + s.y1 + '"/>'); });
       svg.innerHTML = out.join('');
     }
     var onResize = function () { drawLinks(); };
