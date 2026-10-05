@@ -227,6 +227,46 @@ await shot('bunkai-uniform');
 await page.locator('#back').click();
 await page.waitForSelector('#app .menu');
 
+// 入れ子の係り受け（きれいな が係り先であり出し手）: 同じ辺を共有する垂線は1本に合流・矢じりは係り先の辺を指す
+await page.evaluate(() => {
+  window.KANZI_BUNKAI = [{ id: 'bn1', segs: [{ t: 'とても', r: '修', m: 2 }, { t: 'きれいな', r: '修', m: 3 }, { t: 'はなが', r: '主', m: 0 }, { t: 'さいた。', r: '述', m: 0 }] }];
+});
+await page.locator('#go-other').click();
+await page.locator('.chooser .big[data-id="bunkai"]').click();
+await page.waitForSelector('.bk-chip[data-i="0"]');
+for (const [chip, role] of [[0, '修'], [1, '修'], [2, '主'], [3, '述']]) {
+  await page.locator('.bk-chip[data-i="' + chip + '"]').click();
+  await page.locator('.bk-role[data-r="' + role + '"]').click();
+}
+await page.waitForTimeout(300);
+await page.locator('.bk-chip[data-i="0"]').click();
+await page.locator('.bk-chip[data-i="1"]').click(); // とても → きれいな
+await page.locator('.bk-chip[data-i="1"]').click();
+await page.locator('.bk-chip[data-i="2"]').click(); // きれいな → はなが
+const lkGeo = await page.evaluate(() => {
+  const v = [], heads = [];
+  document.querySelectorAll('.bk-svg path').forEach((p) => {
+    const n = p.getAttribute('d').match(/-?\d+\.?\d*/g).map(Number);
+    if (p.getAttribute('class').includes('lkhead')) { heads.push(n); return; }
+    if (Math.abs(n[0] - n[2]) < 0.5) v.push({ x: n[0], y0: Math.min(n[1], n[3]), y1: Math.max(n[1], n[3]) });
+  });
+  return { v, heads };
+});
+let vOver = 0;
+for (let i = 0; i < lkGeo.v.length; i++) for (let j = i + 1; j < lkGeo.v.length; j++) {
+  const a = lkGeo.v[i], b = lkGeo.v[j];
+  if (Math.abs(a.x - b.x) <= 2 && a.y0 < b.y1 - 1 && b.y0 < a.y1 - 1) vOver++;
+}
+check(vOver === 0, '入れ子の係り受けで垂線が重ならない（同じ辺でも別の接続点）');
+check(lkGeo.heads.length === 2 && lkGeo.heads.every((h) => h[3] < Math.min(h[1], h[5]) - 2),
+  '矢じりは係り先の文節の辺を指す向き（下から来た線は上向き）');
+await shot('bunkai-nested');
+// 1問セッションは せいかい のあと自動で おわり画面 へ進む（つぎへ が残っていれば押すが、自動遷移と競合するので失敗は無視）
+try { await page.locator('#bknext').click({ timeout: 2500 }); } catch (e) {}
+await page.waitForSelector('.done');
+await page.locator('#menu').click();
+await page.waitForSelector('#app .menu');
+
 // 先生画面: ぶんかい区画（集計・つくる画面・一覧）
 await page.goto(URL0 + '?teacher=1');
 await page.waitForSelector('.teacher section.tsets');
