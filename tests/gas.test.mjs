@@ -251,7 +251,7 @@ test('見せる学年に ひらがな・カタカナを入れられる（1〜6�
   assert.throws(() => env.api_setGrades('3-1', ['h']), /1年〜6年から/);
 });
 
-test('過年度データ: 残す→一覧→集計→個人情報をまとめて消す（担当の先生だけ）', () => {
+test('過年度データ: 残す→一覧→集計（担当学級だけ）→個人情報をまとめて消す（全学級の担当だけ）', () => {
   const s = base();
   for (let i = 4; i <= 7; i++) { // 3-1 に 計6人。安をまちがえた人が4人増えるとクラス集計に出る
     const k = `1000000${i}@kyoiku.edu.nishi.or.jp`;
@@ -267,30 +267,55 @@ test('過年度データ: 残す→一覧→集計→個人情報をまとめて
   assert.throws(() => env.api_archiveSave('2025'), /すでに残してあります/);
   assert.throws(() => env.api_archiveSave('20A5'), /4桁/);
   assert.deepEqual(JSON.parse(JSON.stringify(env.api_archiveYears())), [{ year: '2025', anonymized: false }]);
-  const v = env.api_archiveView('2025');
+  const v = env.api_archiveView('2025'); // T は 3-1 だけ担当 → 3-2 は見えず、まとめて消すこともできない
   assert.equal(v.anonymized, false);
-  const c1 = v.classes.find((c) => c.klass === '3-1'), c2 = v.classes.find((c) => c.klass === '3-2');
+  assert.equal(v.canAnonymize, false);
+  assert.deepEqual(v.classes.map((c) => c.klass), ['3-1']);
+  const c1 = v.classes.find((c) => c.klass === '3-1');
   assert.equal(c1.students, 6); assert.equal(c1.learned, 1); // K1の 悪が箱3
   assert.equal(c1.missTop[0].c, '安'); assert.deepEqual([c1.missTop[0].s, c1.missTop[0].b], [5, 5]); // K1＋4人
-  assert.equal(c2.students, 1);
   assert.throws(() => env.api_archiveAnonymize('2025', '2024'), /名前が違います/); // 確定語が違えば何もしない
-  const res = env.api_archiveAnonymize('2025', '2025');
+  assert.throws(() => env.api_archiveAnonymize('2025', '2025'), /全学級を 担当する先生だけ/); // 担当外（3-2）が残る年度は消せない
+  // 3年の全学級を担当する先生（教師シートで 組を空けた行）なら全部見えて消せる
+  const env2 = makeEnv(env.book, T2);
+  const w = env2.api_archiveView('2025');
+  assert.equal(w.canAnonymize, true);
+  assert.equal(w.classes.find((c) => c.klass === '3-2').students, 1);
+  const res = env2.api_archiveAnonymize('2025', '2025');
   assert.equal(res.remaining, 0);
-  const arch = env.book['名簿2025'];
+  const arch = env2.book['名簿2025'];
   assert.equal(arch[1][0], '児童001'); assert.equal(arch[1][4], ''); // メール・名前を消す
-  assert.equal(env.book['進捗2025'][1][0], '児童001'); // 進捗側も同じIDにして集計を保つ
-  assert.equal(env.book['照合2025'], undefined); // 対応表は消えている（メールが残るため残せない）
-  const log = env.book['設定'].find((r) => r[0] === 'archLog:2025');
-  assert.ok(log && JSON.parse(log[1]).by === T, '消した記録が設定シートに残る');
-  const v2 = env.api_archiveView('2025');
+  assert.equal(env2.book['進捗2025'][1][0], '児童001'); // 進捗側も同じIDにして集計を保つ
+  assert.equal(env2.book['照合2025'], undefined); // 対応表は消えている（メールが残るため残せない）
+  const log = env2.book['設定'].find((r) => r[0] === 'archLog:2025');
+  assert.ok(log && JSON.parse(log[1]).by === T2, '消した記録が設定シートに残る');
+  const v2 = env2.api_archiveView('2025');
   assert.equal(v2.anonymized, true); assert.equal(v2.remaining, 0);
   assert.equal(v2.anonLog.count, 7); // 名簿+進捗の重複しないメール数（7人）
   assert.equal(v2.classes.find((c) => c.klass === '3-1').missTop[0].c, '安'); // 消しても集計は読める
 });
 
+test('過年度データ: 担当学級のない先生には使わせない', () => {
+  const s = base(), env = makeEnv(s, T2);
+  env.api_archiveSave('2025');
+  const nope = () => makeEnv(env.book, 'other@edu.nishi.or.jp'); // 先生ドメインだが 教師シートに行が無い
+  assert.throws(() => nope().api_archiveYears(), /担当の学級がありません/);
+  assert.throws(() => nope().api_archiveView('2025'), /担当の学級がありません/);
+  assert.throws(() => nope().api_archiveSave('2026'), /担当の学級がありません/);
+  assert.throws(() => nope().api_archiveAnonymize('2025', '2025'), /担当の学級がありません/);
+});
+
+test('名簿にいない児童は どの学級にも対応しないので使えない', () => {
+  const env = makeEnv(base(), '19999999@kyoiku.edu.nishi.or.jp');
+  assert.equal(env.api_init().klass, '');
+  assert.throws(() => env.api_save('{}'), /名簿に あなたが 入っていません/);
+  assert.deepEqual(Array.from(env.api_gates()), []);
+  assert.equal(env.api_bunkai().length, 0);
+});
+
 test('過年度の消去: 途中で止まったら残数を出し、同じ番号で続きを消せる', () => {
   const s = base();
-  const env = makeEnv(s, T);
+  const env = makeEnv(s, T2);
   env.api_archiveSave('2025');
   // 名簿だけ消えて 進捗が残っている状態（途中で止まった）を作る
   const rs = env.book['名簿2025'];
@@ -306,7 +331,7 @@ test('過年度の消去: 途中で止まったら残数を出し、同じ番号
 });
 
 test('過年度の消去: 消し終わった年度をもう一度消しても無害（同時実行の後続と同じ処理）', () => {
-  const s = base(), env = makeEnv(s, T);
+  const s = base(), env = makeEnv(s, T2);
   env.api_archiveSave('2025');
   const first = env.api_archiveAnonymize('2025', '2025');
   assert.equal(first.remaining, 0);
@@ -323,7 +348,7 @@ test('過年度の消去: 消し終わった年度をもう一度消しても無
 });
 
 test('過年度の消去: 照合表を先に保存してから名簿・進捗を書き換える', () => {
-  const s = base(), env = makeEnv(s, T);
+  const s = base(), env = makeEnv(s, T2);
   env.api_archiveSave('2025');
   env.calls.log.length = 0; // 消去の呼び出しだけを見る
   env.api_archiveAnonymize('2025', '2025');
@@ -388,7 +413,7 @@ test('児童画面のボタンのオン・オフ: 先生が担当学級だけ保
 test('過年度の消去: 名簿の列の順が違っても、見出しで メール・名前を探して消す', () => {
   const s = base();
   s.名簿 = [['番号', '名前', 'メール', '学年', '組'], [1, 'あおい', K1, 3, 1], [2, 'はると', K2, 3, 1], [1, 'ゆい', K3, 3, 2]];
-  const env = makeEnv(s, T);
+  const env = makeEnv(s, T2);
   env.api_archiveSave('2025');
   assert.equal(env.api_archiveView('2025').remaining, 4); // 名簿3行＋進捗1行
   const res = env.api_archiveAnonymize('2025', '2025');
@@ -405,7 +430,7 @@ test('過年度の消去: 名簿の列の順が違っても、見出しで メ�
 
 test('過年度の消去: メールの列が見つからなければ、何も書き換えずに止める（消したと記録しない）', () => {
   const s = base();
-  const env = makeEnv(s, T);
+  const env = makeEnv(s, T2);
   env.api_archiveSave('2025');
   env.book['名簿2025'][0][0] = 'mail'; // 見出しを手で書き換えた
   const before = JSON.stringify(env.book['名簿2025']);

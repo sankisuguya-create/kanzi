@@ -127,6 +127,12 @@ function requireClass_(klass) {
   if (teacherClasses_(me.email).indexOf(String(klass)) < 0) throw new Error(klass + ' はあなたの担当学級ではありません（「教師」シートを確認してください）');
   return me;
 }
+// 担当学級が1つ以上ある先生だけ（過年度データなど 学級を指定しない先生系APIの入口）
+function requireAssigned_() {
+  var me = requireTeacher_();
+  if (!teacherClasses_(me.email).length) throw new Error('担当の学級がありません（「教師」シートを確認してください）');
+  return me;
+}
 
 // 見せる学年（h＝ひらがな・k＝カタカナ・1〜6年）。未設定なら組名の先頭の数字（例: 3-1 → 3年）、それもなければ3年
 function tabList_(list) {
@@ -217,6 +223,8 @@ function api_init() {
   var me = begin_(), orders = orders_(), ver = Sched.VER || '';
   if (me.role === 'student') {
     var klass = classOf_(me.email);
+    // 名簿にいない児童は どの学級の児童ページにも対応しない（学級なしを返し、画面は案内だけを出す。進捗・学級設定は読まない）
+    if (!klass) return { role: 'student', email: me.email, klass: '', orders: orders, ver: ver };
     return { role: 'student', email: me.email, klass: klass, progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders, test: Sched.activeTest(tests_(klass)), writeLevel: writeLevel_(klass), gates: gates_(klass), ver: ver };
   }
   if (me.role === 'teacher') return { role: 'teacher', email: me.email, classes: teacherClasses_(me.email), orders: orders, ver: ver };
@@ -228,6 +236,8 @@ function api_init() {
 function api_save(json) {
   var me = begin_();
   if (me.role !== 'student') throw new Error('児童のアカウントではありません');
+  // 名簿にいない児童の進捗は どの学級の先生にも届かないので受け取らない
+  if (!classOf_(me.email)) throw new Error('名簿に あなたが 入っていません（先生に いってください）');
   var incoming = Sched.norm(JSON.parse(json));
   // 形の違う字エントリは字単位で直す（旧形式は補完）・落としてから統合する。
   // 全体を拒否すると、一部だけ壊れた端末の進捗が永遠に保存できなくなる
@@ -394,16 +404,25 @@ function rowsOf_(sh, header) {
   var vals = sh.getRange(1, 1, n + 1, w).getValues(), head = vals[0].map(String);
   return vals.slice(1).map(function (r) { var o = {}; header.forEach(function (h) { var i = head.indexOf(h); o[h] = i >= 0 ? r[i] : ''; }); return o; });
 }
+// その年度の名簿にある学級の一覧（年度集計の絞り込みと「まとめて消す」の担当判定に使う）
+function archClasses_(rs) {
+  var set = {};
+  if (rs) rowsOf_(rs, ['学年', '組']).forEach(function (o) {
+    var k = klassKey_(Number(o['学年']), String(o['組']));
+    if (k) set[k] = true;
+  });
+  return Object.keys(set);
+}
 // 残した年度の一覧: [{ year, anonymized }]
 function api_archiveYears() {
-  requireTeacher_();
+  requireAssigned_();
   var arch = archSheets_(), out = [];
   for (var y in arch) if (arch[y].roster) out.push({ year: y, anonymized: archAnonymized_(y) });
   return out.sort(function (a, b) { return a.year < b.year ? -1 : 1; });
 }
 // 今年度を 過年度として残す: 「名簿」「進捗」を 名前に年度を付けて複写（いまのシートはそのまま残る）
 function api_archiveSave(year) {
-  requireTeacher_();
+  requireAssigned_();
   year = archYear_(year);
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   if (ss.getSheetByName('名簿' + year) || ss.getSheetByName('進捗' + year)) throw new Error(year + '年度は すでに残してあります');
@@ -415,8 +434,10 @@ function api_archiveSave(year) {
   return year;
 }
 // 過年度の集計: クラスごとに 人数・おぼえた字の合計・まちがいのおおかった字（上位10字。児童名は出さない）
+// 返すのは その先生の担当学級だけ（クラス担任は他クラスのデータに干渉できない）。
+// canAnonymize は「まとめて消す」を使えるか — その年度の名簿にある全学級を担当する先生だけ
 function api_archiveView(year) {
-  requireTeacher_();
+  var me = requireAssigned_();
   year = archYear_(year);
   var rs = sheetByName_('名簿' + year), ps = sheetByName_('進捗' + year);
   if (!rs) throw new Error(year + '年度のデータは ありません');
@@ -444,21 +465,28 @@ function api_archiveView(year) {
   });
   var anonLog = null;
   try { var l = setting_('archLog:' + year); if (l) anonLog = JSON.parse(l); } catch (e) {}
-  return { year: year, anonymized: remaining === 0, remaining: remaining, anonWord: archAnonWord_(year), anonLog: anonLog, classes: Object.keys(classes).map(function (k) {
+  var own = teacherClasses_(me.email), archKlasses = archClasses_(rs);
+  return { year: year, anonymized: remaining === 0, remaining: remaining, anonWord: archAnonWord_(year), anonLog: anonLog,
+    canAnonymize: archKlasses.every(function (k) { return own.indexOf(k) >= 0; }),
+    classes: Object.keys(classes).map(function (k) {
     var cl = classes[k];
     // 学級まちがい判定は Sched.classMissTop（3人以上が答え・最後の答えがまちがいの人がいる字を割合順に上位10件）
     var missTop = Sched.classMissTop(cl.perChar, { top: 10 });
     return { klass: k, grade: cl.grade, students: cl.students, learned: cl.learned, missTop: missTop };
-  }).sort(function (a, b) { return a.grade - b.grade || (a.klass < b.klass ? -1 : 1); }) };
+  }).filter(function (x) { return own.indexOf(x.klass) >= 0; }).sort(function (a, b) { return a.grade - b.grade || (a.klass < b.klass ? -1 : 1); }) };
 }
 // 過年度の個人情報をまとめて消す: メール → 児童001・002…、名前 → 空。学年・組・番号・答えの記録は残るので集計は見られる。
 // 誤操作を防ぐため、画面が受け取った確定語（anonWord＝年度名）を confirmWord としてサーバーでも照合する。
 // メール→番号の対応は一時シート「照合YYYY」に残し、途中で止まった時の再実行は同じ番号で続きを消す（全部消えたら対応表ごと消す。
 // 対応表にはメールが残るので、消し残しには出来ない）。消し終わったら実行記録を設定シートに残す（個人情報は入れない）
 function api_archiveAnonymize(year, confirmWord) {
-  var me = requireTeacher_();
+  var me = requireAssigned_();
   year = archYear_(year);
   if (String(confirmWord || '') !== archAnonWord_(year)) throw new Error('消す年度の名前が違います。画面の案内どおりに入れてください');
+  // 一括で全学級の個人情報を消す操作なので、その年度の名簿にある全学級を担当する先生だけ（クラス担任は他クラスのデータを消せない）
+  var mine = teacherClasses_(me.email);
+  var rest = archClasses_(sheetByName_('名簿' + year)).filter(function (k) { return mine.indexOf(k) < 0; });
+  if (rest.length) throw new Error(year + '年度の 全学級を 担当する先生だけが まとめて消せます（あなたの担当外: ' + rest.join('・') + '）');
   // 同じ年度を同時に消さない（後続が空の照合表を読んで別番号を付け直すと、名簿と進捗の結合が壊れる）
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);

@@ -208,7 +208,8 @@
   function demoArchive(year) {
     var a = demoArchives().archives[year];
     if (!a) throw new Error(year + '年度のデータは ありません');
-    return { year: year, anonymized: !!a.anonymized, remaining: a.anonymized ? 0 : (a.remaining || 0), anonWord: String(year), anonLog: a.anonLog || null, classes: a.classes };
+    // デモは 残した年度の全学級を担当する先生として扱う（canAnonymize は GAS と同じキー名）
+    return { year: year, anonymized: !!a.anonymized, remaining: a.anonymized ? 0 : (a.remaining || 0), anonWord: String(year), anonLog: a.anonLog || null, canAnonymize: true, classes: a.classes };
   }
   function demoArchiveSave(year) {
     var s = demoArchives();

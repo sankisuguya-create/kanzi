@@ -1086,7 +1086,7 @@
     else Platform.archiveYears().then(function (years) { S.arch = years; renderArch(el, years); }, function () { el.innerHTML = '<p class="hint">よめませんでした。</p>'; });
   }
   function renderArch(el, years) {
-    el.innerHTML = '<p class="hint">年度の終わりに「残す」を押すと、いまの名簿と進捗が「名簿2025」「進捗2025」のような別シートに写されます（いまのシートはそのまま残ります）。残した年度ごとに、クラスで まちがいの おおかった字が見られます。</p>' +
+    el.innerHTML = '<p class="hint">年度の終わりに「残す」を押すと、いまの名簿と進捗が「名簿2025」「進捗2025」のような別シートに写されます（いまのシートはそのまま残ります）。残した年度ごとに、自分のクラスで まちがいの おおかった字が見られます。</p>' +
       '<p><label>年度 <input id="arch-year" size="6" maxlength="4" inputmode="numeric" value="' + schoolYear() + '"></label> <button id="arch-save">この年度のデータを 残す</button> <span id="arch-msg" class="hint" aria-live="polite"></span></p>' +
       (years.length ? '<nav class="tabs t" id="arch-tabs">' + years.map(function (y) { return '<button class="atab" role="tab" data-y="' + y.year + '" aria-selected="false">' + y.year + '年度</button>'; }).join('') + '</nav><div id="arch-body"></div>' : '<p>まだ 過年度のデータは ありません。</p>');
     $('#arch-save').addEventListener('click', function () {
@@ -1110,12 +1110,15 @@
     S.archY = String(year);
     var show = function (v) {
       // 「まとめて消す」は消す年度名の入力で確定する（入力する語はサーバーが返す anonWord）。消すと もどせないため注意色で出す
+      // 使えるのは その年度の全学級を担当する先生だけ（canAnonymize。担当外の先生には案内だけ出す）
       var anon = v.anonymized
         ? '<span class="hint">' + year + '年度の メール・名前は 消してあります。' + (v.anonLog ? ' 消した記録: ' + esc(anonLogText(v.anonLog)) : '') + '</span>'
-        : '<label for="arch-word">「' + esc(v.anonWord) + '」と 入力してください</label> <input id="arch-word" size="10" autocomplete="off"> ' +
-          '<button id="arch-anon" class="btn-danger" disabled>' + year + '年度の メール・名前をまとめて消す</button>' +
-          (v.remaining ? ' <span class="hint">前回は 途中で止まりました（メールが残る行: ' + v.remaining + '）。続きを消せます。</span>' : '') +
-          ' <span class="hint">消すと もどせません（学年・組・番号・答えの記録は残ります）</span>';
+        : !v.canAnonymize
+          ? '<span class="hint">メール・名前をまとめて消せるのは、' + year + '年度の 全学級を 担当する先生だけです' + (v.remaining ? '（まだ 消えていない行が ' + v.remaining + '）' : '') + '。</span>'
+          : '<label for="arch-word">「' + esc(v.anonWord) + '」と 入力してください</label> <input id="arch-word" size="10" autocomplete="off"> ' +
+            '<button id="arch-anon" class="btn-danger" disabled>' + year + '年度の メール・名前をまとめて消す</button>' +
+            (v.remaining ? ' <span class="hint">前回は 途中で止まりました（メールが残る行: ' + v.remaining + '）。続きを消せます。</span>' : '') +
+            ' <span class="hint">消すと もどせません（学年・組・番号・答えの記録は残ります）</span>';
       body.innerHTML = v.classes.map(function (cl) {
         return '<h3>' + esc(klassLabel(cl.klass)) + '（' + cl.students + '人・おぼえた字 ' + cl.learned + '字）</h3>' +
           (cl.missTop.length ? '<ol class="hard">' + cl.missTop.map(function (x) { return '<li><span class="hc">' + esc(x.c) + '</span>' + x.s + '人中 ' + x.b + '人（' + Math.round(x.r * 100) + '%）</li>'; }).join('') + '</ol>' : '<p>まちがいのデータは ありません。</p>');
@@ -1586,6 +1589,11 @@
     S.writeLevel = info.writeLevel || '';
     S.gates = Sched.normGates(info.gates);
     if (info.role === 'teacher') return teacher();
+    // 名簿にいない児童は どの学級の児童ページにも対応しない（進捗が どの先生の画面にも出ないため）
+    if (info.role === 'student' && !info.klass) {
+      app.innerHTML = '<main class="done"><p>名簿に あなたが 入っていません。先生に いってね。</p></main>';
+      return;
+    }
     if (info.role !== 'student') {
       app.innerHTML = '<main class="done"><p>このアカウントでは つかえません。学校のアカウントで ひらいてね。</p></main>';
       return;
