@@ -582,14 +582,16 @@ body.tp-screen .bar button { min-height: 48px; min-width: 0; padding: 0 12px; fo
 .tp-yomi, .tp-iyomi { text-decoration: underline; text-decoration-color: var(--ink-alert); text-underline-offset: .2em; }
 .tp-paren { display: inline-block; border: 1px solid var(--line); border-radius: .6em; padding: .2em 0; margin-top: .3em; }
 .tp-okuri { font-family: var(--font-sans); }
-.tp-mark { font-family: var(--font-sans); font-weight: 700; font-size: .9em; }
-.tp-mark.ok { color: var(--cat-1); }
-.tp-mark.ng { color: var(--ink-alert); }
-/* ② 10問: 大きな字で横一列。画面より広いので横にスクロールする */
+.tp-box { position: relative; }
+/* 丸つけの印: 赤ペンで 四角にかぶせて書いたように（○＝正解、✓＝まちがい。形で分かる） */
+svg.tp-mark { position: absolute; left: -30%; top: -30%; width: 160%; height: 160%; overflow: visible; pointer-events: none; z-index: 1; }
+svg.tp-mark path { fill: none; stroke: #E0262B; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; opacity: .9; }
+.tp-input h2 .tp-mark { color: #E0262B; }
+/* ② 10問: かならず横一段。入らない時は fitRow() が字を小さくする（折り返し・スクロールなし） */
 .tp-block { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .tp-block.open { grid-template-columns: minmax(0, 1fr) minmax(320px, 36%); }
-.tp-strip { min-height: 0; overflow-x: auto; overflow-y: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; font-family: var(--font-kanji); font-size: clamp(30px, 6.5vh, 46px); -webkit-overflow-scrolling: touch; }
-.tp-row { display: flex; flex-direction: row-reverse; gap: .5em; padding: .4em .6em; width: max-content; min-height: 100%; align-items: flex-start; }
+.tp-strip { min-height: 0; overflow: hidden; background: var(--card); border: 1px solid var(--line); border-radius: 12px; font-family: var(--font-kanji); font-size: clamp(30px, 6.5vh, 46px); -webkit-overflow-scrolling: touch; }
+.tp-row { display: flex; flex-direction: row-reverse; flex-wrap: nowrap; gap: .5em; padding: .4em .6em; width: max-content; margin-left: auto; align-items: flex-start; }
 .tp-q.big { flex: none; width: 2.8em; padding: .3em .2em; border: 1px solid transparent; } /* 縦書きの列は幅を決めておく（決めないと 横書きの親の幅まで広がる） */
 .tp-q.big.done { border-color: var(--line); }
 /* ③ 答える */
