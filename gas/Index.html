@@ -641,7 +641,7 @@ div.tp-q { cursor: default; }
 .tcell.tok::before { content: "送"; position: absolute; left: 1px; top: 1px; padding: 0 2px; font-size: 13px; line-height: 1.2; font-weight: 700; color: #fff; background: var(--solid-on); border-radius: 4px; }
 .tmode .seg button { min-height: 44px; min-width: 0; padding: 0 12px; font-size: 16px; }
 </style>
-<meta name="kanzi-ver" content="7fd71f6">
+<meta name="kanzi-ver" content="930dfc3">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -5290,12 +5290,20 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
             paintTest(); saveTests();
           });
         }
+        // 保存は1つずつ順に送る。続けて押した時、先の保存の返事で 後の変更を上書きしない（字が消えたり もどったりした）
+        var testSaving = false, testAgain = false;
         function saveTests() {
           $('#test-msg').textContent = '保存中…';
-          Platform.setTests(klass, tests).then(function (v) {
-            view.tests = tests = Sched.normTests(v); view.test = Sched.activeTest(tests);
+          if (testSaving) { testAgain = true; return; }
+          testSaving = true; testAgain = false;
+          Platform.setTests(klass, JSON.parse(JSON.stringify(tests))).then(function (v) {
+            testSaving = false;
+            if (testAgain) return saveTests(); // 返事を待つ間に 変わった。手元の状態を 送り直す
+            var n = Sched.normTests(v);
+            tests.active = n.active; tests.list = n.list; view.tests = tests; view.test = Sched.activeTest(tests);
+            paintTest();
             $('#test-msg').textContent = '✓ 保存しました';
-          }, function () { $('#test-msg').textContent = '× 保存できませんでした'; });
+          }, function () { testSaving = false; if (testAgain) return saveTests(); $('#test-msg').textContent = '× 保存できませんでした'; });
         }
         // 字を押した時: 範囲に入れる・はずす／送りがなで出す印をつける・はずす（印をつけた字は範囲にも入る。範囲からはずすと印も消える）
         var tmode = 'range';
