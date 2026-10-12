@@ -641,7 +641,7 @@ div.tp-q { cursor: default; }
 .tcell.tok::before { content: "送"; position: absolute; left: 1px; top: 1px; padding: 0 2px; font-size: 13px; line-height: 1.2; font-weight: 700; color: #fff; background: var(--solid-on); border-radius: 4px; }
 .tmode .seg button { min-height: 44px; min-width: 0; padding: 0 12px; font-size: 16px; }
 </style>
-<meta name="kanzi-ver" content="08c008f">
+<meta name="kanzi-ver" content="7fd71f6">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -2969,9 +2969,10 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
   // chars: 範囲の字（並び順どおり）、T: KANZI_TPRINT（{ 字: [[前, よみ, 後, 送りがな], ...] }）、n: 50 か 10、rnd: 0〜1 の乱数、
   // first: 先に出す字（その子が まちがえたことのある字。範囲の字が問題数より多い時に、出しそびれないように）、
   // okChars: テストで送りがなを問う字（先生が範囲につけた印）。あれば 送りがなの問題は この字だけから、四角の問題は この字以外から出す（利用者の指定）
+  // extra: 出題範囲の字のうち chars にない字（利用者の指定）。chars を全部出してもまだ空きがある時、同じ字をくり返す前に ここから出す
   // 戻り値: [{ c: 答えの字, pre, rt: 四角のよみ, post, okuri: 送りがな（送りがなの問題だけ） }]。前・後の {字|よみ} はルビ。
   // 字が足りなければ n より少なくなる（同じ文は2回出さない。答えが見える組は作らない）
-  function make(chars, T, n, rnd, first, okChars) {
+  function make(chars, T, n, rnd, first, okChars, extra) {
     rnd = rnd || Math.random;
     chars = Array.from(chars || '').filter(function (c, i, a) { return T[c] && a.indexOf(c) === i; });
     var pri = {}, used = {};
@@ -2983,6 +2984,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     var asked = {}, shown = {}, covered = {};
     var inRange = {};
     chars.forEach(function (c) { inRange[c] = true; });
+    extra = Array.from(extra || '').filter(function (c, i, a) { return T[c] && !inRange[c] && a.indexOf(c) === i; });
     function ctx(s) { return Array.from((s[0] + s[2]).replace(/\{([^|}]+)\|[^}]+\}/g, '$1')).filter(function (ch) { return /[\u4e00-\u9fff々]/.test(ch); }); }
     function fits(c, s) { return !shown[c] && ctx(s).every(function (ch) { return !asked[ch] && ch !== c; }); }
     function take(list, c, ok) {
@@ -3005,6 +3007,8 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     // 送りがなの問題で出た字は あとに回す（範囲の字が問題数より多い時に、なるべく多くの字を出す）
     order.forEach(function (c) { if (items.length < slots && !covered[c] && cands(c, false).length) take(items, c, false); });
     order.forEach(function (c) { if (items.length < slots && !items.some(function (x) { return x.c === c; }) && cands(c, false).length) take(items, c, false); });
+    // それでも空きがあれば、同じ字をくり返す前に 出題範囲の別の字（extra）を出す
+    shuffle(extra.slice(), rnd).forEach(function (c) { if (items.length < slots && !covered[c] && !shown[c] && cands(c, false).length) take(items, c, false); });
     var guard = 0;
     while (items.length < slots && guard++ < 1000) {
       var left = order.filter(function (c) { return cands(c, false).some(function (s) { return fits(c, s); }); });
@@ -3779,6 +3783,14 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     var cs = testChars(), top = Math.max.apply(null, cs.map(function (c) { return D.kanji[c].g; }).concat([0]));
     return cs.filter(function (c) { return D.kanji[c].g === top; });
   }
+  // 出題範囲の予測（利用者の指定）: その学年の並び（出題順）で、問う字のうち いちばん早く習う字から いちばん遅く習う字までの間。
+  // 問う字をぜんぶ出しても50問に空きがある時は、同じ字をくり返さずに この範囲の別の字を出す
+  function printExtra(chars) {
+    if (!chars.length) return '';
+    var o = orderOf(D.kanji[chars[0]].g), pos = chars.map(function (c) { return o.indexOf(c); }).filter(function (i) { return i >= 0; });
+    if (!pos.length) return '';
+    return Array.from(o.slice(Math.min.apply(null, pos), Math.max.apply(null, pos) + 1)).filter(function (c) { return chars.indexOf(c) < 0; }).join('');
+  }
   function allowedChars() { return S.grades.map(orderOf).join('').split(''); }
 
   // 例語は答えた回数ごとに入れ替える（音・訓を交互に：D7）
@@ -4007,12 +4019,12 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
   function tpRuby(s) { return esc(String(s)).replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>'); }
   function tprint(n, fresh) {
     clearScreen();
-    var chars = printChars(), sig = chars.join('') + '/' + testOkuri();
+    var chars = printChars(), sig = chars.join('') + '/' + testOkuri() + '/' + printExtra(chars);
     var st = fresh ? null : Platform.store.get(tpKey(n));
     if (!st || st.v !== TP_VER || st.sig !== sig || !st.items || !st.items.length) {
       // 先に出す字: 自分が「書く」で まちがえたことのある字
       var first = chars.filter(function (c) { return S.p.write[c] && (S.p.write[c][4] || 0) > 0; });
-      st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, n, Math.random, first, testOkuri()), ans: {}, startedAt: nowMs(), result: null, view: 'all', cur: 0 };
+      st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, n, Math.random, first, testOkuri(), printExtra(chars)), ans: {}, startedAt: nowMs(), result: null, view: 'all', cur: 0 };
     }
     var items = st.items, confirmUnanswered = false;
     var revealUpTo = Infinity; // 丸つけの途中: この番号の問題まで ○× を見せる
@@ -4228,9 +4240,9 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
   // 「答えを見る」で 四角に答えの字（と送りがな）を出して 自分で答えあわせする。記録はしない。50問・10問
   function tpaper(n, fresh) {
     clearScreen();
-    var chars = printChars(), sig = chars.join('') + '/' + testOkuri(), key = 'kanzi.tpaper.' + (S.trial ? 'trial.' : '') + S.info.email + '.' + n;
+    var chars = printChars(), sig = chars.join('') + '/' + testOkuri() + '/' + printExtra(chars), key = 'kanzi.tpaper.' + (S.trial ? 'trial.' : '') + S.info.email + '.' + n;
     var st = fresh ? null : Platform.store.get(key);
-    if (!st || st.v !== TP_VER || st.sig !== sig || !st.items || !st.items.length) st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, n, Math.random, null, testOkuri()), show: false };
+    if (!st || st.v !== TP_VER || st.sig !== sig || !st.items || !st.items.length) st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, n, Math.random, null, testOkuri(), printExtra(chars)), show: false };
     Platform.store.set(key, st);
     var items = st.items, firstOk = -1;
     items.forEach(function (it, i) { if (it.okuri && firstOk < 0) firstOk = i; });

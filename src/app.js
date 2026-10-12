@@ -68,6 +68,14 @@
     var cs = testChars(), top = Math.max.apply(null, cs.map(function (c) { return D.kanji[c].g; }).concat([0]));
     return cs.filter(function (c) { return D.kanji[c].g === top; });
   }
+  // 出題範囲の予測（利用者の指定）: その学年の並び（出題順）で、問う字のうち いちばん早く習う字から いちばん遅く習う字までの間。
+  // 問う字をぜんぶ出しても50問に空きがある時は、同じ字をくり返さずに この範囲の別の字を出す
+  function printExtra(chars) {
+    if (!chars.length) return '';
+    var o = orderOf(D.kanji[chars[0]].g), pos = chars.map(function (c) { return o.indexOf(c); }).filter(function (i) { return i >= 0; });
+    if (!pos.length) return '';
+    return Array.from(o.slice(Math.min.apply(null, pos), Math.max.apply(null, pos) + 1)).filter(function (c) { return chars.indexOf(c) < 0; }).join('');
+  }
   function allowedChars() { return S.grades.map(orderOf).join('').split(''); }
 
   // 例語は答えた回数ごとに入れ替える（音・訓を交互に：D7）
@@ -296,12 +304,12 @@
   function tpRuby(s) { return esc(String(s)).replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>'); }
   function tprint(n, fresh) {
     clearScreen();
-    var chars = printChars(), sig = chars.join('') + '/' + testOkuri();
+    var chars = printChars(), sig = chars.join('') + '/' + testOkuri() + '/' + printExtra(chars);
     var st = fresh ? null : Platform.store.get(tpKey(n));
     if (!st || st.v !== TP_VER || st.sig !== sig || !st.items || !st.items.length) {
       // 先に出す字: 自分が「書く」で まちがえたことのある字
       var first = chars.filter(function (c) { return S.p.write[c] && (S.p.write[c][4] || 0) > 0; });
-      st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, n, Math.random, first, testOkuri()), ans: {}, startedAt: nowMs(), result: null, view: 'all', cur: 0 };
+      st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, n, Math.random, first, testOkuri(), printExtra(chars)), ans: {}, startedAt: nowMs(), result: null, view: 'all', cur: 0 };
     }
     var items = st.items, confirmUnanswered = false;
     var revealUpTo = Infinity; // 丸つけの途中: この番号の問題まで ○× を見せる
@@ -517,9 +525,9 @@
   // 「答えを見る」で 四角に答えの字（と送りがな）を出して 自分で答えあわせする。記録はしない。50問・10問
   function tpaper(n, fresh) {
     clearScreen();
-    var chars = printChars(), sig = chars.join('') + '/' + testOkuri(), key = 'kanzi.tpaper.' + (S.trial ? 'trial.' : '') + S.info.email + '.' + n;
+    var chars = printChars(), sig = chars.join('') + '/' + testOkuri() + '/' + printExtra(chars), key = 'kanzi.tpaper.' + (S.trial ? 'trial.' : '') + S.info.email + '.' + n;
     var st = fresh ? null : Platform.store.get(key);
-    if (!st || st.v !== TP_VER || st.sig !== sig || !st.items || !st.items.length) st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, n, Math.random, null, testOkuri()), show: false };
+    if (!st || st.v !== TP_VER || st.sig !== sig || !st.items || !st.items.length) st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, n, Math.random, null, testOkuri(), printExtra(chars)), show: false };
     Platform.store.set(key, st);
     var items = st.items, firstOk = -1;
     items.forEach(function (it, i) { if (it.okuri && firstOk < 0) firstOk = i; });

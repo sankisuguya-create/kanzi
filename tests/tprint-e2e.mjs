@@ -26,7 +26,7 @@ const check = (cond, msg) => { if (!cond) { console.error('NG: ' + msg); process
 const shot = (name) => page.screenshot({ path: path.join(SHOTS, name + '.png') });
 
 // 写真の 3年 9・10月のテストの範囲
-const CHARS = '係薬者勝血橋命風根役米両全作業鉄板電柱休日石油水田空港草笛雲海新雪注意売買車庫勉強放送波体力感想写真列第二主語九州船長魚屋荷物負祭悪寒暗暑軽明返守';
+const CHARS = '係薬者勝血橋命風根役米両全員作業鉄板電柱休日石油水田空港草笛雲海新雪注意売買車庫勉強放送波体力感想写真列第二主語九州船長魚屋荷物負祭悪寒暗暑軽明返守';
 const KEY = 'kanzi.tprint.demo.50';
 const state = () => page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KEY);
 await page.goto(URL0);

@@ -8,7 +8,7 @@ const T = require('../src/tprint.js');
 const load = (f, name) => new Function(fs.readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8') + `;return ${name};`)();
 const D = load('data.js', 'KANZI_DATA');
 const P = load('tprint-data.js', 'KANZI_TPRINT');
-const CHARS = '係薬者勝血橋命風根役米両全作業鉄板電柱休日石油水田空港草笛雲海新雪注意売買車庫勉強放送波体力感想写真列第二主語九州船長魚屋荷物負祭悪寒暗暑軽明返守';
+const CHARS = '係薬者勝血橋命風根役米両全員作業鉄板電柱休日石油水田空港草笛雲海新雪注意売買車庫勉強放送波体力感想写真列第二主語九州船長魚屋荷物負祭悪寒暗暑軽明返守';
 const seeded = (s) => () => (s = (s * 16807) % 2147483647) / 2147483647;
 const strip = (s) => s.replace(/\{([^|}]+)\|[^}]+\}/g, '$1');
 
@@ -82,11 +82,17 @@ test('先生が「送りがなで出す字」の印をつけたら、送りが�
   assert.equal(T.make(CHARS, P, 50, seeded(1)).filter((x) => x.okuri).length, 10);
 });
 
-test('3年9・10月のテスト（3年の45字・送りがなの印11字）: どの回も45字すべてを出す', () => {
+test('3年9・10月のテスト（3年の46字・送りがなの印11字）: 46字すべてと、残りは出題範囲の別の字（同じ字をくり返さない）', () => {
   const G3 = [...CHARS].filter((c) => D.kanji[c].g === 3).join('');
-  assert.equal(G3.length, 45);
+  assert.equal(G3.length, 46);
+  const o = D.grades[3].order, pos = [...G3].map((c) => o.indexOf(c));
+  const RANGE = o.slice(Math.min(...pos), Math.max(...pos) + 1), EXTRA = [...RANGE].filter((c) => !G3.includes(c)).join('');
+  assert.equal(RANGE[0], '物'); assert.equal(RANGE[RANGE.length - 1], '役'); // 出題範囲の予測: いちばん早く習う字〜いちばん遅く習う字
   for (let seed = 1; seed <= 30; seed++) {
-    const it = T.make(G3, P, 50, seeded(seed), null, '負祭悪注暑寒暗軽明返守');
-    assert.equal(new Set(it.map((x) => x.c)).size, 45, `seed ${seed}`);
+    const it = T.make(G3, P, 50, seeded(seed), null, '負祭悪注暑寒暗軽明返守', EXTRA);
+    const cs = it.map((x) => x.c);
+    assert.equal(new Set(cs).size, 50, `seed ${seed}: 同じ字のくり返し`);
+    assert.ok([...G3].every((c) => cs.includes(c)), `seed ${seed}: 46字`);
+    assert.ok(cs.filter((c) => !G3.includes(c)).every((c) => EXTRA.includes(c)), `seed ${seed}: 範囲外の字`);
   }
 });

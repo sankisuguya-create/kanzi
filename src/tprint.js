@@ -16,9 +16,10 @@
   // chars: 範囲の字（並び順どおり）、T: KANZI_TPRINT（{ 字: [[前, よみ, 後, 送りがな], ...] }）、n: 50 か 10、rnd: 0〜1 の乱数、
   // first: 先に出す字（その子が まちがえたことのある字。範囲の字が問題数より多い時に、出しそびれないように）、
   // okChars: テストで送りがなを問う字（先生が範囲につけた印）。あれば 送りがなの問題は この字だけから、四角の問題は この字以外から出す（利用者の指定）
+  // extra: 出題範囲の字のうち chars にない字（利用者の指定）。chars を全部出してもまだ空きがある時、同じ字をくり返す前に ここから出す
   // 戻り値: [{ c: 答えの字, pre, rt: 四角のよみ, post, okuri: 送りがな（送りがなの問題だけ） }]。前・後の {字|よみ} はルビ。
   // 字が足りなければ n より少なくなる（同じ文は2回出さない。答えが見える組は作らない）
-  function make(chars, T, n, rnd, first, okChars) {
+  function make(chars, T, n, rnd, first, okChars, extra) {
     rnd = rnd || Math.random;
     chars = Array.from(chars || '').filter(function (c, i, a) { return T[c] && a.indexOf(c) === i; });
     var pri = {}, used = {};
@@ -30,6 +31,7 @@
     var asked = {}, shown = {}, covered = {};
     var inRange = {};
     chars.forEach(function (c) { inRange[c] = true; });
+    extra = Array.from(extra || '').filter(function (c, i, a) { return T[c] && !inRange[c] && a.indexOf(c) === i; });
     function ctx(s) { return Array.from((s[0] + s[2]).replace(/\{([^|}]+)\|[^}]+\}/g, '$1')).filter(function (ch) { return /[\u4e00-\u9fff々]/.test(ch); }); }
     function fits(c, s) { return !shown[c] && ctx(s).every(function (ch) { return !asked[ch] && ch !== c; }); }
     function take(list, c, ok) {
@@ -52,6 +54,8 @@
     // 送りがなの問題で出た字は あとに回す（範囲の字が問題数より多い時に、なるべく多くの字を出す）
     order.forEach(function (c) { if (items.length < slots && !covered[c] && cands(c, false).length) take(items, c, false); });
     order.forEach(function (c) { if (items.length < slots && !items.some(function (x) { return x.c === c; }) && cands(c, false).length) take(items, c, false); });
+    // それでも空きがあれば、同じ字をくり返す前に 出題範囲の別の字（extra）を出す
+    shuffle(extra.slice(), rnd).forEach(function (c) { if (items.length < slots && !covered[c] && !shown[c] && cands(c, false).length) take(items, c, false); });
     var guard = 0;
     while (items.length < slots && guard++ < 1000) {
       var left = order.filter(function (c) { return cands(c, false).some(function (s) { return fits(c, s); }); });
