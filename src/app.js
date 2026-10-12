@@ -1575,12 +1575,20 @@
             paintTest(); saveTests();
           });
         }
+        // 保存は1つずつ順に送る。続けて押した時、先の保存の返事で 後の変更を上書きしない（字が消えたり もどったりした）
+        var testSaving = false, testAgain = false;
         function saveTests() {
           $('#test-msg').textContent = '保存中…';
-          Platform.setTests(klass, tests).then(function (v) {
-            view.tests = tests = Sched.normTests(v); view.test = Sched.activeTest(tests);
+          if (testSaving) { testAgain = true; return; }
+          testSaving = true; testAgain = false;
+          Platform.setTests(klass, JSON.parse(JSON.stringify(tests))).then(function (v) {
+            testSaving = false;
+            if (testAgain) return saveTests(); // 返事を待つ間に 変わった。手元の状態を 送り直す
+            var n = Sched.normTests(v);
+            tests.active = n.active; tests.list = n.list; view.tests = tests; view.test = Sched.activeTest(tests);
+            paintTest();
             $('#test-msg').textContent = '✓ 保存しました';
-          }, function () { $('#test-msg').textContent = '× 保存できませんでした'; });
+          }, function () { testSaving = false; if (testAgain) return saveTests(); $('#test-msg').textContent = '× 保存できませんでした'; });
         }
         // 字を押した時: 範囲に入れる・はずす／送りがなで出す印をつける・はずす（印をつけた字は範囲にも入る。範囲からはずすと印も消える）
         var tmode = 'range';
