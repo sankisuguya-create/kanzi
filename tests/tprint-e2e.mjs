@@ -40,6 +40,14 @@ check(items.every((x) => x.c.length === 1 && CHARS.includes(x.c)), '1問で答�
 check((await page.locator('.tp-all .tp-q').count()) === 50 && (await page.locator('#tp-input').count()) === 0, '① では答える欄を出さない');
 const fits = () => page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1 && document.documentElement.scrollWidth <= innerWidth + 1);
 check(await fits(), '① 1366×630 でページはスクロールなし');
+// 四角が 文字の列の中心にそろう（縦書きで vertical-align: middle だと右にずれる）
+const offs = () => page.evaluate((sel) => [...document.querySelectorAll(sel)].map((q) => {
+  const b = q.querySelector('.tp-box').getBoundingClientRect(), r = document.createRange(), cs = [];
+  q.querySelector('.tp-text').childNodes.forEach((n) => { if (n.nodeType === 3 && n.textContent.trim()) { r.selectNodeContents(n); const x = r.getBoundingClientRect(); cs.push(x.x + x.width / 2); } });
+  return cs.length ? Math.max(...cs.map((c) => Math.abs(c - (b.x + b.width / 2)))) : 0;
+}), '.tp-paper .tp-q:not(.tp-oq)');
+const off1 = Math.max(...await offs());
+check(off1 <= 2, `① 四角が文字の列の中心にそろう（ずれ ${off1.toFixed(1)}px）`);
 await shot('tprint-1-all');
 
 // ① で 13問目を押す → ② 11〜20問

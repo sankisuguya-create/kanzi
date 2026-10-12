@@ -571,7 +571,7 @@ body.tp-screen .bar button { min-height: 48px; min-width: 0; padding: 0 12px; fo
 .tp-no { font-size: .8em; font-family: var(--font-sans); }
 .tp-text { writing-mode: vertical-rl; text-orientation: upright; line-height: 1.6; }
 .tp-text rt, .tp-iq rt { font-size: .5em; font-family: var(--font-sans); }
-.tp-box { display: inline-block; width: 1.3em; height: 1.3em; border: 2px solid var(--cat-2); background: var(--card); vertical-align: middle; margin: .05em 0; }
+.tp-box { display: inline-block; width: 1.3em; height: 1.3em; border: 2px solid var(--cat-2); background: var(--card); vertical-align: baseline; margin: .05em 0; } /* 縦書きでは baseline が列の中心。middle だと右にずれる */
 .tp-box.ok { border-color: var(--cat-1); }
 .tp-box.ng { border-color: var(--ink-alert); border-style: dashed; }
 .tp-mini { width: 100%; height: 100%; display: block; }
