@@ -24,13 +24,23 @@
     (first || []).forEach(function (c) { pri[c] = true; });
     function prioritized(list) { return shuffle(list.slice(), rnd).sort(function (a, b) { return (pri[b] ? 1 : 0) - (pri[a] ? 1 : 0); }); } // 同じ組の中は ばらばら
     function cands(c, ok) { return T[c].filter(function (s) { return !!s[3] === ok && !used[key(item(c, s))]; }); }
-    function take(list, c, ok) { var it = item(c, pick(cands(c, ok), rnd)); used[key(it)] = true; list.push(it); }
+    // 文の前後に 範囲の字があると、その字を問う別の問題の答えが見えてしまう（「感□文」と「□想」）。範囲の字が少ない文を選ぶ
+    var inRange = {};
+    chars.forEach(function (c) { inRange[c] = true; });
+    function leak(s) { return Array.from((s[0] + s[2]).replace(/\{[^}]*\}/g, '')).filter(function (ch) { return inRange[ch]; }).length + rnd() * 0.5; }
+    function take(list, c, ok) {
+      var cs = cands(c, ok).sort(function (a, b) { return leak(a) - leak(b); });
+      var it = item(c, cs[0]); used[key(it)] = true; covered[c] = true; list.push(it);
+    }
+    var covered = {};
     // 送りがなの問題（最後に並べる）
     var okItems = [], nOk = OKURI_COUNT[n] || Math.round(n / 5);
     prioritized(chars).forEach(function (c) { if (okItems.length < nOk && cands(c, true).length) take(okItems, c, true); });
     // 四角に書く問題: まず範囲の字を1つずつ（先に出す字から）。空きがあれば ほかの文で埋める
     var slots = Math.max(0, n - okItems.length), items = [], order = prioritized(chars);
-    order.forEach(function (c) { if (items.length < slots && cands(c, false).length) take(items, c, false); });
+    // 送りがなの問題で出た字は あとに回す（範囲の字が問題数より多い時に、なるべく多くの字を出す）
+    order.forEach(function (c) { if (items.length < slots && !covered[c] && cands(c, false).length) take(items, c, false); });
+    order.forEach(function (c) { if (items.length < slots && !items.some(function (x) { return x.c === c; }) && cands(c, false).length) take(items, c, false); });
     var guard = 0;
     while (items.length < slots && guard++ < 1000) {
       var left = order.filter(function (c) { return cands(c, false).length; });

@@ -51,3 +51,13 @@ test('範囲の字が問題数より少なくても埋め、多い時は先に�
   assert.ok(small.length > 0 && small.length < 50);
   assert.deepEqual(T.make('', P, 10, seeded(1)), []);
 });
+
+test('範囲の字が問題数より多い時は、問題数ぶん ちがう字を出す（送りがなの問題と字をかぶらせない）。前後に答えが見える文は避ける', () => {
+  for (let seed = 1; seed <= 20; seed++) {
+    const it = T.make(CHARS, P, 50, seeded(seed));
+    assert.equal(new Set(it.map((x) => x.c)).size, 50, `seed ${seed}`);
+    const asked = new Set(it.map((x) => x.c));
+    const leaks = it.filter((x) => [...strip(x.pre + x.post)].some((ch) => asked.has(ch))).length;
+    assert.ok(leaks <= 8, `seed ${seed}: 前後に ほかの問題の答えが見える問題 ${leaks}`);
+  }
+});

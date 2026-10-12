@@ -121,16 +121,18 @@ await shot('tprint-5-graded');
 await page.click('#back'); await page.click('#tp-10'); await page.waitForSelector('.tp-all .tp-q');
 const it10 = await page.evaluate(() => JSON.parse(localStorage.getItem('kanzi.tprint.demo.10')).items);
 check(it10.length === 10 && it10.slice(8).every((x) => x.okuri), '10問版（送りがなは最後の2問）');
-// 紙で練習（3・4年の子だけ）
-await page.click('#back'); await page.click('#tp-paper-go'); await page.waitForSelector('.tp-paper .tp-q');
+// 紙で練習（50問・10問。どの学年にも出す）
+await page.click('#back'); await page.click('#tpp-50'); await page.waitForSelector('.tp-paper .tp-q');
 check(await page.locator('.tp-paper .tp-q').count() === 50 && await page.locator('.tp-akanji').count() === 0, '紙で練習: 50問、はじめは答えを出さない');
 await page.click('#tpp-show');
-const ps = await page.evaluate(() => JSON.parse(localStorage.getItem('kanzi.tpaper.demo')).items);
+const ps = await page.evaluate(() => JSON.parse(localStorage.getItem('kanzi.tpaper.demo.50')).items);
 check(await page.locator('.tp-akanji').count() === 50 && (await page.locator('.tp-akanji').first().textContent()) === ps[0].c && (await page.locator('.tp-aokuri').last().textContent()) === ps[49].okuri, '紙で練習: 答えを見る で 四角に答えの字と送りがな');
 check(await fits(), '紙で練習: ページはスクロールなし');
 await shot('tprint-6-paper');
 await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('kanzi.settings')); s.grades['3-1'] = [5]; localStorage.setItem('kanzi.settings', JSON.stringify(s)); });
 await page.goto(URL0); await page.waitForSelector('#go-test'); await page.click('#go-test'); await page.waitForSelector('#tp-50');
-check(await page.locator('#tp-paper-go').count() === 0, '紙で練習は 5年の子には出さない（まずは3・4年）');
+check(await page.locator('#tpp-50').count() === 1, '紙で練習は 5年の子にも出す');
+await page.click('#tpp-10'); await page.waitForSelector('.tp-paper .tp-q');
+check(await page.locator('.tp-paper .tp-q').count() === 10, '紙で練習 10問版');
 check(errors.length === 0, 'エラーなし' + (errors.length ? ': ' + errors.join(' / ') : ''));
 await browser.close(); server.close();

@@ -252,15 +252,18 @@
       (chars.length ? '<div class="tp-start">' + [50, 10].map(function (n) {
         return '<button class="big' + (n === 50 ? ' primary' : '') + '" id="tp-' + n + '" data-gate="t.p' + n + '">' + K('れんしゅうプリント') + '<span class="meta">' + n + K('[問|もん]・テストと にた[問|もん][題|だい]') + '</span></button>';
       }).join('') + '</div>' +
-        // 紙で練習（利用者の指定。まずは3・4年の子だけ）
-        (TP_PAPER_GRADES.indexOf(maxGrade()) >= 0 ? '<p><button class="big" id="tp-paper-go" data-gate="t.paper">' + K('[紙|かみ]で[練|れん][習|しゅう]') + '<span class="meta">' + K('[問|もん][題|だい]を [見|み]て [紙|かみ]に [書|か]く・[答|こた]えあわせ') + '</span></button></p>' : '') : '') +
+        // 紙で練習（利用者の指定）
+        '<div class="tp-start">' + [50, 10].map(function (n) {
+          return '<button class="big" id="tpp-' + n + '" data-gate="t.paper">' + K('[紙|かみ]で[練|れん][習|しゅう]') + '<span class="meta">' + n + K('[問|もん]・[紙|かみ]に [書|か]いて [答|こた]えあわせ') + '</span></button>';
+        }).join('') + '</div>' : '') +
       '<div class="kgrid" id="test-grid">' + chars.map(function (c) {
         return '<button class="kc' + (miss[c] ? ' kmiss' : '') + '" data-c="' + esc(c) + '">' + esc(c) + '</button>';
       }).join('') + '</div></main>';
     on('#back', menu);
     on('#tp-50', function () { tprint(50); });
     on('#tp-10', function () { tprint(10); });
-    on('#tp-paper-go', function () { tpaper(); });
+    on('#tpp-50', function () { tpaper(50); });
+    on('#tpp-10', function () { tpaper(10); });
     app.querySelectorAll('#test-grid .kc').forEach(function (b, i) {
       if (b.dataset.c === focusChar) b.focus({ preventScroll: true });
       b.addEventListener('click', function () {
@@ -504,13 +507,12 @@
   }
 
   // ================= 児童: 紙で練習（利用者の指定）。れんしゅうプリントと同じ問題を 画面に出し、子どもは紙に書く。
-  // 「答えを見る」で 四角に答えの字（と送りがな）を出して 自分で答えあわせする。記録はしない。まずは3・4年の子だけ
-  var TP_PAPER_GRADES = [3, 4];
-  function tpaper(fresh) {
+  // 「答えを見る」で 四角に答えの字（と送りがな）を出して 自分で答えあわせする。記録はしない。50問・10問
+  function tpaper(n, fresh) {
     clearScreen();
-    var chars = testChars(), sig = chars.join(''), key = 'kanzi.tpaper.' + (S.trial ? 'trial.' : '') + S.info.email;
+    var chars = testChars(), sig = chars.join(''), key = 'kanzi.tpaper.' + (S.trial ? 'trial.' : '') + S.info.email + '.' + n;
     var st = fresh ? null : Platform.store.get(key);
-    if (!st || st.v !== TP_VER || st.sig !== sig || !st.items || !st.items.length) st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, 50, Math.random), show: false };
+    if (!st || st.v !== TP_VER || st.sig !== sig || !st.items || !st.items.length) st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, n, Math.random), show: false };
     Platform.store.set(key, st);
     var items = st.items, firstOk = -1;
     items.forEach(function (it, i) { if (it.okuri && firstOk < 0) firstOk = i; });
@@ -523,7 +525,7 @@
         : tpRuby(it.pre) + '<ruby class="tp-target">' + box + '<rt>' + esc(it.rt) + '</rt></ruby>' + tpRuby(it.post);
       return '<div class="tp-q' + (it.okuri ? ' tp-oq' : '') + '"><span class="tp-no">' + circled(i + 1) + '</span><span class="tp-text">' + body + '</span></div>';
     }
-    app.innerHTML = '<header class="bar tp-bar"><button class="back" id="back">もどる</button><span class="prog">' + K('[紙|かみ]で[練|れん][習|しゅう]') + '</span>' +
+    app.innerHTML = '<header class="bar tp-bar"><button class="back" id="back">もどる</button><span class="prog">' + K('[紙|かみ]で[練|れん][習|しゅう] ') + items.length + K('[問|もん]') + '</span>' +
       '<span class="nav"><button id="tpp-new">' + K('[新|あたら]しい プリント') + '</button><button class="primary" id="tpp-show" aria-pressed="' + st.show + '">' + (st.show ? K('[答|こた]えを かくす') : K('[答|こた]えを [見|み]る')) + '</button></span></header>' +
       '<main class="tp-all"><p class="hint">' + K('ノートに [番|ばん][号|ごう]と [答|こた]えを [書|か]いてから、「[答|こた]えを [見|み]る」で たしかめよう') + '</p>' +
       '<div class="tp-sheet"><div class="tp-paper' + (st.show ? ' tp-answers' : '') + '" id="tp-paper" style="grid-template-columns:repeat(' + Math.min(TP_COLS, items.length) + ', 3.6em)">' +
@@ -531,8 +533,8 @@
     var paper = $('#tp-paper'), w = $('.tp-sheet').clientWidth - 24;
     paper.style.fontSize = Math.max(12, Math.min(30, Math.floor(w / (Math.min(TP_COLS, items.length) * 3.75)))) + 'px';
     on('#back', function () { testOverview(); });
-    on('#tpp-new', function () { tpaper(true); });
-    on('#tpp-show', function () { st.show = !st.show; Platform.store.set(key, st); tpaper(); });
+    on('#tpp-new', function () { tpaper(n, true); });
+    on('#tpp-show', function () { st.show = !st.show; Platform.store.set(key, st); tpaper(n); });
   }
 
   // ================= 児童: 漢字を ぜんぶ見る（見る／えらぶ）
