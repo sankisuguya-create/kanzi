@@ -68,3 +68,16 @@ test('範囲の字が問題数より多い時は、ちがう字を なるべく�
     assert.ok(new Set(it.map((x) => x.c)).size >= 45, `seed ${seed}: ${new Set(it.map((x) => x.c)).size}字`);
   }
 });
+
+test('先生が「送りがなで出す字」の印をつけたら、送りがなの問題は その字だけ、四角の問題は それ以外の字だけ', () => {
+  const OK = '負祭悪注暑寒暗軽明返守';
+  for (let seed = 1; seed <= 20; seed++) {
+    const it = T.make(CHARS, P, 50, seeded(seed), null, OK);
+    assert.equal(it.length, 50);
+    assert.equal(it.filter((x) => x.okuri).length, 10);
+    assert.ok(it.slice(40).every((x) => OK.includes(x.c)), `seed ${seed}: 送りがなの問題 ${it.slice(40).map((x) => x.c).join('')}`);
+    assert.ok(it.slice(0, 40).every((x) => !OK.includes(x.c)), `seed ${seed}: 四角の問題に印の字`);
+  }
+  // 印がない時は これまでどおり（範囲のどの字からも）
+  assert.equal(T.make(CHARS, P, 50, seeded(1)).filter((x) => x.okuri).length, 10);
+});

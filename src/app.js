@@ -61,6 +61,7 @@
   }
   // 次の漢字テストの範囲（先生が指定した字。学年をまたいでよい）
   function testChars() { return S.test && S.test.chars ? Array.from(S.test.chars).filter(function (c) { return D.kanji[c]; }) : []; }
+  function testOkuri() { return S.test && S.test.okuri ? String(S.test.okuri) : ''; } // テストで送りがなを問う字（先生の印）
   function allowedChars() { return S.grades.map(orderOf).join('').split(''); }
 
   // 例語は答えた回数ごとに入れ替える（音・訓を交互に：D7）
@@ -289,12 +290,12 @@
   function tpRuby(s) { return esc(String(s)).replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>'); }
   function tprint(n, fresh) {
     clearScreen();
-    var chars = testChars(), sig = chars.join('');
+    var chars = testChars(), sig = chars.join('') + '/' + testOkuri();
     var st = fresh ? null : Platform.store.get(tpKey(n));
     if (!st || st.v !== TP_VER || st.sig !== sig || !st.items || !st.items.length) {
       // 先に出す字: 自分が「書く」で まちがえたことのある字
       var first = chars.filter(function (c) { return S.p.write[c] && (S.p.write[c][4] || 0) > 0; });
-      st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, n, Math.random, first), ans: {}, startedAt: nowMs(), result: null, view: 'all', cur: 0 };
+      st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, n, Math.random, first, testOkuri()), ans: {}, startedAt: nowMs(), result: null, view: 'all', cur: 0 };
     }
     var items = st.items, confirmUnanswered = false;
     var revealUpTo = Infinity; // 丸つけの途中: この番号の問題まで ○× を見せる
@@ -510,9 +511,9 @@
   // 「答えを見る」で 四角に答えの字（と送りがな）を出して 自分で答えあわせする。記録はしない。50問・10問
   function tpaper(n, fresh) {
     clearScreen();
-    var chars = testChars(), sig = chars.join(''), key = 'kanzi.tpaper.' + (S.trial ? 'trial.' : '') + S.info.email + '.' + n;
+    var chars = testChars(), sig = chars.join('') + '/' + testOkuri(), key = 'kanzi.tpaper.' + (S.trial ? 'trial.' : '') + S.info.email + '.' + n;
     var st = fresh ? null : Platform.store.get(key);
-    if (!st || st.v !== TP_VER || st.sig !== sig || !st.items || !st.items.length) st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, n, Math.random), show: false };
+    if (!st || st.v !== TP_VER || st.sig !== sig || !st.items || !st.items.length) st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, n, Math.random, null, testOkuri()), show: false };
     Platform.store.set(key, st);
     var items = st.items, firstOk = -1;
     items.forEach(function (it, i) { if (it.okuri && firstOk < 0) firstOk = i; });
@@ -1487,6 +1488,8 @@
             '<div id="test-editor">' +
             '<p><label>テストの名前 <input id="test-label" maxlength="40" placeholder="例: 9月の50問テスト"></label></p>' +
             '<p class="picked" id="test-picked"></p>' +
+            '<p class="tmode">字を押すと: <span class="seg" role="group"><button id="tm-range">範囲に入れる・はずす</button><button id="tm-okuri">送りがなで出す（<b>送</b>の印）</button></span></p>' +
+            '<p class="hint">テストで送りがなを問う字に <b>送</b> の印をつけると、児童の「れんしゅうプリント」の送りがなの問題は その字だけから出ます（印のない字は 四角の問題だけ）。</p>' +
             '<div class="grid">' + Array.from(order).map(function (c) { return '<button class="tcell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
             '<p class="hint">あかい わくは、学級で まちがいの おおい字です（よむで3人以上が答え、まちがいが3割以上）</p>' +
             '<p><button id="test-clear">このテストの範囲を ぜんぶ はずす</button> <span id="test-msg" aria-live="polite"></span></p></div>') +
@@ -1534,8 +1537,10 @@
             (cur ? '<p><label class="opt"><input type="checkbox" id="test-show"' + (tests.active === testCur ? ' checked' : '') + '> このテストを 児童に見せる</label></p>' : '<p class="hint">「＋ 新しいテスト」で作ります。</p>');
           $('#test-editor').hidden = !cur;
           $('#test-label').value = cur ? cur.label : '';
-          $('#test-picked').innerHTML = tchars.length ? '<b>' + tchars.length + '字</b> <span class="tlist">' + tchars.map(esc).join(' ') + '</span>' : '<span class="hint">まだ ありません</span>';
-          app.querySelectorAll('.tcell').forEach(function (b) { var on = tchars.indexOf(b.dataset.c) >= 0; b.classList.toggle('tsel', on); b.classList.toggle('tfail', !!fails[b.dataset.c]); b.setAttribute('aria-pressed', on); });
+          var tok = cur ? Array.from(cur.okuri || '') : [];
+          $('#test-picked').innerHTML = tchars.length ? '<b>' + tchars.length + '字</b> <span class="tlist">' + tchars.map(esc).join(' ') + '</span>' + (tok.length ? '<br>送りがなで出す字 <b>' + tok.length + '字</b> <span class="tlist">' + tok.map(esc).join(' ') + '</span>' : '') : '<span class="hint">まだ ありません</span>';
+          app.querySelectorAll('.tcell').forEach(function (b) { var on = tchars.indexOf(b.dataset.c) >= 0; b.classList.toggle('tsel', on); b.classList.toggle('tfail', !!fails[b.dataset.c]); b.classList.toggle('tok', tok.indexOf(b.dataset.c) >= 0); b.setAttribute('aria-pressed', on); });
+          $('#tm-range').setAttribute('aria-pressed', tmode === 'range'); $('#tm-okuri').setAttribute('aria-pressed', tmode === 'okuri');
           // #test-mgr を 描き直したので 中の操作を 付け直す
           var sel = $('#test-sel'); if (sel) sel.addEventListener('change', function () { testCur = S.testCur = sel.value; paintTest(); });
           var show = $('#test-show'); if (show) show.addEventListener('change', function () {
@@ -1563,17 +1568,22 @@
             $('#test-msg').textContent = '✓ 保存しました';
           }, function () { $('#test-msg').textContent = '× 保存できませんでした'; });
         }
+        // 字を押した時: 範囲に入れる・はずす／送りがなで出す印をつける・はずす（印をつけた字は範囲にも入る。範囲からはずすと印も消える）
+        var tmode = 'range';
+        on('#tm-range', function () { tmode = 'range'; paintTest(); });
+        on('#tm-okuri', function () { tmode = 'okuri'; paintTest(); });
         app.querySelectorAll('.tcell').forEach(function (b) {
           b.addEventListener('click', function () {
             var cur = curTest(); if (!cur) return;
-            var arr = Array.from(cur.chars), i = arr.indexOf(b.dataset.c);
-            if (i >= 0) arr.splice(i, 1); else arr.push(b.dataset.c);
-            cur.chars = arr.join('');
+            var c = b.dataset.c, arr = Array.from(cur.chars), i = arr.indexOf(c), ok = Array.from(cur.okuri || ''), k = ok.indexOf(c);
+            if (tmode === 'okuri') { if (k >= 0) ok.splice(k, 1); else { ok.push(c); if (i < 0) arr.push(c); } }
+            else if (i >= 0) { arr.splice(i, 1); if (k >= 0) ok.splice(k, 1); } else arr.push(c);
+            cur.chars = arr.join(''); cur.okuri = ok.join('');
             paintTest(); saveTests();
           });
         });
         $('#test-label').addEventListener('change', function () { var cur = curTest(); if (cur) { cur.label = $('#test-label').value.trim().slice(0, 40); } paintTest(); saveTests(); });
-        on('#test-clear', function () { var cur = curTest(); if (cur) { cur.chars = ''; } paintTest(); saveTests(); });
+        on('#test-clear', function () { var cur = curTest(); if (cur) { cur.chars = ''; cur.okuri = ''; } paintTest(); saveTests(); });
         paintTest();
         app.querySelectorAll('.gchecks input').forEach(function (cb) {
           cb.addEventListener('change', function () {

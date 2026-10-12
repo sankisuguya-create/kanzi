@@ -14,10 +14,11 @@
   function key(it) { return it.c + '|' + it.pre + '|' + it.post + '|' + it.okuri; }
 
   // chars: 範囲の字（並び順どおり）、T: KANZI_TPRINT（{ 字: [[前, よみ, 後, 送りがな], ...] }）、n: 50 か 10、rnd: 0〜1 の乱数、
-  // first: 先に出す字（その子が まちがえたことのある字。範囲の字が問題数より多い時に、出しそびれないように）
+  // first: 先に出す字（その子が まちがえたことのある字。範囲の字が問題数より多い時に、出しそびれないように）、
+  // okChars: テストで送りがなを問う字（先生が範囲につけた印）。あれば 送りがなの問題は この字だけから、四角の問題は この字以外から出す（利用者の指定）
   // 戻り値: [{ c: 答えの字, pre, rt: 四角のよみ, post, okuri: 送りがな（送りがなの問題だけ） }]。前・後の {字|よみ} はルビ。
   // 字が足りなければ n より少なくなる（同じ文は2回出さない。答えが見える組は作らない）
-  function make(chars, T, n, rnd, first) {
+  function make(chars, T, n, rnd, first, okChars) {
     rnd = rnd || Math.random;
     chars = Array.from(chars || '').filter(function (c, i, a) { return T[c] && a.indexOf(c) === i; });
     var pri = {}, used = {};
@@ -40,9 +41,10 @@
     }
     // 送りがなの問題（最後に並べる）
     var okItems = [], nOk = OKURI_COUNT[n] || Math.round(n / 5);
-    prioritized(chars).forEach(function (c) { if (okItems.length < nOk && cands(c, true).length) take(okItems, c, true); });
+    var okSet = Array.from(okChars || '').filter(function (c) { return chars.indexOf(c) >= 0; });
+    prioritized(okSet.length ? okSet : chars).forEach(function (c) { if (okItems.length < nOk && cands(c, true).length) take(okItems, c, true); });
     // 四角に書く問題: まず範囲の字を1つずつ（先に出す字から）。空きがあれば ほかの文で埋める
-    var slots = Math.max(0, n - okItems.length), items = [], order = prioritized(chars);
+    var slots = Math.max(0, n - okItems.length), items = [], order = prioritized(okSet.length ? chars.filter(function (c) { return okSet.indexOf(c) < 0; }) : chars);
     // 送りがなの問題で出た字は あとに回す（範囲の字が問題数より多い時に、なるべく多くの字を出す）
     order.forEach(function (c) { if (items.length < slots && !covered[c] && cands(c, false).length) take(items, c, false); });
     order.forEach(function (c) { if (items.length < slots && !items.some(function (x) { return x.c === c; }) && cands(c, false).length) take(items, c, false); });

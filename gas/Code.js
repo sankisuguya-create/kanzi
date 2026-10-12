@@ -324,7 +324,7 @@ function validChars_(s) {
 function api_setTests(klass, json) {
   requireClass_(klass);
   var t = Sched.normTests(JSON.parse(json || 'null'));
-  t.list.forEach(function (x) { x.chars = validChars_(x.chars); });
+  t.list.forEach(function (x) { x.chars = validChars_(x.chars); x.okuri = Array.from(validChars_(x.okuri)).filter(function (c) { return x.chars.indexOf(c) >= 0; }).join(''); });
   if (!t.list.some(function (x) { return x.id === t.active; })) t.active = null;
   var v = t.list.length ? t : null;
   setSetting_('test:' + klass, v ? JSON.stringify(v) : '');

@@ -322,7 +322,9 @@
         var id = String(t.id || 't' + (i + 1)).slice(0, 24);
         if (seen[id]) return;
         seen[id] = true;
-        out.list.push({ id: id, label: String(t.label || '').slice(0, 40), chars: String(t.chars || '') });
+        // okuri: そのテストで 送りがなを問う字（れんしゅうプリントの送りがなの問題は この字だけから出す）。範囲の字の中だけ
+        var chars = String(t.chars || ''), okuri = Array.from(String(t.okuri || '')).filter(function (c, k, a) { return chars.indexOf(c) >= 0 && a.indexOf(c) === k; }).join('');
+        out.list.push({ id: id, label: String(t.label || '').slice(0, 40), chars: chars, okuri: okuri });
       });
       var active = v.active !== undefined ? v.active : (out.list.length === 1 && !Array.isArray(v.list) ? out.list[0].id : null);
       if (out.list.some(function (t) { return t.id === active; })) out.active = String(active);
@@ -332,7 +334,7 @@
   // 児童に見せるテスト（旧来の { label, chars } の形で返す）
   function activeTest(tests) {
     var t = normTests(tests), hit = t.list.filter(function (x) { return x.id === t.active; })[0];
-    return hit && hit.chars ? { label: hit.label, chars: hit.chars } : null;
+    return hit && hit.chars ? { label: hit.label, chars: hit.chars, okuri: hit.okuri || '' } : null;
   }
 
   // おぼえた字 = よむが箱3以上（chars を渡すとその中だけ数える）
@@ -430,4 +432,4 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 // GAS 版ずれ検知の版（tools/build-gas.mjs が埋め込む）
-Sched.VER = "5b53c45";
+Sched.VER = "cf8c75d";

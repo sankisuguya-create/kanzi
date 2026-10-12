@@ -466,3 +466,10 @@ test('先生の集計: ぶんかいの問題ごとに [答えた人数, 最後�
   assert.deepEqual(JSON.parse(JSON.stringify(v.stats.perProblem['b01'])), [1, 1, 5, 7]);
   assert.equal(v.bunkai.length, 0);
 });
+
+test('漢字テストの範囲: 送りがなで出す字の印を保存する（範囲の字の中だけ・漢字だけ）', () => {
+  const env = makeEnv(base(), T);
+  const t = env.api_setTests('3-1', JSON.stringify({ active: 't1', list: [{ id: 't1', label: '9月', chars: '悪安暑', okuri: '悪x港暑悪' }] }));
+  assert.equal(t.list[0].okuri, '悪暑');
+  assert.equal(makeEnv(env.book, K1).api_init().test.okuri, '悪暑');
+});
