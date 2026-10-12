@@ -269,136 +269,162 @@
     watchGates();
   }
 
-  // ================= 児童: れんしゅうプリント（漢字テストの練習。問題づくりは src/tprint.js）
-  // 左に テストと同じ形の縦書きのプリント（拡大・縮小できる）、右に 押した問題の答えを書くところ。
-  // 漢字は手書き（書いている間は判定しない）、送りがなはキーボード。「丸つけ」で まとめて判定し、点数と まちがえた字を出す。
-  // 書きかけは端末に保存し、画面を閉じても続きから（同じテストの範囲・同じ問題数のとき）
-  var TP_COLS = { 50: 10, 10: 10 }; // プリントの1行の問題数（右から左へ）。50問は 四角の問題40＝4行・送りがな10＝1行で、行がそろう
+  // ================= 児童: れんしゅうプリント（漢字テストの練習。問題づくりは src/tprint.js、問題文は src/tprint-data.js）
+  // 画面は3つ（利用者の指定）: ① プリント全体（50問または10問を縦書きで一覧。押すと その10問へ）
+  //   ② 10問（大きな字で横一列。画面より広いので横にスクロールする前提。「プリント全体へ」「前の10問」「次の10問」）
+  //   ③ 答える（②で問題を押すと右に開く。漢字1字を手書き、送りがなの問題は ひらがなも）。
+  // 書いている間は判定しない。「丸つけ」で まとめて判定し、点数と まちがえた字を出す。書きかけは端末に保存し、画面を閉じても続きから
+  var TP_VER = 2; // 保存の形（問題の形を変えたら上げる。古い形の書きかけは捨てて作り直す）
+  var TP_COLS = 10; // プリント全体の1行の問題数（右から左へ）。50問は 四角の問題40＝4行・送りがな10＝1行で、行がそろう
+  var TP_BLOCK = 10; // ②で一度に見せる問題数
   function tpKey(n) { return 'kanzi.tprint.' + (S.trial ? 'trial.' : '') + S.info.email + '.' + n; }
   function circled(i) { return String.fromCharCode(i <= 20 ? 0x245F + i : i <= 35 ? 0x3250 + i - 20 : 0x32B0 + i - 35); }
+  // 問題文の {字|よみ} をルビに
+  function tpRuby(s) { return esc(String(s)).replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>'); }
   function tprint(n, fresh) {
     clearScreen();
     var chars = testChars(), sig = chars.join('');
     var st = fresh ? null : Platform.store.get(tpKey(n));
-    if (!st || st.sig !== sig || !st.items || !st.items.length) {
+    if (!st || st.v !== TP_VER || st.sig !== sig || !st.items || !st.items.length) {
       // 先に出す字: 自分が「書く」で まちがえたことのある字
       var first = chars.filter(function (c) { return S.p.write[c] && (S.p.write[c][4] || 0) > 0; });
-      st = { sig: sig, items: TPrint.make(chars, D, n, Math.random, first), ans: {}, startedAt: nowMs(), result: null };
+      st = { v: TP_VER, sig: sig, items: TPrint.make(chars, KANZI_TPRINT, n, Math.random, first), ans: {}, startedAt: nowMs(), result: null, view: 'all', cur: 0 };
     }
-    var items = st.items, cur = Math.min(st.cur || 0, items.length - 1), confirmUnanswered = false;
-    function save() { st.cur = cur; Platform.store.set(tpKey(n), st); }
+    var items = st.items, confirmUnanswered = false;
+    function save() { Platform.store.set(tpKey(n), st); }
     save();
-    function ans(i) { return st.ans[i] || (st.ans[i] = { k: TPrint.answerChars(items[i]).map(function () { return []; }), o: '' }); }
-    function answered(i) { var a = st.ans[i]; return !!a && a.k.some(function (s) { return s.length; }); }
+    function ans(i) { return st.ans[i] || (st.ans[i] = { s: [], o: '' }); }
+    function answered(i) { var a = st.ans[i]; return !!a && a.s.length > 0; }
+    function res(i) { return st.result && st.result.items[i]; }
     document.body.classList.add('tp-screen');
     cleanup.push(function () { document.body.classList.remove('tp-screen'); });
-    app.innerHTML = '<header class="bar"><button class="back" id="back">もどる</button>' +
-      '<span class="prog" id="tp-prog"></span>' +
-      '<span class="nav"><button id="tp-new">' + K('[新|あたら]しい プリント') + '</button><button class="primary" id="tp-grade">' + K('[丸|まる]つけ') + '</button></span></header>' +
-      '<main class="tp"><section class="tp-sheet" id="tp-sheet"><div class="tp-zoom" role="group" aria-label="大きさ">' +
-      '<button id="tp-zout" aria-label="小さく">－</button><button id="tp-zin" aria-label="大きく">＋</button></div>' +
-      '<div class="tp-paper" id="tp-paper"></div></section>' +
-      '<section class="tp-input" id="tp-input"></section></main>';
-    on('#back', function () { save(); testOverview(); });
-    on('#tp-new', function () { tprint(n, true); });
-    on('#tp-grade', grade);
-    var paper = $('#tp-paper'), sheet = $('#tp-sheet');
-    paper.style.gridTemplateColumns = 'repeat(' + Math.min(TP_COLS[n] || 13, items.length) + ', 3.6em)';
 
-    // ---- プリント（縦書き）
-    function boxHtml(i, j) {
-      var a = st.ans[i], s = a && a.k[j], r = st.result && st.result.items[i];
-      return '<span class="tp-box' + (r ? (r.chars[j] ? ' ok' : ' ng') : '') + '">' + (s && s.length ? Ink.strokesSvg(s, 'tp-mini') : '') + '</span>';
+    // 問題1つ（縦書き）。四角には書いた字を小さく写す
+    function boxHtml(i) {
+      var a = st.ans[i], r = res(i);
+      return '<span class="tp-box' + (r ? (r.ok ? ' ok' : ' ng') : '') + '">' + (a && a.s.length ? Ink.strokesSvg(a.s, 'tp-mini') : '') + '</span>';
     }
-    function qHtml(it, i) {
-      var r = st.result && st.result.items[i], mark = r ? '<span class="tp-mark ' + (r.ok ? 'ok' : 'ng') + '">' + (r.ok ? '○' : '×') + '</span>' : '';
-      var body;
-      if (it.okuri) {
-        var a = st.ans[i];
-        body = '<span class="tp-yomi">' + esc(it.yomi) + '</span><span class="tp-paren">' + boxHtml(i, 0) + '<span class="tp-okuri">' + esc(a && a.o || '') + '</span></span>';
-      } else {
-        var pre = Array.from(it.w.slice(0, it.s)), post = Array.from(it.w.slice(it.e)), boxes = TPrint.answerChars(it);
-        body = pre.map(function (ch, k) { return withRuby(ch, it.ruby[k]); }).join('') +
-          '<ruby class="tp-target">' + boxes.map(function (_, j) { return boxHtml(i, j); }).join('') + '<rt>' + esc(it.rt) + '</rt></ruby>' +
-          post.map(function (ch, k) { return withRuby(ch, it.ruby[it.e + k]); }).join('');
-      }
-      return '<button class="tp-q' + (it.okuri ? ' tp-oq' : '') + (i === cur ? ' cur' : '') + (answered(i) ? ' done' : '') + '" data-i="' + i + '">' +
-        '<span class="tp-no">' + circled(i + 1) + '</span><span class="tp-text">' + body + '</span>' + mark + '</button>';
+    function qHtml(i, cls) {
+      var it = items[i], r = res(i), a = st.ans[i];
+      var body = it.okuri
+        ? tpRuby(it.pre) + '<span class="tp-yomi">' + esc(it.rt + it.okuri) + '</span>' + tpRuby(it.post) +
+          '<span class="tp-paren">' + boxHtml(i) + '<span class="tp-okuri">' + esc(a && a.o || '') + '</span></span>'
+        : tpRuby(it.pre) + '<ruby class="tp-target">' + boxHtml(i) + '<rt>' + esc(it.rt) + '</rt></ruby>' + tpRuby(it.post);
+      return '<button class="tp-q ' + (cls || '') + (it.okuri ? ' tp-oq' : '') + (i === st.cur ? ' cur' : '') + (answered(i) ? ' done' : '') + '" data-i="' + i + '">' +
+        '<span class="tp-no">' + circled(i + 1) + '</span><span class="tp-text">' + body + '</span>' +
+        (r ? '<span class="tp-mark ' + (r.ok ? 'ok' : 'ng') + '">' + (r.ok ? '○' : '×') + '</span>' : '') + '</button>';
     }
-    function paintPaper() {
+    function header(nav) {
+      var done = items.filter(function (_, i) { return answered(i); }).length;
+      return '<header class="bar tp-bar"><button class="back" id="back">もどる</button>' +
+        '<span class="prog" id="tp-prog">' + (st.result ? st.result.score + K('[点|てん]') + '（' + st.result.ok + ' / ' + items.length + '）' : K('れんしゅうプリント ') + done + ' / ' + items.length) + '</span>' +
+        '<span class="nav">' + (nav || '') + '<button id="tp-new">' + K('[新|あたら]しい プリント') + '</button>' + (st.result ? '' : '<button class="primary" id="tp-grade">' + K('[丸|まる]つけ') + '</button>') + '</span></header>';
+    }
+    function bindHeader() {
+      on('#back', function () { save(); testOverview(); });
+      on('#tp-new', function () { tprint(n, true); });
+      on('#tp-grade', grade);
+    }
+    function render() { clearScreen(); document.body.classList.add('tp-screen'); cleanup.push(function () { document.body.classList.remove('tp-screen'); }); (st.view === 'block' ? blockView : allView)(); }
+
+    // ---- ① プリント全体
+    function allView() {
+      st.view = 'all'; save();
       var firstOk = -1;
       items.forEach(function (it, i) { if (it.okuri && firstOk < 0) firstOk = i; });
-      // 送りがなの問題は 点線で区切った新しい行から（テストと同じ）
-      paper.innerHTML = items.map(function (it, i) { return (i === firstOk && i > 0 ? '<div class="tp-sep" aria-hidden="true"></div>' : '') + qHtml(it, i); }).join('');
-      paper.querySelectorAll('.tp-q').forEach(function (b) { b.addEventListener('click', function () { cur = +b.dataset.i; save(); paintPaper(); paintInput(); }); });
-      var done = items.filter(function (_, i) { return answered(i); }).length;
-      $('#tp-prog').textContent = st.result ? st.result.score + K('[点|てん]') + '（' + st.result.ok + ' / ' + items.length + '）' : K('れんしゅうプリント ') + done + ' / ' + items.length;
-      $('#tp-grade').hidden = !!st.result;
-    }
-    // ---- 拡大・縮小（ボタン・二本指・Ctrl＋ホイール）。大きさは端末に保存
-    var ZK = 'kanzi.tprint.zoom.' + n, fs = Platform.store.get(ZK) || 0;
-    function setZoom(v) {
-      fs = Math.max(8, Math.min(48, v));
-      paper.style.fontSize = fs + 'px';
-      Platform.store.set(ZK, fs);
-    }
-    if (!fs) fs = Math.max(10, Math.floor((sheet.clientWidth - 24) / (Math.min(TP_COLS[n] || 13, items.length) * 3.75))); // はじめは横幅に収まる大きさ
-    setZoom(fs);
-    on('#tp-zin', function () { setZoom(Math.round(fs * 1.25)); });
-    on('#tp-zout', function () { setZoom(Math.round(fs / 1.25)); });
-    sheet.addEventListener('wheel', function (ev) { if (ev.ctrlKey) { ev.preventDefault(); setZoom(fs * (ev.deltaY < 0 ? 1.1 : 1 / 1.1)); } }, { passive: false });
-    var touches = {}, pinch = null;
-    sheet.addEventListener('pointerdown', function (ev) { if (ev.pointerType === 'touch') touches[ev.pointerId] = [ev.clientX, ev.clientY]; });
-    sheet.addEventListener('pointermove', function (ev) {
-      if (!touches[ev.pointerId]) return;
-      touches[ev.pointerId] = [ev.clientX, ev.clientY];
-      var ids = Object.keys(touches);
-      if (ids.length !== 2) { pinch = null; return; }
-      var a = touches[ids[0]], b = touches[ids[1]], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
-      if (!pinch) pinch = { d: d, fs: fs }; else setZoom(pinch.fs * d / pinch.d);
-    });
-    function lift(ev) { delete touches[ev.pointerId]; if (Object.keys(touches).length < 2) pinch = null; }
-    sheet.addEventListener('pointerup', lift); sheet.addEventListener('pointercancel', lift);
-
-    // ---- 右側: 押した問題の答えを書くところ
-    function paintInput() {
-      var it = items[cur], a = ans(cur), r = st.result && st.result.items[cur], box = $('#tp-input'), chs = TPrint.answerChars(it);
-      var q = it.okuri
-        ? '<p class="tp-iq"><span class="tp-iyomi">' + esc(it.yomi) + '</span></p><p class="hint">' + K('―の ところを [漢|かん][字|じ]と おくりがなで [書|か]こう') + '</p>'
-        : '<p class="tp-iq">' + Array.from(it.w.slice(0, it.s)).map(function (ch, k) { return withRuby(ch, it.ruby[k]); }).join('') +
-          '<ruby><span class="tp-ibox">' + chs.map(function () { return '□'; }).join('') + '</span><rt>' + esc(it.rt) + '</rt></ruby>' +
-          Array.from(it.w.slice(it.e)).map(function (ch, k) { return withRuby(ch, it.ruby[it.e + k]); }).join('') + '</p>';
-      box.innerHTML = '<h2>' + circled(cur + 1) + (r ? ' <span class="tp-mark ' + (r.ok ? 'ok' : 'ng') + '">' + (r.ok ? K('○ [正|せい][解|かい]') : '× ' + K('[答|こた]えは ') + esc(it.w.slice(it.s, it.e) + it.okuri)) + '</span>' : '') + '</h2>' + q +
-        '<div class="tp-pads">' + chs.map(function (_, j) {
-          return '<div class="tp-cell"><div class="tp-padbox" id="tp-pad' + j + '"></div>' + (r ? '' : '<p class="tp-tools"><button data-undo="' + j + '">' + K('1[画|かく] もどす') + '</button><button data-clear="' + j + '">' + K('けす') + '</button></p>') + '</div>';
-        }).join('') +
-        (it.okuri ? '<div class="tp-cell tp-ocell"><input id="tp-okuri" lang="ja" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="おくりがな" placeholder="' + K('おくりがな') + '"' + (r ? ' readonly' : '') + '></div>' : '') + '</div>' +
-        (r ? '<div class="tp-correct">' + chs.map(function (c) { return kanjiSvg(c, 'tp-ans', false); }).join('') + '<button id="tp-show">' + K('[書|か]き[順|じゅん]を [見|み]る') + '</button></div>' : '') +
-        '<p class="tp-move"><button id="tp-prev"' + (cur ? '' : ' disabled') + '>← ' + K('まえ') + '</button><button id="tp-next"' + (cur < items.length - 1 ? '' : ' disabled') + '>' + K('つぎ') + ' →</button></p>';
-      var pads = chs.map(function (_, j) {
-        if (r) { $('#tp-pad' + j).innerHTML = Ink.strokesSvg(a.k[j], 'pad tp-pad tp-done ' + (r.chars[j] ? 'ok' : 'ng')); return null; }
-        return new Ink.Recorder($('#tp-pad' + j), a.k[j], function (s) { a.k[j] = s.map(function (x) { return x.slice(); }); save(); paintPaper(); });
+      app.innerHTML = header() + '<main class="tp-all"><p class="hint">' + K('[問|もん][題|だい]を おすと、その10[問|もん]が [大|おお]きく [出|で]るよ') + '</p>' +
+        (st.result ? resultHtml() : '') +
+        '<div class="tp-sheet"><div class="tp-paper" id="tp-paper" style="grid-template-columns:repeat(' + Math.min(TP_COLS, items.length) + ', 3.6em)">' +
+        items.map(function (_, i) { return (i === firstOk && i > 0 ? '<div class="tp-sep" aria-hidden="true"></div>' : '') + qHtml(i); }).join('') + '</div></div></main>';
+      bindHeader(); bindResult();
+      // はじめは横幅に収まる大きさ
+      var paper = $('#tp-paper'), w = $('.tp-sheet').clientWidth - 24;
+      paper.style.fontSize = Math.max(12, Math.min(30, Math.floor(w / (Math.min(TP_COLS, items.length) * 3.75)))) + 'px';
+      app.querySelectorAll('.tp-q').forEach(function (b) {
+        b.addEventListener('click', function () { st.cur = +b.dataset.i; st.block = Math.floor(st.cur / TP_BLOCK); st.open = true; blockView(); });
       });
-      box.querySelectorAll('[data-undo]').forEach(function (b) { b.addEventListener('click', function () { pads[+b.dataset.undo].undo(); }); });
-      box.querySelectorAll('[data-clear]').forEach(function (b) { b.addEventListener('click', function () { pads[+b.dataset.clear].clear(); }); });
+    }
+
+    // ---- ② 10問（横一列・横スクロール）＋ ③ 答える
+    function blockView() {
+      clearScreen(); document.body.classList.add('tp-screen'); cleanup.push(function () { document.body.classList.remove('tp-screen'); });
+      st.view = 'block';
+      var nb = Math.ceil(items.length / TP_BLOCK), b = Math.max(0, Math.min(nb - 1, st.block || 0)), from = b * TP_BLOCK, to = Math.min(items.length, from + TP_BLOCK);
+      st.block = b;
+      if (st.cur < from || st.cur >= to) st.cur = from;
+      save();
+      var nav = '<button id="tp-all">' + K('プリント[全|ぜん][体|たい]へ') + '</button>' +
+        '<button id="tp-prevb"' + (b > 0 ? '' : ' disabled') + '>← ' + K('[前|まえ]の10[問|もん]') + '</button>' +
+        '<button id="tp-nextb"' + (b < nb - 1 ? '' : ' disabled') + '>' + K('[次|つぎ]の10[問|もん]') + ' →</button>';
+      var list = [];
+      for (var i = from; i < to; i++) list.push(i);
+      app.innerHTML = header(nav) + (st.result ? resultHtml() : '') +
+        '<main class="tp-block' + (st.open ? ' open' : '') + '"><section class="tp-strip" id="tp-strip"><div class="tp-row">' + list.map(function (i) { return qHtml(i, 'big'); }).join('') + '</div></section>' +
+        '<section class="tp-input" id="tp-input"' + (st.open ? '' : ' hidden') + '></section></main>';
+      bindHeader(); bindResult();
+      on('#tp-all', function () { st.open = false; allView(); });
+      on('#tp-prevb', function () { st.block = b - 1; st.cur = (b - 1) * TP_BLOCK; blockView(); });
+      on('#tp-nextb', function () { st.block = b + 1; st.cur = (b + 1) * TP_BLOCK; blockView(); });
+      app.querySelectorAll('.tp-row .tp-q').forEach(function (q) {
+        q.addEventListener('click', function () { st.cur = +q.dataset.i; st.open = true; save(); paintStrip(); paintInput(); });
+      });
+      var strip = $('#tp-strip');
+      strip.scrollLeft = strip.scrollWidth; // 縦書きのプリントは右から読むので、右端から見せる
+      if (st.open) paintInput();
+      paintStrip();
+    }
+    // 押した問題を目立たせ、見える位置までスクロールする。書いた字を四角に写す
+    function paintStrip() {
+      app.querySelectorAll('.tp-row .tp-q').forEach(function (q) {
+        var i = +q.dataset.i;
+        q.classList.toggle('cur', i === st.cur && st.open);
+        q.classList.toggle('done', answered(i));
+        var box = q.querySelector('.tp-box'), a = st.ans[i];
+        if (box) box.innerHTML = a && a.s.length ? Ink.strokesSvg(a.s, 'tp-mini') : '';
+        var ok = q.querySelector('.tp-okuri'); if (ok) ok.textContent = a && a.o || '';
+        if (i === st.cur && st.open) q.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      });
+      var main = $('.tp-block'); if (main) main.classList.toggle('open', !!st.open);
+      var done = items.filter(function (_, i) { return answered(i); }).length;
+      if (!st.result) $('#tp-prog').textContent = K('れんしゅうプリント ') + done + ' / ' + items.length;
+    }
+    function paintInput() {
+      var i = st.cur, it = items[i], a = ans(i), r = res(i), box = $('#tp-input');
+      box.hidden = false;
+      var q = it.okuri
+        ? '<p class="tp-iq">' + tpRuby(it.pre) + '<span class="tp-iyomi">' + esc(it.rt + it.okuri) + '</span>' + tpRuby(it.post) + '</p><p class="hint">' + K('―の ところを [漢|かん][字|じ]と おくりがなで [書|か]こう') + '</p>'
+        : '<p class="tp-iq">' + tpRuby(it.pre) + '<ruby><span class="tp-ibox">□</span><rt>' + esc(it.rt) + '</rt></ruby>' + tpRuby(it.post) + '</p>';
+      var from = st.block * TP_BLOCK, to = Math.min(items.length, from + TP_BLOCK);
+      box.innerHTML = '<h2>' + circled(i + 1) + (r ? ' <span class="tp-mark ' + (r.ok ? 'ok' : 'ng') + '">' + (r.ok ? K('○ [正|せい][解|かい]') : '× ' + K('[答|こた]えは ') + esc(it.c + it.okuri)) + '</span>' : '') +
+        '<button class="tp-close" id="tp-close" aria-label="とじる">×</button></h2>' + q +
+        '<div class="tp-pads"><div class="tp-cell"><div class="tp-padbox" id="tp-pad"></div>' +
+        (r ? '' : '<p class="tp-tools"><button id="tp-undo">' + K('1[画|かく] もどす') + '</button><button id="tp-clear">' + K('けす') + '</button></p>') + '</div>' +
+        (it.okuri ? '<div class="tp-cell tp-ocell"><input id="tp-okuri" lang="ja" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="おくりがな" placeholder="' + K('おくりがな') + '"' + (r ? ' readonly' : '') + '></div>' : '') + '</div>' +
+        (r ? '<div class="tp-correct">' + kanjiSvg(it.c, 'tp-ans', false) + '<button id="tp-show">' + K('[書|か]き[順|じゅん]を [見|み]る') + '</button></div>' : '') +
+        '<p class="tp-move"><button id="tp-prev"' + (i > from ? '' : ' disabled') + '>← ' + K('まえ') + '</button><button id="tp-next"' + (i < to - 1 ? '' : ' disabled') + '>' + K('つぎ') + ' →</button></p>';
+      var pad = null;
+      if (r) $('#tp-pad').innerHTML = Ink.strokesSvg(a.s, 'pad tp-pad tp-done ' + (r.ok ? 'ok' : 'ng'));
+      else pad = new Ink.Recorder($('#tp-pad'), a.s, function (s) { a.s = s.map(function (x) { return x.slice(); }); save(); paintStrip(); });
+      on('#tp-undo', function () { pad.undo(); });
+      on('#tp-clear', function () { pad.clear(); });
+      on('#tp-close', function () { st.open = false; save(); box.hidden = true; paintStrip(); });
       var oi = $('#tp-okuri');
       if (oi) {
         oi.value = a.o || '';
         var composing = false;
-        oi.addEventListener('compositionstart', function () { composing = true; });
-        oi.addEventListener('compositionend', function () { composing = false; tidy(); });
-        oi.addEventListener('input', tidy);
-        function tidy() { // 読むと同じく、ローマ字は ひらがなに、ほかの字は入らない
+        var tidy = function () { // 読むと同じく、ローマ字は ひらがなに、ほかの字は入らない
           if (composing || r) return;
           var k = Kana.normalize(oi.value, false), v = k.text + k.rest;
           if (v !== oi.value) oi.value = v;
-          a.o = Kana.normalize(oi.value, true).text; save(); paintPaper();
-        }
+          a.o = Kana.normalize(oi.value, true).text; save(); paintStrip();
+        };
+        oi.addEventListener('compositionstart', function () { composing = true; });
+        oi.addEventListener('compositionend', function () { composing = false; tidy(); });
+        oi.addEventListener('input', tidy);
       }
-      on('#tp-prev', function () { if (cur > 0) { cur--; save(); paintPaper(); paintInput(); } });
-      on('#tp-next', function () { if (cur < items.length - 1) { cur++; save(); paintPaper(); paintInput(); } });
-      on('#tp-show', function () { var svgs = Array.from(box.querySelectorAll('.tp-ans')); svgs.forEach(function (sv) { sv.classList.add('play'); }); cleanup.push(playLoop(svgs)); });
-      if (st.result) showResult(); // 点数と まちがえた字は、どの問題を開いても いちばん上に
+      on('#tp-prev', function () { st.cur--; save(); paintStrip(); paintInput(); });
+      on('#tp-next', function () { st.cur++; save(); paintStrip(); paintInput(); });
+      on('#tp-show', function () { var svgs = Array.from(box.querySelectorAll('.tp-ans')); cleanup.push(playLoop(svgs)); });
     }
 
     // ---- 丸つけ: 漢字は Ink.grade（書き順・向きは問わない。紙のテストと同じ基準）、送りがなは文字の一致
@@ -409,41 +435,33 @@
         $('#tp-prog').textContent = K('まだ ') + blank + K('[問|もん] [書|か]いていないよ。もう[一|いち][度|ど] おすと [丸|まる]つけ');
         return;
       }
-      var res = { items: [], ok: 0 }, now = nowMs(), seen = {}, wrong = [];
+      var result = { items: [], ok: 0 }, now = nowMs(), seen = {}, wrong = [];
       items.forEach(function (it, i) {
-        var a = ans(i), chs = TPrint.answerChars(it);
-        var chars = chs.map(function (c, j) { return a.k[j].length ? Ink.grade(ST[c], a.k[j], S.writeLevel === 'easy' ? 'easy' : 'normal').ok : false; });
-        var ok = chars.every(Boolean) && (!it.okuri || a.o === it.okuri);
-        res.items.push({ ok: ok, chars: chars });
-        if (ok) res.ok++;
-        // 書いた字だけを「書く」の記録に入れる（何も書いていない問題は数えない）
-        chs.forEach(function (c, j) {
-          if (!a.k[j].length || seen[c]) return;
-          seen[c] = true;
-          Sched.answerWrite(S.p, c, chars[j], today(), now);
-          if (!chars[j]) wrong.push(c);
-        });
-        if (!ok && it.okuri && chars.every(Boolean) && wrong.indexOf(chs[0]) < 0) wrong.push(chs[0]); // 送りがなだけ まちがえた字
+        var a = ans(i), kOk = a.s.length ? Ink.grade(ST[it.c], a.s, S.writeLevel === 'easy' ? 'easy' : 'normal').ok : false;
+        var ok = kOk && (!it.okuri || a.o === it.okuri);
+        result.items.push({ ok: ok, k: kOk });
+        if (ok) result.ok++;
+        if (!ok && wrong.indexOf(it.c) < 0) wrong.push(it.c);
+        // 書いた字だけを「書く」の記録に入れる（何も書いていない問題は数えない。同じ字は1回）
+        if (a.s.length && !seen[it.c]) { seen[it.c] = true; Sched.answerWrite(S.p, it.c, kOk, today(), now); }
       });
-      res.score = Math.round(res.ok * 100 / items.length);
-      res.wrong = wrong;
-      st.result = res; save();
-      var done = items.filter(function (_, i) { return answered(i); }).length;
-      Sched.finishSession(S.p, st.startedAt, done, 'write'); // 書いた問題の数だけ 森が育つ（書くと同じ）
+      result.score = Math.round(result.ok * 100 / items.length);
+      result.wrong = wrong;
+      st.result = result; save();
+      Sched.finishSession(S.p, st.startedAt, items.filter(function (_, i) { return answered(i); }).length, 'write'); // 書いた問題の数だけ 森が育つ（書くと同じ）
       commit(); flush();
-      paintPaper(); paintInput();
+      render();
     }
-    function showResult() {
-      var r = st.result, box = document.createElement('div');
-      box.className = 'tp-result';
-      box.innerHTML = '<p class="tp-score">' + r.score + K('[点|てん]') + '</p>' +
-        (r.wrong.length ? '<p>' + K('まちがえた[字|じ]: ') + '<span class="tp-wrong">' + r.wrong.map(esc).join(' ') + '</span></p>' +
-          '<p><button id="tp-sel">' + K('まちがえた[字|じ]を [選|えら]んだ[漢|かん][字|じ]に [入|い]れる') + '</button> <span id="tp-selmsg" aria-live="polite"></span></p>' : '<p>' + K('ぜんぶ [正|せい][解|かい]！') + '</p>') +
-        '<p class="hint">' + K('[問|もん][題|だい]を おすと、[答|こた]えと [書|か]き[順|じゅん]が [見|み]られるよ') + '</p>';
-      $('#tp-input').prepend(box);
-      on('#tp-sel', function () { r.wrong.forEach(function (c) { Sched.setSel(S.p, c, true, nowMs()); }); commit(); $('#tp-selmsg').textContent = '✓'; });
+    function resultHtml() {
+      var r = st.result;
+      return '<div class="tp-result"><span class="tp-score">' + r.score + K('[点|てん]') + '</span>' +
+        (r.wrong.length ? '<span>' + K('まちがえた[字|じ]: ') + '<span class="tp-wrong">' + r.wrong.map(esc).join(' ') + '</span></span>' +
+          '<button id="tp-sel">' + K('まちがえた[字|じ]を [選|えら]んだ[漢|かん][字|じ]に [入|い]れる') + '</button><span id="tp-selmsg" aria-live="polite"></span>' : '<span>' + K('ぜんぶ [正|せい][解|かい]！') + '</span>') + '</div>';
     }
-    paintPaper(); paintInput();
+    function bindResult() {
+      on('#tp-sel', function () { st.result.wrong.forEach(function (c) { Sched.setSel(S.p, c, true, nowMs()); }); commit(); $('#tp-selmsg').textContent = '✓'; });
+    }
+    render();
   }
 
   // ================= 児童: 漢字を ぜんぶ見る（見る／えらぶ）
