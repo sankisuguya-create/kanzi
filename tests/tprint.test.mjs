@@ -81,3 +81,12 @@ test('先生が「送りがなで出す字」の印をつけたら、送りが�
   // 印がない時は これまでどおり（範囲のどの字からも）
   assert.equal(T.make(CHARS, P, 50, seeded(1)).filter((x) => x.okuri).length, 10);
 });
+
+test('3年9・10月のテスト（3年の45字・送りがなの印11字）: どの回も45字すべてを出す', () => {
+  const G3 = [...CHARS].filter((c) => D.kanji[c].g === 3).join('');
+  assert.equal(G3.length, 45);
+  for (let seed = 1; seed <= 30; seed++) {
+    const it = T.make(G3, P, 50, seeded(seed), null, '負祭悪注暑寒暗軽明返守');
+    assert.equal(new Set(it.map((x) => x.c)).size, 45, `seed ${seed}`);
+  }
+});

@@ -28,12 +28,16 @@
     // 答えが見える組は作らない（利用者の指定）: ある問題の文の前後（ルビつきの字も含む）に、別の問題の答えの字を出さない。
     // asked＝答えにした字、shown＝文の前後に出ている字。文を選ぶたびに両方を見て、組めない文は使わない
     var asked = {}, shown = {}, covered = {};
+    var inRange = {};
+    chars.forEach(function (c) { inRange[c] = true; });
     function ctx(s) { return Array.from((s[0] + s[2]).replace(/\{([^|}]+)\|[^}]+\}/g, '$1')).filter(function (ch) { return /[\u4e00-\u9fff々]/.test(ch); }); }
     function fits(c, s) { return !shown[c] && ctx(s).every(function (ch) { return !asked[ch] && ch !== c; }); }
     function take(list, c, ok) {
       var cs = cands(c, ok).filter(function (s) { return fits(c, s); });
       if (!cs.length) return false;
-      var s = pick(cs, rnd), it = item(c, s);
+      // 文の前後に まだ問うていない範囲の字が入ると、その字はもう問えなくなる（「荷物」の 物）。そういう字の少ない文を選ぶ
+      var block = function (s) { return ctx(s).filter(function (ch) { return inRange[ch] && !covered[ch]; }).length + rnd() * 0.5; };
+      var s = cs.sort(function (a, b) { return block(a) - block(b); })[0], it = item(c, s);
       used[key(it)] = true; covered[c] = true; asked[c] = true;
       ctx(s).forEach(function (ch) { shown[ch] = true; });
       list.push(it);
