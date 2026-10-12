@@ -266,7 +266,7 @@
   // ---- 児童画面のボタンのオン・オフ（学級ごと。先生がおためし画面で切り替える）
   // 持つのはオフにしたボタンのキーだけ。m.＝メニューのボタン、s.＝「どの字で やる？」の選び方（読む・書く・カードで共通）
   // 先生画面・児童画面・GAS サーバーが同じ一覧を使う（ここが唯一の定義）
-  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 'm.other', 'o.bunkai', 's.test', 's.due', 's.sel', 's.rnd', 's.miss'];
+  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 'm.other', 'o.bunkai', 's.test', 's.due', 's.sel', 's.rnd', 's.miss', 't.p50', 't.p10', 't.paper'];
   // 配列・「,」区切りの文字列のどちらでも受け、知らないキー・重なりを除いて GATE_KEYS の順に並べる
   function normGates(v) {
     var list = Array.isArray(v) ? v.map(String) : String(v || '').split(',');
@@ -321,7 +321,9 @@
         var id = String(t.id || 't' + (i + 1)).slice(0, 24);
         if (seen[id]) return;
         seen[id] = true;
-        out.list.push({ id: id, label: String(t.label || '').slice(0, 40), chars: String(t.chars || '') });
+        // okuri: そのテストで 送りがなを問う字（れんしゅうプリントの送りがなの問題は この字だけから出す）。範囲の字の中だけ
+        var chars = String(t.chars || ''), okuri = Array.from(String(t.okuri || '')).filter(function (c, k, a) { return chars.indexOf(c) >= 0 && a.indexOf(c) === k; }).join('');
+        out.list.push({ id: id, label: String(t.label || '').slice(0, 40), chars: chars, okuri: okuri });
       });
       var active = v.active !== undefined ? v.active : (out.list.length === 1 && !Array.isArray(v.list) ? out.list[0].id : null);
       if (out.list.some(function (t) { return t.id === active; })) out.active = String(active);
@@ -331,7 +333,7 @@
   // 児童に見せるテスト（旧来の { label, chars } の形で返す）
   function activeTest(tests) {
     var t = normTests(tests), hit = t.list.filter(function (x) { return x.id === t.active; })[0];
-    return hit && hit.chars ? { label: hit.label, chars: hit.chars } : null;
+    return hit && hit.chars ? { label: hit.label, chars: hit.chars, okuri: hit.okuri || '' } : null;
   }
 
   // おぼえた字 = よむが箱3以上（chars を渡すとその中だけ数える）

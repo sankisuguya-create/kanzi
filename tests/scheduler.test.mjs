@@ -166,12 +166,14 @@ test('終えた回のまとめ: 6年間 毎日10回やっても meta は5万文�
 
 test('漢字テストの範囲: 複数管理と 見せる1つ（旧形式も読める）', () => {
   assert.deepEqual(S.normTests(null), { active: null, list: [] });
-  assert.deepEqual(S.normTests({ label: '9月', chars: '悪安' }), { active: 't1', list: [{ id: 't1', label: '9月', chars: '悪安' }] }); // 旧形式
-  const multi = { active: 'b', list: [{ id: 'a', label: 'x', chars: '悪' }, { id: 'b', label: 'y', chars: '安' }] };
+  assert.deepEqual(S.normTests({ label: '9月', chars: '悪安' }), { active: 't1', list: [{ id: 't1', label: '9月', chars: '悪安', okuri: '' }] }); // 旧形式
+  const multi = { active: 'b', list: [{ id: 'a', label: 'x', chars: '悪', okuri: '' }, { id: 'b', label: 'y', chars: '安', okuri: '' }] };
   assert.deepEqual(S.normTests(multi), multi);
-  assert.deepEqual(S.activeTest(multi), { label: 'y', chars: '安' });
-  assert.deepEqual(S.activeTest({ label: '9月', chars: '悪安' }), { label: '9月', chars: '悪安' });
+  assert.deepEqual(S.activeTest(multi), { label: 'y', chars: '安', okuri: '' });
+  assert.deepEqual(S.activeTest({ label: '9月', chars: '悪安' }), { label: '9月', chars: '悪安', okuri: '' });
   assert.equal(S.activeTest({ active: 'x', list: [{ id: 'a', label: 'x', chars: '悪' }] }), null); // 見せるidが消えている
   assert.equal(S.activeTest({ active: 'a', list: [{ id: 'a', label: '', chars: '' }] }), null); // 範囲が空
   assert.deepEqual(S.normTests({ active: 'x', list: [] }), { active: null, list: [] });
+  // 送りがなで出す字（印）: 範囲の字の中だけ・重なりなし
+  assert.deepEqual(S.activeTest({ active: 'a', list: [{ id: 'a', label: '', chars: '悪安暑', okuri: '悪悪港暑' }] }), { label: '', chars: '悪安暑', okuri: '悪暑' });
 });

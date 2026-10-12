@@ -551,3 +551,88 @@ ol.hard.bk .bp { font-weight: 700; }
 ol.hard.bk .bp2 { color: var(--ink-sub); font-size: 15px; }
 ol.hard.bk .bk-del { margin-left: auto; min-height: 40px; padding: 0 14px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); cursor: pointer; font-size: 15px; }
 #bk-editor .bk { padding-top: 10px; }
+
+/* ---- れんしゅうプリント（漢字テストの練習）: ① プリント全体 → ② 10問（横スクロール）→ ③ 答える。画面の高さに収める */
+.tp-start { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 6px 0 12px; }
+body.tp-screen { height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+body.tp-screen #app { flex: 1 1 0; min-height: 0; width: 100%; max-width: none; display: flex; flex-direction: column; padding: 8px 12px 6px; }
+body.tp-screen .bar { flex: none; margin-bottom: 6px; }
+body.tp-screen .bar button { min-height: 48px; min-width: 0; padding: 0 12px; font-size: 17px; }
+.tp-bar .nav { flex-wrap: wrap; justify-content: flex-end; }
+.bar .nav .primary { background: var(--solid-on); border-color: var(--solid-on); color: #fff; font-weight: 700; }
+.tp-all { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.tp-all > .hint { margin: 0 0 4px; }
+.tp-sheet { flex: 1 1 0; min-height: 0; overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+/* 問題は右から左へ（テストと同じ）。1問＝縦書きの1列 */
+.tp-paper { display: grid; direction: rtl; gap: 1.2em .1em; align-items: start; padding: .6em; width: max-content; margin: 0 auto; font-family: var(--font-kanji); }
+.tp-q { direction: ltr; display: flex; flex-direction: column; align-items: center; gap: .2em; padding: .2em; font: inherit; background: none; border: 0; border-radius: 6px; cursor: pointer; color: var(--ink); }
+.tp-q.cur { outline: 3px solid var(--cat-1); outline-offset: 1px; background: var(--fill-a); }
+.tp-sep { grid-column: 1 / -1; border-top: 2px dotted var(--cat-2); margin: -.4em 0; }
+.tp-no { font-size: .8em; font-family: var(--font-sans); }
+.tp-text { writing-mode: vertical-rl; text-orientation: upright; line-height: 1.6; }
+.tp-text rt, .tp-iq rt { font-size: .5em; font-family: var(--font-sans); }
+.tp-box { display: inline-block; width: 1.3em; height: 1.3em; border: 2px solid var(--cat-2); background: var(--card); vertical-align: baseline; margin: .05em 0; } /* 縦書きでは baseline が列の中心。middle だと右にずれる */
+.tp-box.ok { border-color: var(--cat-1); }
+.tp-box.ng { border-color: var(--ink-alert); border-style: dashed; }
+.tp-mini { width: 100%; height: 100%; display: block; }
+.tp-mini polyline { fill: none; stroke: var(--ink); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+.tp-yomi, .tp-iyomi { text-decoration: underline; text-decoration-color: var(--ink-alert); text-underline-offset: .2em; }
+.tp-paren { display: inline-block; border: 1px solid var(--line); border-radius: .6em; padding: .2em 0; margin-top: .3em; }
+.tp-okuri { font-family: var(--font-sans); }
+.tp-mark { font-family: var(--font-sans); font-weight: 700; font-size: .9em; }
+.tp-mark.ok { color: var(--cat-1); }
+.tp-mark.ng { color: var(--ink-alert); }
+/* ② 10問: 大きな字で横一列。画面より広いので横にスクロールする */
+.tp-block { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.tp-block.open { grid-template-columns: minmax(0, 1fr) minmax(320px, 36%); }
+.tp-strip { min-height: 0; overflow-x: auto; overflow-y: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; font-family: var(--font-kanji); font-size: clamp(30px, 6.5vh, 46px); -webkit-overflow-scrolling: touch; }
+.tp-row { display: flex; flex-direction: row-reverse; gap: .5em; padding: .4em .6em; width: max-content; min-height: 100%; align-items: flex-start; }
+.tp-q.big { flex: none; width: 2.8em; padding: .3em .2em; border: 1px solid transparent; } /* 縦書きの列は幅を決めておく（決めないと 横書きの親の幅まで広がる） */
+.tp-q.big.done { border-color: var(--line); }
+/* ③ 答える */
+.tp-input { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 4px 8px; }
+.tp-input h2 { margin: 0; font-size: 24px; display: flex; align-items: center; gap: 8px; }
+.tp-close { margin-left: auto; width: 44px; height: 44px; font-size: 22px; border: 2px solid var(--line); border-radius: 50%; background: var(--card); }
+.tp-iq { margin: 0; font-size: 32px; font-family: var(--font-kanji); }
+.tp-ibox { color: var(--cat-2); }
+.tp-pads { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.tp-cell { flex: 1 1 0; min-width: 140px; max-width: 300px; }
+.tp-padbox { aspect-ratio: 1; width: 100%; }
+.tp-pad .stroke-rec, .tp-done polyline { fill: none; stroke: var(--ink); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+.tp-done { border: 3px solid var(--cat-1); }
+.tp-done.ng { border: 3px dashed var(--ink-alert); }
+.tp-tools { display: flex; gap: 6px; margin: 4px 0 0; }
+.tp-tools button, .tp-move button, .tp-correct button, .tp-result button { min-height: 48px; padding: 0 12px; font-size: 17px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); }
+.tp-ocell input { width: 100%; min-height: 56px; font-size: 28px; padding: 0 10px; border: 2px solid var(--ink); border-radius: 10px; }
+.tp-correct { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tp-correct .tp-ans { width: 120px; height: 120px; }
+.tp-move { display: flex; justify-content: space-between; margin: 4px 0 0; }
+.tp-result { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; border: 2px solid var(--cat-1); border-radius: 12px; padding: 4px 12px; margin-bottom: 6px; background: var(--fill-a); }
+.tp-score { font-size: 28px; font-weight: 700; }
+.tp-wrong { font-family: var(--font-kanji); font-size: 26px; letter-spacing: .2em; }
+.tp-ans .frame { fill: none; stroke: #9AA0A6; stroke-width: .9; }
+.tp-ans .cross { stroke: #9AA0A6; stroke-width: .7; stroke-dasharray: 2.2 2.2; }
+.tp-ans path { fill: none; stroke: #111; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }
+@media (max-width: 760px) { .tp-block.open { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } }
+/* 丸つけの ○× を順につける（.pop）・最後のポップアップ */
+.tp-mark.pop { animation: tp-pop .25s ease-out; }
+@keyframes tp-pop { from { transform: scale(2.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .tp-mark.pop { animation: none; } }
+.tp-pop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .45); }
+.tp-pop-box { background: var(--card); border-radius: 20px; padding: 18px 28px; min-width: min(520px, 92vw); max-width: 92vw; max-height: 92vh; overflow: auto; text-align: center; box-shadow: 0 8px 30px rgba(0, 0, 0, .35); }
+.tp-pop-box p { margin: 6px 0; }
+.tp-pop-score { font-size: 96px; font-weight: 700; line-height: 1.1; color: var(--cat-1); }
+.tp-pop-score small { font-size: 36px; margin-left: 6px; }
+.tp-pop-sub { font-size: 22px; color: var(--ink-sub); }
+.tp-pop-h { font-size: 22px; font-weight: 700; }
+.tp-pop-wrong { font-family: var(--font-kanji); font-size: 54px; letter-spacing: .15em; color: var(--ink-alert); }
+.tp-pop-box button { min-height: 52px; padding: 0 18px; font-size: 19px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); }
+.tp-pop-box button.primary { background: var(--solid-on); border-color: var(--solid-on); color: #fff; font-weight: 700; min-width: 180px; }
+/* 紙で練習: 答えの字（赤ではなく青の太字。色だけに頼らず 四角の中に字が出ることで分かる） */
+.tp-akanji { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--cat-1); font-weight: 700; }
+.tp-aokuri { color: var(--cat-1); font-weight: 700; }
+div.tp-q { cursor: default; }
+/* 漢字テストの範囲: 送りがなで出す字の印（語の印「送」と点線の枠。色だけに頼らない） */
+.tcell.tok { outline: 2px dashed var(--cat-1); outline-offset: -5px; }
+.tcell.tok::before { content: "送"; position: absolute; left: 1px; top: 1px; padding: 0 2px; font-size: 13px; line-height: 1.2; font-weight: 700; color: #fff; background: var(--solid-on); border-radius: 4px; }
+.tmode .seg button { min-height: 44px; min-width: 0; padding: 0 12px; font-size: 16px; }
