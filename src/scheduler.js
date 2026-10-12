@@ -266,7 +266,7 @@
   // ---- 児童画面のボタンのオン・オフ（学級ごと。先生がおためし画面で切り替える）
   // 持つのはオフにしたボタンのキーだけ。m.＝メニューのボタン、s.＝「どの字で やる？」の選び方（読む・書く・カードで共通）
   // 先生画面・児童画面・GAS サーバーが同じ一覧を使う（ここが唯一の定義）
-  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 'm.other', 'o.bunkai', 's.test', 's.due', 's.sel', 's.rnd', 's.miss'];
+  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 'm.other', 'o.bunkai', 's.test', 's.due', 's.sel', 's.rnd', 's.miss', 't.p50', 't.p10'];
   // 配列・「,」区切りの文字列のどちらでも受け、知らないキー・重なりを除いて GATE_KEYS の順に並べる
   function normGates(v) {
     var list = Array.isArray(v) ? v.map(String) : String(v || '').split(',');

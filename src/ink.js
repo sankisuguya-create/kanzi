@@ -255,5 +255,97 @@
     });
   };
 
-  root.Ink = { LEVELS: LEVELS, Pad: Pad, animate: animate, _resample: resample, _scribble: scribble };
+  // ---- れんしゅうプリント用（app.js の tprint）: 書いている間は判定しない。丸つけの時に まとめて判定する
+  // （1画ごとに判定して外れた線を消すと、書きながら答えが分かってしまうため）
+
+  // 線を記録するだけのパッド。strokes: これまでに書いた線 [[[x,y],...],...]（109四方の座標）。onChange(strokes) は線が変わるたび
+  function Recorder(container, strokes, onChange) {
+    var self = this;
+    container.innerHTML = '';
+    this.strokes = (strokes || []).map(function (s) { return s.slice(); });
+    var svg = el('svg', { viewBox: '0 0 109 109', class: 'pad tp-pad', role: 'img', 'aria-label': 'かくところ' }, container);
+    el('rect', { x: 1, y: 1, width: 107, height: 107, class: 'pad-frame' }, svg);
+    el('path', { d: 'M54.5 4V105M4 54.5H105', class: 'pad-grid' }, svg);
+    this.svg = svg;
+    this.ink = el('g', { class: 'pad-ink' }, svg);
+    this.onChange = onChange || function () {};
+    this.draw();
+    var cur = null, pid = null, penSeen = false, rect = null;
+    function pt(ev) { return [Math.round((ev.clientX - rect.left) / rect.width * 1090) / 10, Math.round((ev.clientY - rect.top) / rect.height * 1090) / 10]; }
+    svg.addEventListener('pointerdown', function (ev) {
+      if (ev.pointerType === 'pen') penSeen = true;
+      if ((penSeen && ev.pointerType === 'touch') || pid !== null) return; // ペンの間は手のひらの接触を無視
+      pid = ev.pointerId; svg.setPointerCapture(pid); rect = svg.getBoundingClientRect();
+      cur = { pts: [pt(ev)], line: el('polyline', { class: 'stroke-live' }, self.ink) };
+      cur.line.setAttribute('points', cur.pts.join(' '));
+      ev.preventDefault();
+    });
+    svg.addEventListener('pointermove', function (ev) {
+      if (ev.pointerId !== pid || !cur) return;
+      var p = pt(ev), last = cur.pts[cur.pts.length - 1];
+      if (Math.hypot(p[0] - last[0], p[1] - last[1]) < 0.8) return;
+      cur.pts.push(p); cur.line.setAttribute('points', cur.pts.join(' '));
+    });
+    function end(ev) {
+      if (ev.pointerId !== pid || !cur) return;
+      pid = null;
+      self.strokes.push(cur.pts); cur = null;
+      self.draw(); self.onChange(self.strokes);
+    }
+    svg.addEventListener('pointerup', end);
+    svg.addEventListener('pointercancel', end);
+  }
+  Recorder.prototype.draw = function () {
+    var ink = this.ink;
+    ink.innerHTML = '';
+    this.strokes.forEach(function (s) { el('polyline', { class: 'stroke-rec', points: s.join(' ') }, ink); });
+  };
+  Recorder.prototype.undo = function () { this.strokes.pop(); this.draw(); this.onChange(this.strokes); };
+  Recorder.prototype.clear = function () { this.strokes = []; this.draw(); this.onChange(this.strokes); };
+
+  // 書いた線を小さく見せる SVG（プリントの四角の中など）
+  function strokesSvg(strokes, cls) {
+    return '<svg viewBox="0 0 109 109" class="' + (cls || '') + '">' + (strokes || []).map(function (s) { return '<polyline points="' + s.join(' ') + '"/>'; }).join('') + '</svg>';
+  }
+
+  // お手本の画（path の d）を比べる形に。getTotalLength のために見えない SVG に置く
+  var gradeSvg = null, tplCache = {};
+  function templateOf(dList) {
+    var key = dList.join('|');
+    if (tplCache[key]) return tplCache[key];
+    if (!gradeSvg) { gradeSvg = el('svg', { width: 0, height: 0, style: 'position:absolute;width:0;height:0', 'aria-hidden': 'true' }); document.body.appendChild(gradeSvg); }
+    return (tplCache[key] = dList.map(function (d) {
+      var p = el('path', { d: d }, gradeSvg), L = p.getTotalLength(), pts = [];
+      for (var i = 0; i < N; i++) { var q = p.getPointAtLength(L * i / (N - 1)); pts.push({ x: q.x, y: q.y }); }
+      p.remove();
+      return { pts: pts, len: L, c: centroid(pts) };
+    }));
+  }
+  // まとめて判定する。dList: お手本の画、drawn: 書いた線 [[[x,y],...],...]、level: 'normal'|'easy'（「書く」と同じ許容）。
+  // 書いた1画ずつ、まだ合っていない画のうち いちばん近いものに当てる（字全体のずれは「書く」と同じく補正）。
+  // 正解 = 全部の画に当たり、余った線がない。書き順・書く向きは問わない（紙のテストでは見えないので、紙のテストと同じ基準）
+  function grade(dList, drawn, level) {
+    var tpl = templateOf(dList), L = LEVELS[level] || LEVELS.normal, done = tpl.map(function () { return false; }), shifts = [], extra = 0;
+    (drawn || []).forEach(function (s) {
+      if (!s.length) return;
+      var raw = s.map(function (p) { return { x: p[0], y: p[1] }; }), d = resample(raw), dlen = polyLen(raw);
+      var off = shifts.length ? centroid(shifts) : { x: 0, y: 0 };
+      off = { x: Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, off.x)), y: Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, off.y)) };
+      var best = -1, bestS = Infinity;
+      tpl.forEach(function (t, i) {
+        if (done[i]) return;
+        var sc = Math.min(meanDist(d, t.pts, off, false), meanDist(d, t.pts, off, true));
+        var lenOk = t.len < 22 || (dlen > t.len * L.minLen && dlen < t.len * L.maxLen + 15);
+        if (lenOk && sc <= L.tol && sc < bestS) { best = i; bestS = sc; }
+      });
+      if (best < 0) { extra++; return; }
+      done[best] = true;
+      var dc = centroid(d);
+      shifts.push({ x: dc.x - tpl[best].c.x, y: dc.y - tpl[best].c.y });
+    });
+    var missing = done.filter(function (x) { return !x; }).length;
+    return { ok: extra === 0 && missing === 0 && (drawn || []).length > 0, extra: extra, missing: missing };
+  }
+
+  root.Ink = { LEVELS: LEVELS, Pad: Pad, animate: animate, Recorder: Recorder, grade: grade, strokesSvg: strokesSvg, _resample: resample, _scribble: scribble };
 })(this);
