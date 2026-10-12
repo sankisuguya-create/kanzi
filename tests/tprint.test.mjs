@@ -52,12 +52,19 @@ test('範囲の字が問題数より少なくても埋め、多い時は先に�
   assert.deepEqual(T.make('', P, 10, seeded(1)), []);
 });
 
-test('範囲の字が問題数より多い時は、問題数ぶん ちがう字を出す（送りがなの問題と字をかぶらせない）。前後に答えが見える文は避ける', () => {
+test('答えが見える組は作らない: どの問題の文の前後（ルビの字も含む）にも、プリントの答えの字が出ない', () => {
+  const all = Object.keys(P).join('');
+  for (const [chars, n] of [[CHARS, 50], [CHARS, 10], ['感想', 50], [all.slice(0, 200), 50]]) for (let seed = 1; seed <= 20; seed++) {
+    const it = T.make(chars, P, n, seeded(seed));
+    const asked = new Set(it.map((x) => x.c));
+    for (const x of it) assert.ok(![...strip(x.pre + x.post)].some((ch) => asked.has(ch)), `seed ${seed}: ${x.pre}□${x.post}`);
+  }
+});
+
+test('範囲の字が問題数より多い時は、ちがう字を なるべく多く出す（3年9・10月の範囲で45字以上）', () => {
   for (let seed = 1; seed <= 20; seed++) {
     const it = T.make(CHARS, P, 50, seeded(seed));
-    assert.equal(new Set(it.map((x) => x.c)).size, 50, `seed ${seed}`);
-    const asked = new Set(it.map((x) => x.c));
-    const leaks = it.filter((x) => [...strip(x.pre + x.post)].some((ch) => asked.has(ch))).length;
-    assert.ok(leaks <= 8, `seed ${seed}: 前後に ほかの問題の答えが見える問題 ${leaks}`);
+    assert.equal(it.length, 50, `seed ${seed}`);
+    assert.ok(new Set(it.map((x) => x.c)).size >= 45, `seed ${seed}: ${new Set(it.map((x) => x.c)).size}字`);
   }
 });

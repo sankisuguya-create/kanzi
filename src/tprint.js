@@ -16,7 +16,7 @@
   // chars: 範囲の字（並び順どおり）、T: KANZI_TPRINT（{ 字: [[前, よみ, 後, 送りがな], ...] }）、n: 50 か 10、rnd: 0〜1 の乱数、
   // first: 先に出す字（その子が まちがえたことのある字。範囲の字が問題数より多い時に、出しそびれないように）
   // 戻り値: [{ c: 答えの字, pre, rt: 四角のよみ, post, okuri: 送りがな（送りがなの問題だけ） }]。前・後の {字|よみ} はルビ。
-  // 字が足りなければ n より少なくなる（同じ文は2回出さない）
+  // 字が足りなければ n より少なくなる（同じ文は2回出さない。答えが見える組は作らない）
   function make(chars, T, n, rnd, first) {
     rnd = rnd || Math.random;
     chars = Array.from(chars || '').filter(function (c, i, a) { return T[c] && a.indexOf(c) === i; });
@@ -24,15 +24,20 @@
     (first || []).forEach(function (c) { pri[c] = true; });
     function prioritized(list) { return shuffle(list.slice(), rnd).sort(function (a, b) { return (pri[b] ? 1 : 0) - (pri[a] ? 1 : 0); }); } // 同じ組の中は ばらばら
     function cands(c, ok) { return T[c].filter(function (s) { return !!s[3] === ok && !used[key(item(c, s))]; }); }
-    // 文の前後に 範囲の字があると、その字を問う別の問題の答えが見えてしまう（「感□文」と「□想」）。範囲の字が少ない文を選ぶ
-    var inRange = {};
-    chars.forEach(function (c) { inRange[c] = true; });
-    function leak(s) { return Array.from((s[0] + s[2]).replace(/\{[^}]*\}/g, '')).filter(function (ch) { return inRange[ch]; }).length + rnd() * 0.5; }
+    // 答えが見える組は作らない（利用者の指定）: ある問題の文の前後（ルビつきの字も含む）に、別の問題の答えの字を出さない。
+    // asked＝答えにした字、shown＝文の前後に出ている字。文を選ぶたびに両方を見て、組めない文は使わない
+    var asked = {}, shown = {}, covered = {};
+    function ctx(s) { return Array.from((s[0] + s[2]).replace(/\{([^|}]+)\|[^}]+\}/g, '$1')).filter(function (ch) { return /[\u4e00-\u9fff々]/.test(ch); }); }
+    function fits(c, s) { return !shown[c] && ctx(s).every(function (ch) { return !asked[ch] && ch !== c; }); }
     function take(list, c, ok) {
-      var cs = cands(c, ok).sort(function (a, b) { return leak(a) - leak(b); });
-      var it = item(c, cs[0]); used[key(it)] = true; covered[c] = true; list.push(it);
+      var cs = cands(c, ok).filter(function (s) { return fits(c, s); });
+      if (!cs.length) return false;
+      var s = pick(cs, rnd), it = item(c, s);
+      used[key(it)] = true; covered[c] = true; asked[c] = true;
+      ctx(s).forEach(function (ch) { shown[ch] = true; });
+      list.push(it);
+      return true;
     }
-    var covered = {};
     // 送りがなの問題（最後に並べる）
     var okItems = [], nOk = OKURI_COUNT[n] || Math.round(n / 5);
     prioritized(chars).forEach(function (c) { if (okItems.length < nOk && cands(c, true).length) take(okItems, c, true); });
@@ -43,7 +48,7 @@
     order.forEach(function (c) { if (items.length < slots && !items.some(function (x) { return x.c === c; }) && cands(c, false).length) take(items, c, false); });
     var guard = 0;
     while (items.length < slots && guard++ < 1000) {
-      var left = order.filter(function (c) { return cands(c, false).length; });
+      var left = order.filter(function (c) { return cands(c, false).some(function (s) { return fits(c, s); }); });
       if (!left.length) break;
       take(items, pick(left, rnd), false);
     }
