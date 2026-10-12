@@ -591,6 +591,7 @@ svg.tp-mark path { fill: none; stroke: #E0262B; stroke-width: 7; stroke-linecap:
 .tp-block { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .tp-block.open { grid-template-columns: minmax(0, 1fr) minmax(320px, 36%); }
 .tp-strip { min-height: 0; overflow: hidden; background: var(--card); border: 1px solid var(--line); border-radius: 12px; font-family: var(--font-kanji); font-size: clamp(30px, 6.5vh, 46px); -webkit-overflow-scrolling: touch; }
+.tp-strip.scroll { overflow: auto; -webkit-overflow-scrolling: touch; } /* 最小の字でも入らない時だけ */
 .tp-row { display: flex; flex-direction: row-reverse; flex-wrap: nowrap; gap: .5em; padding: .4em .6em; width: max-content; margin-left: auto; align-items: flex-start; }
 .tp-q.big { flex: none; width: 2.8em; padding: .3em .2em; border: 1px solid transparent; } /* 縦書きの列は幅を決めておく（決めないと 横書きの親の幅まで広がる） */
 .tp-q.big.done { border-color: var(--line); }
