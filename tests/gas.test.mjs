@@ -137,7 +137,7 @@ test('保存: 本人の行だけを更新し、meta に えらんだ漢字・終
   const m = JSON.parse(env.api_save(JSON.stringify(p)));
   assert.ok(m.read['暗']);
   const row = env.book['進捗'].find((r) => r[0] === K2);
-  assert.deepEqual(JSON.parse(row[3]), { sel: { 暗: [1, 5] }, done: {}, old: [JSON.parse(row[3]).old[0], 1, 5], bunkai: {} }); // 古い回は合計にまとめる
+  assert.deepEqual(JSON.parse(row[3]), { sel: { 暗: [1, 5] }, done: {}, old: [JSON.parse(row[3]).old[0], 1, 5], bunkai: {}, setsumei: {} }); // 古い回は合計にまとめる
   assert.throws(() => makeEnv(base(), T).api_save('{}'), /児童のアカウントではありません/);
 });
 

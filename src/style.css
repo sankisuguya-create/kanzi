@@ -642,3 +642,46 @@ div.tp-q { cursor: default; }
 .tcell.tok { outline: 2px dashed var(--cat-1); outline-offset: -5px; }
 .tcell.tok::before { content: "送"; position: absolute; left: 1px; top: 1px; padding: 0 2px; font-size: 13px; line-height: 1.2; font-weight: 700; color: #fff; background: var(--solid-on); border-radius: 4px; }
 .tmode .seg button { min-height: 44px; min-width: 0; padding: 0 12px; font-size: 16px; }
+/* ===== せつめい文の くみたて（設計書 §27）。縦書き・1行20字の行はこちらで組む（src/setsumei.js）===== */
+body.sm-screen { height: 100vh; height: 100dvh; overflow: hidden; }
+body.sm-screen #app { height: 100%; display: flex; flex-direction: column; max-width: none; padding: 6px 12px 8px; }
+body.sm-screen .bar { flex: none; margin-bottom: 4px; }
+.sm-step { font-size: 17px; font-weight: 700; color: var(--ink-sub); text-align: right; }
+.sm { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; --sm-fs: clamp(15px, calc((100dvh - 250px) / 23), 26px); }
+.sm-text { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: row-reverse; justify-content: center; align-items: stretch; overflow-x: auto;
+  background: var(--card); border: 2px solid var(--line); border-radius: 14px; padding: 6px 8px; font-size: var(--sm-fs); font-family: var(--font-kanji); }
+.sm-para { display: flex; flex-direction: column; border-radius: 8px; padding: 0 2px; }
+.sm-para[data-part="h"] { background: var(--fill-a); }
+.sm-para[data-part="o"] { background: var(--fill-b); }
+.sm-cols { display: flex; flex-direction: row-reverse; flex: 1 1 auto; }
+.sm-col { display: flex; flex-direction: column; align-items: center; width: 2.05em; }
+.sm-col { padding-bottom: 1em; } /* ぶら下げの1字ぶん */
+.sm-num { flex: none; height: 1.5em; width: 1.5em; margin-bottom: .1em; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-sans); font-size: .8em; font-weight: 700; color: var(--cat-1); border-radius: 50%; }
+.sm-col.numbered .sm-num { border: 2px solid var(--cat-1); background: var(--card); }
+.sm-col.locked .sm-num { color: var(--ink); border-color: var(--ink); }
+.sm-body { writing-mode: vertical-rl; height: 20em; line-height: 1.05; white-space: nowrap; } /* ぶら下げの句読点は行の下にはみ出す（折り返さない） */
+.sm-text.s1 .sm-para { padding: 0; } /* ①では段落の区切りを見た目で出さない */
+.sm-body rt { font-size: .5em; }
+.sm-text.s1 .sm-col { cursor: pointer; border-radius: 6px; }
+.sm-text.s1 .sm-col:active { background: var(--fill-a); }
+.sm-lab { flex: none; min-height: 0; text-align: center; font-family: var(--font-sans); font-size: 17px; font-weight: 700; line-height: 1.6; }
+/* 段落の あいだ（②の切れ目）。①では幅0にして、段落の区切りが見た目で分からないようにする */
+.sm-gap { flex: none; width: 0; padding: 0; margin: 0; border: 0; background: none; position: relative; }
+.sm-text:not(.s1) .sm-gap { width: 34px; }
+.sm-text:not(.s1) .sm-gap::after { content: ""; position: absolute; top: 4px; bottom: 4px; left: 50%; border-left: 2px dashed var(--line); }
+.sm-gap.on::after { border-left: 5px solid var(--cat-2) !important; margin-left: -2px; }
+.sm-gap.on::before { content: "✂"; position: absolute; top: 0; left: 50%; transform: translateX(-50%); font-size: 18px; color: var(--cat-2); }
+.sm-gap.locked { cursor: default; }
+/* ③ 文を押す。選んだ文は 右に太い線（教科書の傍線）＋太字 */
+.sm-text.s3 .sm-ch { cursor: pointer; }
+.sm-ch.sm-on { text-decoration: underline 4px var(--cat-1); text-underline-position: right; text-underline-offset: 3px; color: var(--cat-1); font-weight: 700; }
+.sm-ask { flex: none; margin: 0; text-align: center; min-height: 1.5em; font-size: clamp(16px, 3vh, 21px); font-weight: 700; }
+.sm-ask.err { color: var(--ink-alert); }
+.sm-ask.good { color: var(--cat-1); }
+.sm-tools { flex: none; display: flex; justify-content: center; gap: 16px; }
+.sm-tools .big { width: auto; min-width: 220px; min-height: 56px; margin: 0; }
+.sm-tools .btn-mada { min-height: 56px; padding: 0 20px; font-size: 18px; border-radius: 12px; }
+.sm-tbl { border-collapse: collapse; font-size: 16px; width: 100%; }
+.sm-tbl th, .sm-tbl td { border-bottom: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+.sm-tbl rt { font-size: .5em; }

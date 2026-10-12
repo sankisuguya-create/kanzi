@@ -215,7 +215,7 @@ function parseProgress_(read, write, meta) {
   var p = Sched.newProgress();
   try { p.read = JSON.parse(read || '{}'); } catch (e) {}
   try { p.write = JSON.parse(write || '{}'); } catch (e) {}
-  try { var m = JSON.parse(meta || '{}'); p.sel = m.sel || {}; p.done = m.done || {}; if (m.old) p.old = m.old; if (m.bunkai) p.bunkai = m.bunkai; } catch (e) {} // 旧版の行（D列が日付）は無視
+  try { var m = JSON.parse(meta || '{}'); p.sel = m.sel || {}; p.done = m.done || {}; if (m.old) p.old = m.old; if (m.bunkai) p.bunkai = m.bunkai; if (m.setsumei) p.setsumei = m.setsumei; } catch (e) {} // 旧版の行（D列が日付）は無視
   return Sched.norm(p);
 }
 
@@ -249,7 +249,7 @@ function api_save(json) {
   try {
     var cur = loadProgress_(me.email);
     var m = Sched.compact(Sched.merge(cur.p, incoming), Sched.compactBefore(new Date()));
-    var row = [me.email, JSON.stringify(m.read), JSON.stringify(m.write), JSON.stringify({ sel: m.sel, done: m.done, old: m.old, bunkai: m.bunkai }), new Date()];
+    var row = [me.email, JSON.stringify(m.read), JSON.stringify(m.write), JSON.stringify({ sel: m.sel, done: m.done, old: m.old, bunkai: m.bunkai, setsumei: m.setsumei }), new Date()];
     if (row[1].length >= 50000 || row[2].length >= 50000 || row[3].length >= 50000) throw new Error('進捗が大きすぎます'); // I6
     writeProgress_(progressSheet_(), cur.row, row, m.forest);
     return JSON.stringify(m);
@@ -273,7 +273,7 @@ function api_teacherView(klass) {
   var kids = roster_().filter(function (x) { return x.klass === klass; });
   var rows = {}, sh = progressSheet_(), m = sh.getLastRow() - 1;
   if (m > 0) sh.getRange(2, 1, m, 4).getValues().forEach(function (r) { rows[String(r[0]).toLowerCase()] = r; });
-  var per = {}, perP = {};
+  var per = {}, perP = {}, perS = {};
   var students = kids.map(function (k) {
     var r = rows[k.email], out = { no: k.no, name: k.name || k.email.split('@')[0], last: 0, sessions: 0, items: 0, learned: 0, miss: [] };
     if (!r) return out;
@@ -286,6 +286,15 @@ function api_teacherView(klass) {
       bp[0]++;
       if (be[3] > 0) bp[1]++;
       bp[2] += be[4] || 0; bp[3] += be[5] || 0;
+    }
+    // せつめい文: 文章ごとに [答えた人数, 最後の答えがまちがいの人数, ①まちがい累計, ②まちがい累計, ③まちがい累計]
+    for (var sid in p.setsumei) {
+      var se = p.setsumei[sid];
+      if (!(se[0] > 0)) continue;
+      var sp = perS[sid] || (perS[sid] = [0, 0, 0, 0, 0]);
+      sp[0]++;
+      if (se[3] > 0 && se[3] >= se[2]) sp[1]++;
+      sp[2] += se[4] || 0; sp[3] += se[5] || 0; sp[4] += se[6] || 0;
     }
     [p.read, p.write].forEach(function (t) { for (c in t) { if (t[c][3] > out.last) out.last = t[c][3]; } });
     for (c in p.read) {
@@ -306,7 +315,7 @@ function api_teacherView(klass) {
     return out;
   }).sort(function (a, b) { return (Number(a.no) || 999) - (Number(b.no) || 999); });
   var tests = tests_(klass);
-  return { grades: grades_(klass), pointers: pointers_(klass), tests: tests, test: Sched.activeTest(tests), writeLevel: writeLevel_(klass), gates: gates_(klass), students: students, bunkai: bunkai_(klass), stats: { students: kids.length, perChar: per, perProblem: perP } };
+  return { grades: grades_(klass), pointers: pointers_(klass), tests: tests, test: Sched.activeTest(tests), writeLevel: writeLevel_(klass), gates: gates_(klass), students: students, bunkai: bunkai_(klass), stats: { students: kids.length, perChar: per, perProblem: perP, perText: perS } };
 }
 
 function api_setGrades(klass, list) {

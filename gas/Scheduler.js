@@ -22,12 +22,13 @@
   // done: 最後まで終えた回 { 開始時刻: 問題数 }（全モードの学習集計。途中でやめた回は入らない）
   // old: [境目の時刻, 回数, 問題数] … 境目より前に終えた回の合計（サーバーが compact でまとめる。done が際限なく増えないように）
   // bunkai: ぶんかいの問題ごとの記録 { 問題id: [答えた回数, まちがい回数, 最後に答えた時刻, 最後にまちがえた時刻, 役割まちがい累計, 係り先まちがい累計] }
+  // setsumei: せつめい文の くみたて（§27）の文章ごとの記録 { 文章id: [答えた回数, まちがい回数, 最後に答えた時刻, 最後にまちがえた時刻, ①段落番号まちがい累計, ②切れ目まちがい累計, ③文さがしまちがい累計] }
   function newProgress() {
-    return { v: 2, read: {}, write: {}, sel: {}, done: {}, old: [0, 0, 0], bunkai: {} };
+    return { v: 2, read: {}, write: {}, sel: {}, done: {}, old: [0, 0, 0], bunkai: {}, setsumei: {} };
   }
   function norm(p) {
     p = p || newProgress();
-    p.read = p.read || {}; p.write = p.write || {}; p.sel = p.sel || {}; p.done = p.done || {}; p.bunkai = p.bunkai || {};
+    p.read = p.read || {}; p.write = p.write || {}; p.sel = p.sel || {}; p.done = p.done || {}; p.bunkai = p.bunkai || {}; p.setsumei = p.setsumei || {};
     p.old = Array.isArray(p.old) && p.old.length === 3 ? p.old : [0, 0, 0];
     return p;
   }
@@ -61,6 +62,16 @@
     p.bunkai[pid] = [e[0] + 1, e[1] + (ok ? 0 : 1), now || 0, ok ? e[3] : (now || 0),
       e[4] + (errs && errs.role || 0), e[5] + (errs && errs.link || 0)];
     return { kind: 'bunkai', pid: pid, before: before };
+  }
+
+  // せつめい文の採点。errs = [①, ②, ③] の まちがい数（先生集計用の累計）
+  function answerSetsumei(p, id, ok, errs, now) {
+    p.setsumei = p.setsumei || {};
+    var before = clone(p.setsumei[id]);
+    var e = p.setsumei[id] || [0, 0, 0, 0, 0, 0, 0];
+    errs = errs || [];
+    p.setsumei[id] = [e[0] + 1, e[1] + (ok ? 0 : 1), now || 0, ok ? e[3] : (now || 0), e[4] + (errs[0] || 0), e[5] + (errs[1] || 0), e[6] + (errs[2] || 0)];
+    return { kind: 'setsumei', id: id, before: before };
   }
 
   function answeredToday(tbl, today) {
@@ -107,6 +118,14 @@
     return rest.concat(done).slice(0, BUNKAI_PER_SESSION);
   }
 
+  // せつめい文は1回1文章（利用者の指定）。まだ答えていない文章を並び（易→難）どおりに、全部答えたら最後に答えた時刻の古い順
+  function setsumeiPick(list, p) {
+    var tbl = p.setsumei || {}, rest = [], done = [];
+    for (var i = 0; i < list.length; i++) (tbl[list[i].id] && tbl[list[i].id][0] > 0 ? done : rest).push(list[i]);
+    done.sort(function (a, b) { return (tbl[a.id][2] || 0) - (tbl[b.id][2] || 0); });
+    return rest.concat(done).slice(0, 1);
+  }
+
   // まちがいの多い字（児童個人）: 答えたことがあり、まちがいが1回以上ある字を、累積まちがい率 e[4]/e[2] の高い順に
   // 「まちがいの多い字」は2系統ある（design.md §13）。こちらは児童個人の累積まちがい率。学級の集計は classMissTop
   function missList(p, kind, order) {
@@ -147,7 +166,7 @@
     return n;
   }
   // 新しいカード・モード不明の回は学習集計には残し、森には加算しない。ぶんかいは 'b'（葉はカードと同じ色）
-  function forestMode(kind) { return ({ read: 'r', write: 'w', bunkai: 'b' })[kind] || 'x'; }
+  function forestMode(kind) { return ({ read: 'r', write: 'w', bunkai: 'b', setsumei: 'b' })[kind] || 'x'; }
   // 27本ごとに次の森。速度は森ごとに3/4倍。CAPは1画面分であり成長の上限ではない。
   var FOREST_TREES = 27, FOREST_STEP = 36, FOREST_CAP = FOREST_TREES * FOREST_STEP;
   var FOREST_COLORS = 'prwk';
@@ -267,7 +286,7 @@
   // ---- 児童画面のボタンのオン・オフ（学級ごと。先生がおためし画面で切り替える）
   // 持つのはオフにしたボタンのキーだけ。m.＝メニューのボタン、s.＝「どの字で やる？」の選び方（読む・書く・カードで共通）
   // 先生画面・児童画面・GAS サーバーが同じ一覧を使う（ここが唯一の定義）
-  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 'm.other', 'o.bunkai', 's.test', 's.due', 's.sel', 's.rnd', 's.miss', 't.p50', 't.p10', 't.paper'];
+  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 'm.other', 'o.bunkai', 'o.setsumei', 's.test', 's.due', 's.sel', 's.rnd', 's.miss', 't.p50', 't.p10', 't.paper'];
   // 配列・「,」区切りの文字列のどちらでも受け、知らないキー・重なりを除いて GATE_KEYS の順に並べる
   function normGates(v) {
     var list = Array.isArray(v) ? v.map(String) : String(v || '').split(',');
@@ -363,6 +382,11 @@
       var bx = out.bunkai[pb], by = b.bunkai[pb];
       if (!bx || by[2] > bx[2] || (by[2] === bx[2] && by[0] > bx[0])) out.bunkai[pb] = by.slice();
     }
+    for (var sa in a.setsumei || {}) out.setsumei[sa] = a.setsumei[sa].slice();
+    for (var sb in b.setsumei || {}) {
+      var sx = out.setsumei[sb], sy = b.setsumei[sb];
+      if (!sx || sy[2] > sx[2] || (sy[2] === sx[2] && sy[0] > sx[0])) out.setsumei[sb] = sy.slice();
+    }
     // まとめた合計は境目の新しい方（同じなら回数の多い方）。境目より前の回は、その合計に入っているので捨てる
     var o = b.old[0] > a.old[0] || (b.old[0] === a.old[0] && b.old[1] > a.old[1]) ? b.old : a.old, d;
     out.old = o.slice();
@@ -414,22 +438,26 @@
       var e = p.bunkai[c];
       if (!(Array.isArray(e) && e.length === 6 && e.every(function (x) { return Number.isFinite(x) && x >= 0; }))) bad.push('bunkai ' + c);
     }
+    for (c in p.setsumei || {}) {
+      var se = p.setsumei[c];
+      if (!(Array.isArray(se) && se.length === 7 && se.every(function (x) { return Number.isFinite(x) && x >= 0; }))) bad.push('setsumei ' + c);
+    }
     if (p.v !== undefined && p.v !== 2) bad.push('v');
     return bad;
   }
 
   var api = {
     INTERVALS: INTERVALS, LIMIT: LIMIT, WRITE_UNLOCK_BOX: WRITE_UNLOCK_BOX, MAX_BOX: MAX_BOX,
-    day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite, answerBunkai: answerBunkai,
+    day: day, newProgress: newProgress, norm: norm, answerRead: answerRead, answerWrite: answerWrite, answerBunkai: answerBunkai, answerSetsumei: answerSetsumei,
     dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList, classMissTop: classMissTop,
     FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, forestGrowth: forestGrowth, forestActivity: forestActivity, forestRegionLog: forestRegionLog,
     compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check, checkEntry: checkEntry,
-    normTests: normTests, activeTest: activeTest, GATE_KEYS: GATE_KEYS, normGates: normGates, normBunkai: normBunkai, bunkaiPick: bunkaiPick
+    normTests: normTests, activeTest: activeTest, GATE_KEYS: GATE_KEYS, normGates: normGates, normBunkai: normBunkai, bunkaiPick: bunkaiPick, setsumeiPick: setsumeiPick
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sched = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 // GAS 版ずれ検知の版（tools/build-gas.mjs が埋め込む）
-Sched.VER = "e4c2684";
+Sched.VER = "5c7c382";

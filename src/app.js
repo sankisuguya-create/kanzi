@@ -118,7 +118,7 @@
   //   児童: オフのボタンは押せず、うすく見える（disabled。「選んだ漢字がない」時と同じ見た目）
   //   先生のおためし: ボタンの右上にチップを重ねる（ボタンの外にも中の文字にも場所を取らないので、並びは児童画面と同じ）
   var GATE_LABEL = { 'm.browse': 'ぜんぶ見る', 'm.read': '読む', 'm.write': '書く', 'm.fk': 'カード（漢字→読み）', 'm.fy': 'カード（読み→漢字）',
-    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': 'ぶんかい', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
+    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': 'ぶんかい', 'o.setsumei': 'せつめい文', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
     's.sel': '出す字: 選んだ漢字', 's.rnd': '出す字: ランダム', 's.miss': '出す字: まちがいの多い漢字',
     't.p50': 'れんしゅうプリント50問', 't.p10': 'れんしゅうプリント10問', 't.paper': '紙で練習' };
   var GATE_POLL_MS = 30000;
@@ -747,7 +747,7 @@
     if (s.i >= s.items.length) return sessionDone();
     var c = s.items[s.i];
     s.cur = c;
-    if (s.kind === 'read') readCard(c); else if (s.kind === 'write') writeCard(c); else if (s.kind === 'bunkai') bunkaiCard(c); else flashCard(c, s.kind === 'fk' ? 'k' : 'y');
+    if (s.kind === 'read') readCard(c); else if (s.kind === 'write') writeCard(c); else if (s.kind === 'bunkai') bunkaiCard(c); else if (s.kind === 'setsumei') setsumeiCard(c); else flashCard(c, s.kind === 'fk' ? 'k' : 'y');
   }
   function bar() {
     var s = S.session;
@@ -928,7 +928,8 @@
     clearScreen();
     document.body.classList.add('chooser-screen');
     cleanup.push(function () { document.body.classList.remove('chooser-screen'); });
-    var acts = [{ id: 'bunkai', label: 'ぶんの ぶんかい', sub: 'ぶんを 5つの やくわりに わける' }];
+    var acts = [{ id: 'bunkai', label: 'ぶんの ぶんかい', sub: 'ぶんを 5つの やくわりに わける' },
+      { id: 'setsumei', label: K('せつめい[文|ぶん]の くみたて'), sub: K('はじめ・[中|なか]・おわりに わける') }];
     app.innerHTML =
       '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + K('その[他|た]') + '</span><span></span></header>' +
       K('<main class="chooser"><h2>その[他|た]</h2>') + acts.map(function (a) {
@@ -937,6 +938,7 @@
     on('#back', menu);
     app.querySelectorAll('.chooser .big').forEach(function (b) {
       b.addEventListener('click', function () {
+        if (b.dataset.id === 'setsumei') return startSession('setsumei', Sched.setsumeiPick(KANZI_SETSUMEI, S.p));
         if (b.dataset.id !== 'bunkai') return;
         b.disabled = true;
         // 内蔵の問題集 + 学級の自作問題（取れなければ内蔵だけ）。1回5問
@@ -1353,10 +1355,243 @@
     on('#menu', menu);
   }
 
+  // ================= せつめい文の くみたて（その他画面から入る。設計書 §27）====================
+  // 1回1文章（利用者の指定）。①段落番号 → ②中の切れ目 → ③文さがし（a はじめ → b 中の段落ごと → c いちばん つたえたい こと）。
+  // 各段は「こたえあわせ」で判定。1回目の失敗は まちがいだけ消して正解は残す（ロック）、2回目か「わからない」で答えを出す（ぶんかいと同じ約束）
+  var SM_ASK = {
+    toi: 'はじめで、といかけている[文|ぶん]を おそう',
+    wadai: 'はじめで、[何|なに]について [書|か]くのかを しめしている[文|ぶん]を おそう',
+    kangae: 'はじめで、[書|か]いた[人|ひと]が いちばん つたえたい [考|かんが]えの [文|ぶん]を おそう',
+    kotae: '[中|なか]の [段|だん][落|らく]ごとに、といの こたえに なる[文|ぶん]を 1つずつ おそう',
+    rei: '[中|なか]の [段|だん][落|らく]ごとに、れいの まん[中|なか]に なる[文|ぶん]を 1つずつ おそう',
+    wake: '[中|なか]の [段|だん][落|らく]ごとに、[考|かんが]えの わけを [書|か]いた[文|ぶん]を 1つずつ おそう',
+    c: '[文|ぶん][章|しょう]ぜんたいで いちばん つたえたい ことが [書|か]いてある[文|ぶん]を ぜんぶ おそう'
+  };
+  var SM_PART = { h: 'はじめ', m: '[中|なか]', o: 'おわり' };
+  function setsumeiCard(t) {
+    document.body.classList.add('sm-screen');
+    cleanup.push(function () { document.body.classList.remove('sm-screen'); });
+    var n = t.paras.length, cols = [], firstCol = []; // firstCol[段落] = その段落の始まりの行の番号
+    t.paras.forEach(function (p, pi) {
+      Setsumei.layout(p).forEach(function (c) { if (c.first) firstCol[pi] = cols.length; cols.push({ p: pi, first: c.first, items: c.items }); });
+    });
+    var partOf = function (pi, cut) { return pi < cut[0] ? 'h' : pi < cut[1] ? 'm' : 'o'; }; // pi は0から、cut は段落数
+    var st = {
+      step: 1, sub: 'a', tries: 0, done: false, revealed: false, errs: [0, 0, 0], wrong: false,
+      num: {}, lockNum: {},          // ① 行の番号 → つけた番号
+      cuts: [], lockCut: {},         // ② 選んだ切れ目（段落 g の後ろ = g、1から n-1）
+      pick: [], lockPick: {}         // ③ 選んだ文 'p.s'（1から）
+    };
+    function setsMid() { return st.step >= 2 && st.cuts.length === 2 ? st.cuts.slice().sort(function (a, b) { return a - b; }) : null; }
+
+    app.innerHTML =
+      '<header class="bar"><button class="back" id="back">やめる</button><span class="prog">' + rubyText(t.title) + '</span><span class="sm-step" id="smstep"></span></header>' +
+      '<main class="sm">' +
+      '<div class="sm-text" id="smtext">' + t.paras.map(function (p, pi) {
+        return (pi ? '<button type="button" class="sm-gap" data-g="' + pi + '" aria-label="' + pi + 'と' + (pi + 1) + 'の あいだ" tabindex="-1"></button>' : '') +
+          '<div class="sm-para" data-p="' + pi + '"><div class="sm-cols">' +
+          cols.map(function (c, ci) {
+            if (c.p !== pi) return '';
+            return '<div class="sm-col" data-c="' + ci + '"><span class="sm-num"></span><span class="sm-body">' + (c.first ? '<span class="sm-ind">　</span>' : '') + c.items.map(function (it) {
+              return '<span class="sm-ch" data-s="' + (pi + 1) + '.' + (it.si + 1) + '">' + (it.rt ? '<ruby>' + esc(it.t) + '<rt>' + esc(it.rt) + '</rt></ruby>' : esc(it.t)) + '</span>';
+            }).join('') + '</span></div>';
+          }).join('') + '</div><div class="sm-lab"></div></div>';
+      }).join('') + '</div>' +
+      '<p class="sm-ask" id="smask" aria-live="polite"></p>' +
+      '<div class="sm-tools"><button type="button" class="btn-mada" id="smidk">わからない（こたえを 見る）</button>' +
+      '<button type="button" class="big primary" id="smcheck">こたえあわせ</button></div>' +
+      '</main>';
+    on('#back', quit);
+    var text = $('#smtext'), ask = $('#smask');
+    function say(s, cls) { ask.innerHTML = s; ask.className = 'sm-ask' + (cls ? ' ' + cls : ''); }
+    function askText() {
+      if (st.step === 1) return K('[段|だん][落|らく]の はじまりの [行|ぎょう]を おして、[番|ばん][号|ごう]を つけよう（もう[一|いち][度|ど] おすと [消|き]える）');
+      if (st.step === 2) return K('「[中|なか]」は どこから どこまで？ [段|だん][落|らく]の あいだを 2つ おそう');
+      return K(st.sub === 'a' ? SM_ASK[t.a.k] : st.sub === 'b' ? SM_ASK[t.b.k] : SM_ASK.c);
+    }
+    function subGroups() { return st.sub === 'a' ? t.a.g : st.sub === 'b' ? t.b.g : t.c.g; }
+
+    function paint() {
+      $('#smstep').textContent = st.step === 3 ? '3 ' + K('[文|ぶん]を さがす') + '（' + ({ a: 1, b: 2, c: 3 })[st.sub] + '/3）' : st.step === 1 ? '1 ' + K('[番|ばん][号|ごう]') : '2 ' + K('[切|き]れ[目|め]');
+      text.classList.toggle('s1', st.step === 1);
+      // ① 番号
+      text.querySelectorAll('.sm-col').forEach(function (el) {
+        var ci = +el.dataset.c, v = st.num[ci];
+        var num = el.querySelector('.sm-num');
+        num.textContent = v ? String(v) : '';
+        el.classList.toggle('numbered', !!v);
+        el.classList.toggle('locked', !!st.lockNum[ci]);
+      });
+      // ② 切れ目と部分のラベル
+      var mid = setsMid();
+      text.querySelectorAll('.sm-gap').forEach(function (g) {
+        var on = st.cuts.indexOf(+g.dataset.g) >= 0;
+        g.classList.toggle('on', on); g.classList.toggle('locked', !!st.lockCut[g.dataset.g]);
+        g.tabIndex = st.step === 2 && !st.done ? 0 : -1;
+      });
+      text.querySelectorAll('.sm-para').forEach(function (el) {
+        var pi = +el.dataset.p, part = mid ? partOf(pi, mid) : '';
+        el.dataset.part = part;
+        el.querySelector('.sm-lab').innerHTML = part ? K(SM_PART[part]) : '';
+      });
+      // ③ 選んだ文
+      text.querySelectorAll('.sm-ch').forEach(function (el) {
+        var s = el.dataset.s;
+        el.classList.toggle('sm-on', st.step === 3 && st.pick.indexOf(s) >= 0);
+      });
+      text.classList.toggle('s3', st.step === 3);
+      $('#smcheck').disabled = st.done || (st.step === 2 && st.cuts.length !== 2) ||
+        (st.step === 1 && !Object.keys(st.num).length) || (st.step === 3 && !st.pick.length);
+      $('#smidk').disabled = st.done;
+    }
+
+    // ---- 操作（おすだけ）----
+    text.addEventListener('click', function (ev) {
+      if (st.done || st.wait) return;
+      var gap = ev.target.closest('.sm-gap');
+      if (st.step === 2) {
+        if (!gap) return;
+        var g = +gap.dataset.g, i = st.cuts.indexOf(g);
+        if (st.lockCut[g]) return;
+        if (i >= 0) st.cuts.splice(i, 1);
+        else if (st.cuts.length >= 2) { say(K('[切|き]れ[目|め]は 2つ。[消|け]したい [切|き]れ[目|め]を もう[一|いち][度|ど] おしてね'), 'err'); return; }
+        else st.cuts.push(g);
+        say(askText()); paint(); return;
+      }
+      if (st.step === 1) {
+        var col = ev.target.closest('.sm-col');
+        if (!col) return;
+        var ci = +col.dataset.c;
+        if (st.lockNum[ci]) return;
+        if (st.num[ci]) delete st.num[ci];
+        else {
+          // 押した順に番号。消して空いた番号があれば、いちばん小さい空きから入れる
+          var used = {}, k = 1;
+          for (var c in st.num) used[st.num[c]] = 1;
+          while (used[k]) k++;
+          st.num[ci] = k;
+        }
+        say(askText()); paint(); return;
+      }
+      var ch = ev.target.closest('.sm-ch');
+      if (!ch) return;
+      var s = ch.dataset.s, pi = +s.split('.')[0] - 1, mid = setsMid() || [t.cut[0], t.cut[1]];
+      if (st.lockPick[s]) return;
+      var at = st.pick.indexOf(s);
+      if (at >= 0) { st.pick.splice(at, 1); say(askText()); paint(); return; }
+      if (st.sub === 'a') {
+        if (partOf(pi, t.cut) !== 'h') { say(K('はじめの [中|なか]から えらぼう'), 'err'); return; }
+        st.pick = st.pick.filter(function (x) { return st.lockPick[x]; });
+        if (st.pick.length) return;
+      } else if (st.sub === 'b') {
+        if (partOf(pi, t.cut) !== 'm') { say(K('[中|なか]の [段|だん][落|らく]から えらぼう'), 'err'); return; }
+        // 1つの段落に1つ: 同じ段落の前の選択と入れかえる
+        var locked = st.pick.some(function (x) { return x.split('.')[0] === s.split('.')[0] && st.lockPick[x]; });
+        if (locked) return;
+        st.pick = st.pick.filter(function (x) { return x.split('.')[0] !== s.split('.')[0]; });
+      }
+      st.pick.push(s);
+      say(askText()); paint();
+    });
+    text.addEventListener('keydown', function (ev) { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList.contains('sm-gap')) { ev.preventDefault(); ev.target.click(); } });
+
+    // ---- 判定 ----
+    function judge() {
+      var ok;
+      if (st.step === 1) {
+        // 番号のついた行 = 段落の始まり、かつ 段落の順の番号
+        ok = Object.keys(st.num).length === n && firstCol.every(function (ci, pi) { return st.num[ci] === pi + 1; });
+        if (!ok) firstCol.forEach(function (ci, pi) { if (st.num[ci] === pi + 1) st.lockNum[ci] = true; });
+      } else if (st.step === 2) {
+        ok = st.cuts.indexOf(t.cut[0]) >= 0 && st.cuts.indexOf(t.cut[1]) >= 0;
+        if (!ok) st.cuts.forEach(function (g) { if (g === t.cut[0] || g === t.cut[1]) st.lockCut[g] = true; });
+      } else {
+        var gs = subGroups();
+        ok = Setsumei.matchGroups(gs, st.pick);
+        if (!ok) st.pick.forEach(function (r) { if (gs.some(function (g) { return g.indexOf(r) >= 0; })) st.lockPick[r] = true; });
+      }
+      if (ok) return next(false);
+      st.errs[st.step - 1]++; st.wrong = true;
+      if (++st.tries >= 2) return reveal(false);
+      // まちがいだけ消す
+      if (st.step === 1) { for (var c in st.num) if (!st.lockNum[c]) delete st.num[c]; }
+      else if (st.step === 2) st.cuts = st.cuts.filter(function (g) { return st.lockCut[g]; });
+      else st.pick = st.pick.filter(function (r) { return st.lockPick[r]; });
+      say(K('のこったのは あっているよ。もう[一|いち][度|ど]'), 'err');
+      paint();
+    }
+    function reveal(skipped) {
+      if (skipped) st.skipped = true;
+      st.revealed = true;
+      if (st.step === 1) { st.num = {}; firstCol.forEach(function (ci, pi) { st.num[ci] = pi + 1; st.lockNum[ci] = true; }); }
+      else if (st.step === 2) { st.cuts = [t.cut[0], t.cut[1]]; st.lockCut = {}; st.lockCut[t.cut[0]] = st.lockCut[t.cut[1]] = true; }
+      else { st.pick = subGroups().map(function (g) { return g[0]; }); }
+      next(true);
+    }
+    // 段を進める。答えを見せた時は「つぎへ」を押すまで そのまま見せる
+    function next(shown) {
+      var go = function () {
+        st.wait = false; st.tries = 0;
+        if (st.step === 3) {
+          if (st.sub === 'c') return finish();
+          st.sub = st.sub === 'a' ? 'b' : 'c'; st.pick = []; st.lockPick = {};
+        } else st.step++;
+        say(askText()); paint();
+        $('#smcheck').textContent = 'こたえあわせ';
+      };
+      st.wait = true;
+      paint();
+      $('#smcheck').disabled = false;
+      if (shown) {
+        say(K('こたえを [見|み]よう。[見|み]たら 「つぎへ」'), 'err');
+        $('#smcheck').textContent = 'つぎへ';
+        $('#smcheck').onclick = function () { $('#smcheck').onclick = null; go(); };
+        $('#smcheck').disabled = false; $('#smidk').disabled = true;
+      } else {
+        say('✓ せいかい！', 'good');
+        $('#smcheck').disabled = true;
+        setTimeout(function () { if (document.body.contains(text)) go(); }, 900);
+      }
+    }
+    function finish() {
+      st.done = true;
+      var ok = !st.wrong;
+      S.session.results[t.id] = { ok: ok, errs: st.errs.slice() };
+      if (st.skipped) S.session.skipped[t.id] = true;
+      Sched.answerSetsumei(S.p, t.id, ok, st.errs, nowMs());
+      commit();
+      S.session.i++; nextItem();
+    }
+    $('#smcheck').addEventListener('click', function () { if (!st.done && !st.wait) judge(); });
+    $('#smidk').addEventListener('click', function () { if (!st.done && !st.wait) { st.errs[st.step - 1]++; st.wrong = true; reveal(true); } });
+    say(askText());
+    paint();
+  }
+  function setsumeiDone() {
+    var s = S.session, t = s.items[0], r = s.results[t.id] || { ok: false, errs: [0, 0, 0] };
+    // 1文章 = 3段（番号・切れ目・文さがし）なので 木には3問ぶんとして数える。「わからない」を押した文章は数えない
+    Sched.finishSession(S.p, s.startedAt, s.skipped[t.id] ? 0 : 3, 'setsumei');
+    Platform.save(S.p);
+    flush();
+    var mark = function (e) { return e ? '<span class="er again">× ' + e + K('[回|かい] まちがい') + '</span>' : '<span class="er good">○</span>'; };
+    app.innerHTML =
+      '<main class="done wide"><p class="done-big">おわり！ 「' + rubyText(t.title) + '」</p>' +
+      (s.skipped[t.id] ? '<p class="hint">' + K('「わからない」を おした [文|ぶん][章|しょう]は、[木|き]には [入|はい]らないよ') + '</p>' : '') +
+      '<ul class="endlist">' +
+      '<li>' + K('1 [段|だん][落|らく]の [番|ばん][号|ごう] ') + mark(r.errs[0]) + '</li>' +
+      '<li>' + K('2 [中|なか]の [切|き]れ[目|め] ') + mark(r.errs[1]) + '</li>' +
+      '<li>' + K('3 [文|ぶん]を さがす ') + mark(r.errs[2]) + '</li></ul>' +
+      '<p><button class="big" id="again">' + K('つぎの [文|ぶん][章|しょう]') + '</button></p>' +
+      '<button class="big primary" id="menu">メニューへ</button></main>';
+    on('#menu', menu);
+    on('#again', function () { startSession('setsumei', Sched.setsumeiPick(KANZI_SETSUMEI, S.p)); });
+  }
+
   // 最後まで終えた時: 学習を記録（読む・書くなら木も育つ）し、出た字の一覧とチェックを出す
   function sessionDone() {
     var s = S.session;
     if (s.kind === 'bunkai') return bunkaiDone();
+    if (s.kind === 'setsumei') return setsumeiDone();
     var graded = s.kind === 'read' || s.kind === 'write';
     // 読む・書くの「わからない」以外の問題数が成長対象。カードは集計だけ残す。
     var nSkip = s.items.filter(function (c) { return s.skipped[c]; }).length;
@@ -1550,6 +1785,9 @@
             '<div class="bk-input"><p><input id="bk-new" placeholder="例: ぼくは あした ともだちに 手紙を かく。" maxlength="200"></p>' +
             '<p><button id="bk-edit" type="button">文節に分けて 役割をつける</button> <span id="bkmsg2" aria-live="polite"></span></p></div>' +
             '<div id="bk-editor"></div>') +
+          '</section><section class="tsets"><h2>せつめい文の くみたて（はじめ・中・おわり）</h2>' +
+          '<p class="hint">児童は「その他 → せつめい文の くみたて」で、1回1文章を解きます（全20文章・易→難の順）。「まちがい」は、いま最後の答えがまちがいの児童の数。①番号・②切れ目・③文さがし は まちがえた回数の累計（児童名は出しません）。</p>' +
+          '<div id="sm-texts"></div>' +
           '</section><section class="tsets"><h2>過年度データ</h2><div id="arch"><p class="hint">よみこみ中…</p></div></section>';
         app.querySelectorAll('details.tset').forEach(function (d) { d.addEventListener('toggle', function () { S.open[d.id] = d.open; }); });
         var sel = $('#klass'); if (sel) sel.addEventListener('change', function () { teacher(sel.value); });
@@ -1690,6 +1928,16 @@
             return '<li>' + seg + '<span class="bp">' + x.s + '人中 ' + x.b + '人まちがい（' + Math.round(x.r * 100) + '%）</span>' +
               '<span class="bp2">役割まちがい ' + x.roleErr + '・係り先まちがい ' + x.linkErr + '</span></li>';
           }).join('') + '</ol>' : '<p>まだ データが ありません。</p>');
+        // ---- せつめい文: 文章ごとのまちがい集計（型は先生にだけ見せる）----
+        var perT = st.perText || {};
+        var smRows = KANZI_SETSUMEI.map(function (t) {
+          var v = perT[t.id];
+          return v && v[0] > 0 ? { t: t, s: v[0], b: v[1], e: [v[2], v[3], v[4]], r: v[1] / v[0] } : null;
+        }).filter(Boolean).sort(function (a, b) { return (b.r - a.r) || (b.b - a.b) || (a.t.id < b.t.id ? -1 : 1); });
+        $('#sm-texts').innerHTML = smRows.length ? '<table class="sm-tbl"><thead><tr><th>文章</th><th>型・難しさ</th><th>まちがい</th><th>①番号</th><th>②切れ目</th><th>③文さがし</th></tr></thead><tbody>' +
+          smRows.map(function (x) {
+            return '<tr><td>' + esc(x.t.id) + ' ' + rubyText(x.t.title) + '</td><td>' + esc(x.t.type) + '型・' + esc(x.t.level) + '</td><td>' + x.s + '人中 ' + x.b + '人（' + Math.round(x.r * 100) + '%）</td><td>' + x.e[0] + '</td><td>' + x.e[1] + '</td><td>' + x.e[2] + '</td></tr>';
+          }).join('') + '</tbody></table>' : '<p>まだ データが ありません。</p>';
         // つくる画面: 文 → 空白で文節に分ける → 児童と同じ操作で 役割・係り先をつける → 登録
         var bkMsg = function (t) { $('#bkmsg2').textContent = t; };
         function paintBkList() {
