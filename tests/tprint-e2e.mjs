@@ -31,7 +31,7 @@ const KEY = 'kanzi.tprint.demo.50';
 const state = () => page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KEY);
 await page.goto(URL0);
 // 先生の画面で「送りがなで出す字」の印をつける（写真のテストの㊵〜㊿の字）
-const OKU = '負祭悪注暑寒暗軽明返守';
+const OKU = '負祭悪注暑寒暗軽明返守', OKU3 = '負祭悪注暑寒暗軽返守'; // 明は2年の字なので 印をつけても出さない
 await page.evaluate((chars) => { localStorage.clear(); localStorage.setItem('kanzi.settings', JSON.stringify({ grades: { '3-1': [1, 2, 3] }, tests: { '3-1': { active: 't1', list: [{ id: 't1', label: '9・10月', chars }] } } })); }, CHARS);
 await page.goto(URL0 + '?teacher=1'); await page.waitForSelector('#d-test');
 await page.click('#d-test summary'); await page.click('#tm-okuri');
@@ -49,7 +49,8 @@ await page.click('#tp-50'); await page.waitForSelector('.tp-all .tp-q');
 const items = (await state()).items;
 check(items.length === 50 && items.slice(40).every((x) => x.okuri) && items.slice(0, 40).every((x) => !x.okuri), '① プリント全体: 50問（送りがなは最後の10問）');
 check(items.every((x) => x.c.length === 1 && CHARS.includes(x.c)), '1問で答えるのは範囲の字1字');
-check(items.slice(40).every((x) => OKU.includes(x.c)) && items.slice(0, 40).every((x) => !OKU.includes(x.c)), '送りがなの問題は 印の字だけ、四角の問題は それ以外');
+check(await page.evaluate((cs) => cs.every((c) => KANZI_DATA.kanji[c].g === 3), items.map((x) => x.c)), '問うのは3年の字だけ（範囲にある1・2年の字は出さない）');
+check(items.slice(40).every((x) => OKU3.includes(x.c)) && items.slice(0, 40).every((x) => !OKU.includes(x.c)), '送りがなの問題は 印の字だけ、四角の問題は それ以外');
 check((await page.locator('.tp-all .tp-q').count()) === 50 && (await page.locator('#tp-input').count()) === 0, '① では答える欄を出さない');
 const fits = () => page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1 && document.documentElement.scrollWidth <= innerWidth + 1);
 check(await fits(), '① 1366×630 でページはスクロールなし');
