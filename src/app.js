@@ -1594,15 +1594,48 @@
         var tmode = 'range';
         on('#tm-range', function () { tmode = 'range'; paintTest(); });
         on('#tm-okuri', function () { tmode = 'okuri'; paintTest(); });
+        function pressT(cur, c) {
+          var arr = Array.from(cur.chars), i = arr.indexOf(c), ok = Array.from(cur.okuri || ''), k = ok.indexOf(c);
+          if (tmode === 'okuri') { if (k >= 0) ok.splice(k, 1); else { ok.push(c); if (i < 0) arr.push(c); } }
+          else if (i >= 0) { arr.splice(i, 1); if (k >= 0) ok.splice(k, 1); } else arr.push(c);
+          cur.chars = arr.join(''); cur.okuri = ok.join('');
+        }
+        var dragged = false;
         app.querySelectorAll('.tcell').forEach(function (b) {
           b.addEventListener('click', function () {
+            if (dragged) return; // ドラッグで囲んだ後の click は 数えない
             var cur = curTest(); if (!cur) return;
-            var c = b.dataset.c, arr = Array.from(cur.chars), i = arr.indexOf(c), ok = Array.from(cur.okuri || ''), k = ok.indexOf(c);
-            if (tmode === 'okuri') { if (k >= 0) ok.splice(k, 1); else { ok.push(c); if (i < 0) arr.push(c); } }
-            else if (i >= 0) { arr.splice(i, 1); if (k >= 0) ok.splice(k, 1); } else arr.push(c);
-            cur.chars = arr.join(''); cur.okuri = ok.join('');
-            paintTest(); saveTests();
+            pressT(cur, b.dataset.c); paintTest(); saveTests();
           });
+        });
+        // マウス・ペンでドラッグして囲んだ字は、1字ずつ押したのと同じ（利用者の指定）。指は ふつうにスクロール
+        var tgrid = $('#test-editor .grid');
+        tgrid.addEventListener('pointerdown', function (e) {
+          if (e.pointerType === 'touch' || e.button !== 0) return;
+          var x0 = e.clientX, y0 = e.clientY, box = null;
+          dragged = false;
+          function rect(e2) { return { l: Math.min(x0, e2.clientX), t: Math.min(y0, e2.clientY), r: Math.max(x0, e2.clientX), b: Math.max(y0, e2.clientY) }; }
+          function hits(r) { return Array.from(tgrid.querySelectorAll('.tcell')).filter(function (b) { var q = b.getBoundingClientRect(); return q.left < r.r && q.right > r.l && q.top < r.b && q.bottom > r.t; }); }
+          function move(e2) {
+            if (!box && Math.abs(e2.clientX - x0) + Math.abs(e2.clientY - y0) < 8) return;
+            e2.preventDefault();
+            if (!box) { box = document.createElement('div'); box.className = 'tbox'; document.body.appendChild(box); }
+            var r = rect(e2);
+            box.style.cssText = 'left:' + r.l + 'px;top:' + r.t + 'px;width:' + (r.r - r.l) + 'px;height:' + (r.b - r.t) + 'px';
+            var h = hits(r);
+            tgrid.querySelectorAll('.tcell').forEach(function (b) { b.classList.toggle('thit', h.indexOf(b) >= 0); });
+          }
+          function up(e2) {
+            document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up);
+            if (!box) return;
+            box.remove(); dragged = true; setTimeout(function () { dragged = false; }, 0);
+            tgrid.querySelectorAll('.thit').forEach(function (b) { b.classList.remove('thit'); });
+            var cur = curTest(), h = e2.type === 'pointerup' ? hits(rect(e2)) : [];
+            if (!cur || !h.length) return;
+            h.forEach(function (b) { pressT(cur, b.dataset.c); });
+            paintTest(); saveTests();
+          }
+          document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
         });
         $('#test-label').addEventListener('change', function () { var cur = curTest(); if (cur) { cur.label = $('#test-label').value.trim().slice(0, 40); } paintTest(); saveTests(); });
         on('#test-clear', function () { var cur = curTest(); if (cur) { cur.chars = ''; cur.okuri = ''; } paintTest(); saveTests(); });
