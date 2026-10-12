@@ -124,6 +124,14 @@ check((await state()).cur === 13 && (await page.locator('.tp-row .tp-q.done').co
 await page.click('#tp-nextb'); await page.click('#tp-nextb'); await page.click('#tp-nextb');
 check(await page.evaluate(() => [...document.querySelectorAll('.tp-row .tp-q')].map((q) => +q.dataset.i).join()) === '40,41,42,43,44,45,46,47,48,49' && await page.locator('#tp-nextb[disabled]').count() === 1, '② 次の10問で 41〜50（最後は押せない）');
 { const o = await oneRow(); check(o.tops === 1 && o.inside && o.sw <= o.cw + 1, '② 送りがなの10問も 横一段で はみ出さない'); }
+// とても せまい画面でも 1段のまま（入らなければ 横スクロールになり、いまの問題が見える）
+{
+  await page.setViewportSize({ width: 360, height: 630 }); await page.waitForTimeout(300);
+  const o = await page.evaluate(() => { const s = document.getElementById('tp-strip'), qs = [...s.querySelectorAll('.tp-q')], b = s.getBoundingClientRect(), c = s.querySelector('.tp-q.cur') || qs[0], r = c.getBoundingClientRect();
+    return { tops: new Set(qs.map((q) => Math.round(q.getBoundingClientRect().top))).size, ov: getComputedStyle(s).overflowX, vis: r.left >= b.left - 1 && r.right <= b.right + 1 }; });
+  check(o.tops === 1 && o.ov === 'auto' && o.vis, `② せまい画面でも1段・横スクロール・いまの問題が見える（${JSON.stringify(o)}）`);
+  await page.setViewportSize({ width: 1366, height: 630 }); await page.waitForTimeout(300);
+}
 await page.click('.tp-row .tp-q[data-i="40"]'); await write(true); await page.fill('#tp-okuri', ''); await page.type('#tp-okuri', items[40].okuri);
 await page.click('.tp-row .tp-q[data-i="41"]'); await write(true); await page.type('#tp-okuri', items[41].okuri + 'a');
 await shot('tprint-3-okuri');
