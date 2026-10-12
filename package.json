@@ -15,7 +15,8 @@
     "e2e:forest": "node tests/forest-e2e.mjs",
     "e2e:test-overview": "node tests/test-overview-e2e.mjs",
     "e2e:gates": "node tests/gates-e2e.mjs",
-    "e2e:tprint": "node tests/tprint-e2e.mjs"
+    "e2e:tprint": "node tests/tprint-e2e.mjs",
+    "e2e:setsumei": "node tests/setsumei-e2e.mjs"
   },
   "devDependencies": {
     "kanjidic2-json": "^0.1.0",

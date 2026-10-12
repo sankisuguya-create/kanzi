@@ -120,7 +120,13 @@
       var n = Math.max(4, 27 - pi - Math.round(rnd() * 6));
       perProblem[p.id] = [n, Math.min(n, Math.round(n * (0.1 + pi * 0.04 + rnd() * 0.3))), Math.round(rnd() * 4 + pi), Math.round(rnd() * 4 + pi * 1.5)];
     });
-    return { students: 30, perChar: out, perProblem: perProblem };
+    // せつめい文の文章ごとの集計 { id: [答えた人数, 最後がまちがいの人数, ①, ②, ③ のまちがい累計] }
+    var perText = {}, texts = typeof KANZI_SETSUMEI !== 'undefined' ? KANZI_SETSUMEI : [];
+    texts.forEach(function (t, ti) {
+      var n = Math.max(3, 26 - ti - Math.round(rnd() * 5));
+      perText[t.id] = [n, Math.min(n, Math.round(n * (0.1 + ti * 0.03 + rnd() * 0.25))), Math.round(rnd() * 3), Math.round(rnd() * 6 + ti * 0.5), Math.round(rnd() * 8 + ti)];
+    });
+    return { students: 30, perChar: out, perProblem: perProblem, perText: perText };
   }
   function demoStudents() {
     var seed = 11, out = [], now = Date.now(), chars = KANZI_DATA.grades[3].order;
