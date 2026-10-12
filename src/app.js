@@ -415,6 +415,10 @@
         if (s >= 0.995) break;
         f = Math.max(12, Math.floor(f * s * 10) / 10); strip.style.fontSize = f + 'px';
       }
+      // 小さくしきっても入らない時だけ スクロールを許す（段は増やさない）。いまの問題が見えるように 自動で動かす
+      var over = row.scrollWidth > strip.clientWidth + 1 || row.scrollHeight > strip.clientHeight + 1;
+      strip.classList.toggle('scroll', over);
+      if (over) { var q = strip.querySelector('.tp-q[data-i="' + st.cur + '"]'); if (q) q.scrollIntoView({ block: 'nearest', inline: 'center' }); else strip.scrollLeft = strip.scrollWidth; }
     }
     // 押した問題を目立たせ、見える位置までスクロールする。書いた字を四角に写す
     function paintStrip() {
