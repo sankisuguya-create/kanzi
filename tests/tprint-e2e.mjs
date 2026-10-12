@@ -87,8 +87,20 @@ check((await page.locator('.tp-all .tp-q.done').count()) === 4 && JSON.stringify
 // 丸つけ
 await page.click('#tp-grade');
 check((await page.textContent('#tp-prog')).includes('書いていない'), '書いていない問題があると、1回目は案内だけ');
-await page.click('#tp-grade'); await page.waitForSelector('.tp-result');
+await page.click('#tp-grade');
+// 1問目から順に ○× がつき、最後にポップアップ
+await page.waitForFunction(() => document.querySelectorAll('.tp-paper .tp-mark').length >= 5);
+const mid = await page.evaluate(() => [...document.querySelectorAll('.tp-paper .tp-q')].map((q) => !!q.querySelector('.tp-mark')));
+const k = mid.indexOf(false);
+check(k > 0 && mid.slice(0, k).every(Boolean) && mid.slice(k).every((x) => !x) && (await page.textContent('#tp-prog')).includes('丸つけ中'), `丸つけ: 1問目から順に ○×（とちゅう ${k}問まで）`);
+await page.waitForSelector('.tp-pop', { timeout: 15000 });
 const r = (await state()).result;
+check((await page.textContent('.tp-pop-score')).includes(String(r.score)) && (await page.textContent('.tp-pop-wrong')) === r.wrong.join(''), 'ポップアップに 大きく点数と まちがえた字');
+await shot('tprint-4-popup');
+await page.click('#tp-pop-sel');
+check(await page.evaluate((cs) => cs.every((c) => Sched.isSel(KanziState.p, c)), r.wrong), 'ポップアップから まちがえた字を 選んだ漢字に入れられる');
+await page.click('#tp-pop-close');
+check(await page.locator('.tp-pop').count() === 0 && await page.locator('.tp-result').count() === 1, 'とじると プリントの上に 点数が残る');
 check(r.items[12].ok && !r.items[13].ok && r.items[40].ok && !r.items[41].ok, '丸つけ: 正しく書いた問題は○、1画だけ・送りがなちがいは×');
 check(r.score === 4, `点数（2問正解 → ${r.score}点）`);
 check(r.wrong.includes(items[13].c) && r.wrong.includes(items[41].c), `まちがえた字（${r.wrong.slice(0, 6).join('')}…）`);
@@ -96,12 +108,21 @@ check((await page.locator('.tp-all .tp-q .tp-mark').count()) === 50, '① 全部
 check(await page.evaluate((c) => (KanziState.p.write[c] || [])[2] >= 1, items[12].c), '書いた字は「書く」の記録に入る');
 await page.click('.tp-all .tp-q[data-i="13"]'); await page.waitForSelector('#tp-input h2');
 check((await page.textContent('#tp-input h2')).includes('答えは') && await page.locator('.tp-correct .tp-ans').count() === 1, '×の問題を押すと 答えと書き順');
-await page.click('#tp-sel');
-check(await page.evaluate((cs) => cs.every((c) => Sched.isSel(KanziState.p, c)), r.wrong), 'まちがえた字を 選んだ漢字に入れられる');
-await shot('tprint-4-graded');
+await shot('tprint-5-graded');
 // 10問版
 await page.click('#back'); await page.click('#tp-10'); await page.waitForSelector('.tp-all .tp-q');
 const it10 = await page.evaluate(() => JSON.parse(localStorage.getItem('kanzi.tprint.demo.10')).items);
 check(it10.length === 10 && it10.slice(8).every((x) => x.okuri), '10問版（送りがなは最後の2問）');
+// 紙で練習（3・4年の子だけ）
+await page.click('#back'); await page.click('#tp-paper-go'); await page.waitForSelector('.tp-paper .tp-q');
+check(await page.locator('.tp-paper .tp-q').count() === 50 && await page.locator('.tp-akanji').count() === 0, '紙で練習: 50問、はじめは答えを出さない');
+await page.click('#tpp-show');
+const ps = await page.evaluate(() => JSON.parse(localStorage.getItem('kanzi.tpaper.demo')).items);
+check(await page.locator('.tp-akanji').count() === 50 && (await page.locator('.tp-akanji').first().textContent()) === ps[0].c && (await page.locator('.tp-aokuri').last().textContent()) === ps[49].okuri, '紙で練習: 答えを見る で 四角に答えの字と送りがな');
+check(await fits(), '紙で練習: ページはスクロールなし');
+await shot('tprint-6-paper');
+await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('kanzi.settings')); s.grades['3-1'] = [5]; localStorage.setItem('kanzi.settings', JSON.stringify(s)); });
+await page.goto(URL0); await page.waitForSelector('#go-test'); await page.click('#go-test'); await page.waitForSelector('#tp-50');
+check(await page.locator('#tp-paper-go').count() === 0, '紙で練習は 5年の子には出さない（まずは3・4年）');
 check(errors.length === 0, 'エラーなし' + (errors.length ? ': ' + errors.join(' / ') : ''));
 await browser.close(); server.close();

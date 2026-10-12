@@ -614,3 +614,21 @@ body.tp-screen .bar button { min-height: 48px; min-width: 0; padding: 0 12px; fo
 .tp-ans .cross { stroke: #9AA0A6; stroke-width: .7; stroke-dasharray: 2.2 2.2; }
 .tp-ans path { fill: none; stroke: #111; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }
 @media (max-width: 760px) { .tp-block.open { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } }
+/* 丸つけの ○× を順につける（.pop）・最後のポップアップ */
+.tp-mark.pop { animation: tp-pop .25s ease-out; }
+@keyframes tp-pop { from { transform: scale(2.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .tp-mark.pop { animation: none; } }
+.tp-pop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .45); }
+.tp-pop-box { background: var(--card); border-radius: 20px; padding: 18px 28px; min-width: min(520px, 92vw); max-width: 92vw; max-height: 92vh; overflow: auto; text-align: center; box-shadow: 0 8px 30px rgba(0, 0, 0, .35); }
+.tp-pop-box p { margin: 6px 0; }
+.tp-pop-score { font-size: 96px; font-weight: 700; line-height: 1.1; color: var(--cat-1); }
+.tp-pop-score small { font-size: 36px; margin-left: 6px; }
+.tp-pop-sub { font-size: 22px; color: var(--ink-sub); }
+.tp-pop-h { font-size: 22px; font-weight: 700; }
+.tp-pop-wrong { font-family: var(--font-kanji); font-size: 54px; letter-spacing: .15em; color: var(--ink-alert); }
+.tp-pop-box button { min-height: 52px; padding: 0 18px; font-size: 19px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); }
+.tp-pop-box button.primary { background: var(--solid-on); border-color: var(--solid-on); color: #fff; font-weight: 700; min-width: 180px; }
+/* 紙で練習: 答えの字（赤ではなく青の太字。色だけに頼らず 四角の中に字が出ることで分かる） */
+.tp-akanji { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--cat-1); font-weight: 700; }
+.tp-aokuri { color: var(--cat-1); font-weight: 700; }
+div.tp-q { cursor: default; }
