@@ -41,6 +41,29 @@ await page.click('#tm-okuri'); await page.click('.tcell[data-c="明"]');
 await page.waitForFunction(() => document.getElementById('test-msg').textContent.includes('保存'));
 await page.waitForTimeout(300);
 const savedOk = await page.evaluate(() => JSON.parse(localStorage.getItem('kanzi.settings')).tests['3-1'].list[0].okuri);
+// 保存の返事が遅い時に 続けて押しても、先の返事で 後の変更が もどらない（字が消えたり ふっかつしたりした）
+await page.click('#tm-range');
+await page.evaluate(() => { const f = Platform.setTests; let n = 0; window.__slow = () => (Platform.setTests = f); Platform.setTests = (k, t0) => { const t = JSON.parse(JSON.stringify(t0)), d = [600, 400, 100][n++] || 0; return new Promise((r) => setTimeout(r, d)).then(() => f(k, t)); }; });
+const before = await page.evaluate(() => JSON.parse(localStorage.getItem('kanzi.settings')).tests['3-1'].list[0].chars);
+for (const c of '理時') await page.click(`.tcell[data-c="${c}"]`);
+await page.click('.tcell[data-c="理"]');
+await page.waitForTimeout(2000);
+const after = await page.evaluate(() => ({ s: JSON.parse(localStorage.getItem('kanzi.settings')).tests['3-1'].list[0].chars, on: [...document.querySelectorAll('.tcell.tsel')].map((b) => b.dataset.c).join('') }));
+check(after.s === before + '時' && after.on.includes('時') && !after.on.includes('理'), '続けて押しても 範囲が もどらない（保存の返事が遅くても）');
+await page.click('.tcell[data-c="時"]'); await page.waitForTimeout(1200); await page.evaluate(() => window.__slow());
+// マウスでドラッグして囲んだ字は 1字ずつ押したのと同じ（利用者の指定）
+{
+  const cs = await page.evaluate(() => [...document.querySelectorAll('#test-editor .grid .tcell')].slice(0, 3).map((b) => b.dataset.c));
+  const was = await page.evaluate((cs) => cs.map((c) => document.querySelector(`.tcell[data-c="${c}"]`).classList.contains('tsel')), cs);
+  await page.locator(`.tcell[data-c="${cs[0]}"]`).scrollIntoViewIfNeeded();
+  const a = await page.locator(`.tcell[data-c="${cs[0]}"]`).boundingBox(), z = await page.locator(`.tcell[data-c="${cs[2]}"]`).boundingBox();
+  await page.mouse.move(a.x + 5, a.y + 5); await page.mouse.down(); await page.mouse.move(z.x + 10, z.y + 10, { steps: 5 }); await page.mouse.up();
+  await page.waitForTimeout(500);
+  const now = await page.evaluate((cs) => cs.map((c) => document.querySelector(`.tcell[data-c="${c}"]`).classList.contains('tsel')), cs);
+  check(now.every((v, j) => v === !was[j]), `ドラッグで囲んだ3字を まとめて押した扱い（${cs.join('')}）`);
+  await page.mouse.move(a.x + 5, a.y + 5); await page.mouse.down(); await page.mouse.move(z.x + 10, z.y + 10, { steps: 5 }); await page.mouse.up();
+  await page.waitForTimeout(500);
+}
 check([...savedOk].sort().join('') === [...OKU].sort().join(''), `先生: 送りがなで出す字に印（${savedOk}）`);
 await shot('tprint-0-teacher-okuri');
 await page.goto(URL0); await page.waitForSelector('#go-test');
