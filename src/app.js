@@ -323,9 +323,18 @@
     cleanup.push(function () { document.body.classList.remove('tp-screen'); });
 
     // 問題1つ（縦書き）。四角には書いた字を小さく写す
-    function boxHtml(i) {
+    // 丸つけの印: 赤ペンで 四角の上に書いたように かぶせる（正解は ○、まちがいは ✓。利用者の指定）
+    function markSvg(ok, pop) {
+      return '<svg class="tp-mark ' + (ok ? 'ok' : 'ng') + (pop ? ' pop' : '') + '" viewBox="0 0 100 100" aria-label="' + (ok ? 'せいかい' : 'まちがい') + '">' +
+        (ok ? '<path d="M52 8 C22 6 6 30 9 55 C12 82 40 95 64 89 C88 82 96 56 89 33 C83 15 66 6 46 10"/>' : '<path d="M14 52 L40 82 L92 12"/>') + '</svg>';
+    }
+    function boxInner(i) {
       var a = st.ans[i], r = res(i);
-      return '<span class="tp-box' + (r ? (r.ok ? ' ok' : ' ng') : '') + '">' + (a && a.s.length ? Ink.strokesSvg(a.s, 'tp-mini') : '') + '</span>';
+      return (a && a.s.length ? Ink.strokesSvg(a.s, 'tp-mini') : '') + (r ? markSvg(r.ok) : '');
+    }
+    function boxHtml(i) {
+      var r = res(i);
+      return '<span class="tp-box' + (r ? (r.ok ? ' ok' : ' ng') : '') + '">' + boxInner(i) + '</span>';
     }
     function qHtml(i, cls) {
       var it = items[i], r = res(i), a = st.ans[i];
@@ -334,8 +343,7 @@
           '<span class="tp-paren">' + boxHtml(i) + '<span class="tp-okuri">' + esc(a && a.o || '') + '</span></span>'
         : tpRuby(it.pre) + '<ruby class="tp-target">' + boxHtml(i) + '<rt>' + esc(it.rt) + '</rt></ruby>' + tpRuby(it.post);
       return '<button class="tp-q ' + (cls || '') + (it.okuri ? ' tp-oq' : '') + (i === st.cur ? ' cur' : '') + (answered(i) ? ' done' : '') + '" data-i="' + i + '">' +
-        '<span class="tp-no">' + circled(i + 1) + '</span><span class="tp-text">' + body + '</span>' +
-        (r ? '<span class="tp-mark ' + (r.ok ? 'ok' : 'ng') + '">' + (r.ok ? '○' : '×') + '</span>' : '') + '</button>';
+        '<span class="tp-no">' + circled(i + 1) + '</span><span class="tp-text">' + body + '</span></button>';
     }
     function header(nav) {
       var done = items.filter(function (_, i) { return answered(i); }).length;
@@ -391,10 +399,22 @@
       app.querySelectorAll('.tp-row .tp-q').forEach(function (q) {
         q.addEventListener('click', function () { st.cur = +q.dataset.i; st.open = true; save(); paintStrip(); paintInput(); });
       });
-      var strip = $('#tp-strip');
-      strip.scrollLeft = strip.scrollWidth; // 縦書きのプリントは右から読むので、右端から見せる
+      fitRow();
+      window.addEventListener('resize', fitRow); cleanup.push(function () { window.removeEventListener('resize', fitRow); });
       if (st.open) paintInput();
       paintStrip();
+    }
+    // 10問は かならず横一段（利用者の指定。折り返し・横スクロールなし）。入らなければ 字を小さくする
+    function fitRow() {
+      var strip = $('#tp-strip'), row = strip && strip.querySelector('.tp-row');
+      if (!row) return;
+      strip.style.fontSize = '';
+      var f = parseFloat(getComputedStyle(strip).fontSize);
+      for (var k = 0; k < 3; k++) {
+        var s = Math.min(strip.clientWidth / row.scrollWidth, strip.clientHeight / row.scrollHeight, 1);
+        if (s >= 0.995) break;
+        f = Math.max(12, Math.floor(f * s * 10) / 10); strip.style.fontSize = f + 'px';
+      }
     }
     // 押した問題を目立たせ、見える位置までスクロールする。書いた字を四角に写す
     function paintStrip() {
@@ -403,11 +423,11 @@
         q.classList.toggle('cur', i === st.cur && st.open);
         q.classList.toggle('done', answered(i));
         var box = q.querySelector('.tp-box'), a = st.ans[i];
-        if (box) box.innerHTML = a && a.s.length ? Ink.strokesSvg(a.s, 'tp-mini') : '';
+        if (box) box.innerHTML = boxInner(i);
         var ok = q.querySelector('.tp-okuri'); if (ok) ok.textContent = a && a.o || '';
         if (i === st.cur && st.open) q.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       });
-      var main = $('.tp-block'); if (main) main.classList.toggle('open', !!st.open);
+      var main = $('.tp-block'); if (main && main.classList.contains('open') !== !!st.open) { main.classList.toggle('open', !!st.open); fitRow(); }
       var done = items.filter(function (_, i) { return answered(i); }).length;
       if (!st.result) $('#tp-prog').textContent = K('れんしゅうプリント ') + done + ' / ' + items.length;
     }
@@ -418,7 +438,7 @@
         ? '<p class="tp-iq">' + tpRuby(it.pre) + '<span class="tp-iyomi">' + esc(it.rt + it.okuri) + '</span>' + tpRuby(it.post) + '</p><p class="hint">' + K('―の ところを [漢|かん][字|じ]と おくりがなで [書|か]こう') + '</p>'
         : '<p class="tp-iq">' + tpRuby(it.pre) + '<ruby><span class="tp-ibox">□</span><rt>' + esc(it.rt) + '</rt></ruby>' + tpRuby(it.post) + '</p>';
       var from = st.block * TP_BLOCK, to = Math.min(items.length, from + TP_BLOCK);
-      box.innerHTML = '<h2>' + circled(i + 1) + (r ? ' <span class="tp-mark ' + (r.ok ? 'ok' : 'ng') + '">' + (r.ok ? K('○ [正|せい][解|かい]') : '× ' + K('[答|こた]えは ') + esc(it.c + it.okuri)) + '</span>' : '') +
+      box.innerHTML = '<h2>' + circled(i + 1) + (r ? ' <span class="tp-mark ' + (r.ok ? 'ok' : 'ng') + '">' + (r.ok ? K('○ [正|せい][解|かい]') : '✓ ' + K('[答|こた]えは ') + esc(it.c + it.okuri)) + '</span>' : '') +
         '<button class="tp-close" id="tp-close" aria-label="とじる">×</button></h2>' + q +
         '<div class="tp-pads"><div class="tp-cell"><div class="tp-padbox" id="tp-pad"></div>' +
         (r ? '' : '<p class="tp-tools"><button id="tp-undo">' + K('1[画|かく] もどす') + '</button><button id="tp-clear">' + K('けす') + '</button></p>') + '</div>' +
@@ -488,8 +508,7 @@
         revealUpTo++;
         var q = app.querySelector('.tp-paper .tp-q[data-i="' + revealUpTo + '"]'), r = res(revealUpTo);
         if (q && r) {
-          var box = q.querySelector('.tp-box'); if (box) box.classList.add(r.ok ? 'ok' : 'ng');
-          q.insertAdjacentHTML('beforeend', '<span class="tp-mark pop ' + (r.ok ? 'ok' : 'ng') + '">' + (r.ok ? '○' : '×') + '</span>');
+          var box = q.querySelector('.tp-box'); if (box) { box.classList.add(r.ok ? 'ok' : 'ng'); box.insertAdjacentHTML('beforeend', markSvg(r.ok, true)); }
           q.scrollIntoView({ block: 'nearest', inline: 'nearest' });
         }
         timer = setTimeout(next, step);

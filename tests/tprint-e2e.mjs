@@ -1,5 +1,5 @@
 // れんしゅうプリント（npm run e2e:tprint）。Chromium が必要: CHROMIUM=/path/to/chrome
-// テストの範囲 → ① プリント全体 → ② 10問（横スクロール）→ ③ 1字を手書き・送りがな → 丸つけ（点数・○×・まちがえた字）→ 書きかけの保存・画面に収まる
+// テストの範囲 → ① プリント全体 → ② 10問（横一段）→ ③ 1字を手書き・送りがな → 丸つけ（点数・○×・まちがえた字）→ 書きかけの保存・画面に収まる
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -93,8 +93,10 @@ await shot('tprint-1-all');
 await page.click('.tp-all .tp-q[data-i="12"]'); await page.waitForSelector('.tp-row');
 const ids = await page.evaluate(() => [...document.querySelectorAll('.tp-row .tp-q')].map((q) => +q.dataset.i));
 check(JSON.stringify(ids) === JSON.stringify([10, 11, 12, 13, 14, 15, 16, 17, 18, 19]), '② 押した問題を含む10問（11〜20）');
-const strip = await page.evaluate(() => { const s = document.getElementById('tp-strip'); return { sw: s.scrollWidth, cw: s.clientWidth }; });
-check(strip.sw > strip.cw, `② 横一列で 画面より広い（横スクロール ${strip.sw} > ${strip.cw}）`);
+// 10問は かならず横一段（折り返さない・はみ出さない。字は小さくしてよい）
+const oneRow = () => page.evaluate(() => { const s = document.getElementById('tp-strip'), b = s.getBoundingClientRect(), qs = [...s.querySelectorAll('.tp-q')].map((q) => q.getBoundingClientRect());
+  return { tops: new Set(qs.map((q) => Math.round(q.top))).size, inside: qs.every((q) => q.left >= b.left - 1 && q.right <= b.right + 1 && q.bottom <= b.bottom + 1), sw: s.scrollWidth, cw: s.clientWidth }; });
+for (const [tag, o] of [['答える欄あり', await oneRow()]]) check(o.tops === 1 && o.inside && o.sw <= o.cw + 1, `② 10問は横一段で はみ出さない（${tag}）`);
 check(await page.locator('#tp-input:not([hidden])').count() === 1 && (await page.textContent('#tp-input h2')).includes('⑬'), '③ ①で押した問題の答える欄が開く');
 check(await page.locator('#tp-input .tp-padbox').count() === 1, '③ 手書きのマスは1つ（1字）');
 check(await fits(), '②③ ページはスクロールなし');
@@ -121,6 +123,7 @@ check((await state()).cur === 13 && (await page.locator('.tp-row .tp-q.done').co
 // 次の10問 → 送りがなの問題まで
 await page.click('#tp-nextb'); await page.click('#tp-nextb'); await page.click('#tp-nextb');
 check(await page.evaluate(() => [...document.querySelectorAll('.tp-row .tp-q')].map((q) => +q.dataset.i).join()) === '40,41,42,43,44,45,46,47,48,49' && await page.locator('#tp-nextb[disabled]').count() === 1, '② 次の10問で 41〜50（最後は押せない）');
+{ const o = await oneRow(); check(o.tops === 1 && o.inside && o.sw <= o.cw + 1, '② 送りがなの10問も 横一段で はみ出さない'); }
 await page.click('.tp-row .tp-q[data-i="40"]'); await write(true); await page.fill('#tp-okuri', ''); await page.type('#tp-okuri', items[40].okuri);
 await page.click('.tp-row .tp-q[data-i="41"]'); await write(true); await page.type('#tp-okuri', items[41].okuri + 'a');
 await shot('tprint-3-okuri');
@@ -151,7 +154,9 @@ check(await page.locator('.tp-pop').count() === 0 && await page.locator('.tp-res
 check(r.items[12].ok && !r.items[13].ok && r.items[40].ok && !r.items[41].ok, '丸つけ: 正しく書いた問題は○、1画だけ・送りがなちがいは×');
 check(r.score === 4, `点数（2問正解 → ${r.score}点）`);
 check(r.wrong.includes(items[13].c) && r.wrong.includes(items[41].c), `まちがえた字（${r.wrong.slice(0, 6).join('')}…）`);
-check((await page.locator('.tp-all .tp-q .tp-mark').count()) === 50, '① 全部の問題に ○×');
+check((await page.locator('.tp-all .tp-q .tp-mark').count()) === 50, '① 全部の問題に ○✓');
+check(await page.evaluate(() => [...document.querySelectorAll('.tp-all .tp-q')].every((q) => { const m = q.querySelector('.tp-box > svg.tp-mark'); if (!m) return false; const a = m.getBoundingClientRect(), b = q.querySelector('.tp-box').getBoundingClientRect(); return a.left <= b.left && a.right >= b.right && a.top <= b.top && a.bottom >= b.bottom; })), '○✓は 四角に かぶさる');
+check(await page.evaluate(() => document.querySelectorAll('.tp-all svg.tp-mark.ng path')[0]?.getAttribute('d').startsWith('M14 52')), 'まちがいの印は ✓');
 check(await page.evaluate((c) => (KanziState.p.write[c] || [])[2] >= 1, items[12].c), '書いた字は「書く」の記録に入る');
 await page.click('.tp-all .tp-q[data-i="13"]'); await page.waitForSelector('#tp-input h2');
 check((await page.textContent('#tp-input h2')).includes('答えは') && await page.locator('.tp-correct .tp-ans').count() === 1, '×の問題を押すと 答えと書き順');
