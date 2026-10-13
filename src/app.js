@@ -118,7 +118,7 @@
   //   児童: オフのボタンは押せず、うすく見える（disabled。「選んだ漢字がない」時と同じ見た目）
   //   先生のおためし: ボタンの右上にチップを重ねる（ボタンの外にも中の文字にも場所を取らないので、並びは児童画面と同じ）
   var GATE_LABEL = { 'm.browse': 'ぜんぶ見る', 'm.read': '読む', 'm.write': '書く', 'm.fk': 'カード（漢字→読み）', 'm.fy': 'カード（読み→漢字）',
-    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': 'ぶんかい', 'o.setsumei': 'せつめい文', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
+    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': '一文の分解', 'o.setsumei': '説明文の分解', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
     's.sel': '出す字: 選んだ漢字', 's.rnd': '出す字: ランダム', 's.miss': '出す字: まちがいの多い漢字',
     't.p50': 'れんしゅうプリント50問', 't.p10': 'れんしゅうプリント10問', 't.paper': '紙で練習' };
   var GATE_POLL_MS = 30000;
@@ -928,8 +928,8 @@
     clearScreen();
     document.body.classList.add('chooser-screen');
     cleanup.push(function () { document.body.classList.remove('chooser-screen'); });
-    var acts = [{ id: 'bunkai', label: 'ぶんの ぶんかい', sub: 'ぶんを 5つの やくわりに わける' },
-      { id: 'setsumei', label: K('せつめい[文|ぶん]の くみたて'), sub: K('はじめ・[中|なか]・おわりに わける') }];
+    var acts = [{ id: 'bunkai', label: K('[一|いち][文|ぶん]の [分|ぶん][解|かい]'), sub: 'ぶんを 5つの やくわりに わける' },
+      { id: 'setsumei', label: K('[説|せつ][明|めい][文|ぶん]の [分|ぶん][解|かい]'), sub: K('はじめ・[中|なか]・おわりに わける') }];
     app.innerHTML =
       '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + K('その[他|た]') + '</span><span></span></header>' +
       K('<main class="chooser"><h2>その[他|た]</h2>') + acts.map(function (a) {
@@ -1776,17 +1776,17 @@
             '<textarea id="order" rows="5">' + esc(order) + '</textarea><p><button id="save-order">この順番にする</button> <span id="order-msg" aria-live="polite"></span></p>') +
           '<h3>学級でつまずいている字</h3><p class="hint">よむで答えたことのある児童のうち、最後の答えがまちがいだった児童の割合が高い字（' + st.students + '人中。児童名は出しません）。</p>' +
           (hard.length ? '<ol class="hard">' + hard.map(function (x) { return '<li><span class="hc">' + esc(x.c) + '</span>' + x.s + '人中 ' + x.b + '人（' + Math.round(x.r * 100) + '%）</li>'; }).join('') + '</ol>' : '<p>まだ データが ありません。</p>') +
-          '</section><section class="tsets"><h2>ぶんかい（ぶんの文せつ分け）</h2>' +
-          '<p class="hint">児童は「その他 → ぶんの ぶんかい」で解きます。「まちがい」は、いま最後の答えがまちがいの児童の数（児童名は出しません）。</p>' +
+          '</section><section class="tsets"><h2>一文の分解（文の成分・係り受け）</h2>' +
+          '<p class="hint">児童は「その他 → 一文の分解」で解きます。「まちがい」は、いま最後の答えがまちがいの児童の数（児童名は出しません）。</p>' +
           '<div id="bk-probs"></div>' +
           fold('d-bk-list', 'つくった問題の一覧', '<span id="d-bk-list-now"></span>', '<div id="bk-list"></div>') +
-          fold('d-bk-new', 'ぶんかいの 問題を つくる', '',
+          fold('d-bk-new', '一文の分解の 問題を つくる', '',
             '<p class="hint">文を書きます。文節（ことばのかたまり）の間に 空白を入れます（例: ぼくは あした ともだちに 手紙を かく。）。漢字は「{字|よみ}」でルビがつけられます（例: {泳|およ}いだ）。つぎに、児童と同じ操作で 役割と 係り先をつけて登録します。</p>' +
             '<div class="bk-input"><p><input id="bk-new" placeholder="例: ぼくは あした ともだちに 手紙を かく。" maxlength="200"></p>' +
             '<p><button id="bk-edit" type="button">文節に分けて 役割をつける</button> <span id="bkmsg2" aria-live="polite"></span></p></div>' +
             '<div id="bk-editor"></div>') +
-          '</section><section class="tsets"><h2>せつめい文の くみたて（はじめ・中・おわり）</h2>' +
-          '<p class="hint">児童は「その他 → せつめい文の くみたて」で、1回1文章を解きます（全20文章・易→難の順）。「まちがい」は、いま最後の答えがまちがいの児童の数。①番号・②切れ目・③文さがし は まちがえた回数の累計（児童名は出しません）。</p>' +
+          '</section><section class="tsets"><h2>説明文の分解（はじめ・中・おわり）</h2>' +
+          '<p class="hint">児童は「その他 → 説明文の分解」で、1回1文章を解きます（全20文章・易→難の順）。「まちがい」は、いま最後の答えがまちがいの児童の数。①番号・②切れ目・③文さがし は まちがえた回数の累計（児童名は出しません）。</p>' +
           '<div id="sm-texts"></div>' +
           '</section><section class="tsets"><h2>過年度データ</h2><div id="arch"><p class="hint">よみこみ中…</p></div></section>';
         app.querySelectorAll('details.tset').forEach(function (d) { d.addEventListener('toggle', function () { S.open[d.id] = d.open; }); });

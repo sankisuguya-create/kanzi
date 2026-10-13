@@ -1,5 +1,5 @@
 // ぶんかいの通し確認（CHROMIUM=/path/to/chrome node tests/bunkai-e2e.mjs）。
-// メニュー → その他 → ぶんの ぶんかい → 役割を当てる（判定）→ 係り先をつなぐ（判定）→ おわり
+// メニュー → その他 → 一文の分解 → 役割を当てる（判定）→ 係り先をつなぐ（判定）→ おわり
 // 失敗して直す流れ・役割色（おしたまま移動は効かない）・先生の作る画面（登録→一覧）も確かめる。
 import http from 'node:http';
 import fs from 'node:fs';
@@ -46,7 +46,7 @@ const otherBtn = page.locator('#go-other');
 check(await otherBtn.isVisible(), 'メニューに「その他」ボタンがある');
 await otherBtn.click();
 await page.waitForSelector('.chooser .big[data-id="bunkai"]');
-check(true, 'その他画面に「ぶんの ぶんかい」がある');
+check(true, 'その他画面に「一文の分解」がある');
 await page.locator('.chooser .big[data-id="bunkai"]').click();
 
 // 問題1（修飾語なし → 役割の段だけ）
@@ -271,8 +271,8 @@ await page.waitForSelector('#app .menu');
 await page.goto(URL0 + '?teacher=1');
 await page.waitForSelector('.teacher section.tsets');
 check(true, '先生画面が開く');
-const bkSection = await page.locator('section.tsets', { hasText: 'ぶんかい' }).count();
-check(bkSection > 0, '先生画面に ぶんかい区画がある');
+const bkSection = await page.locator('section.tsets', { hasText: '一文の分解' }).count();
+check(bkSection > 0, '先生画面に 一文の分解の区画がある');
 check(await page.locator('#bk-probs h3').isVisible(), 'まちがいの多い問題の見出しがある');
 // つくる画面
 await page.locator('#d-bk-new summary').click();
