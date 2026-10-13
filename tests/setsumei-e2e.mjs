@@ -1,4 +1,4 @@
-// せつめい文の くみたての通し確認（npm run e2e:setsumei）。設計書 §27
+// 説明文の分解の通し確認（npm run e2e:setsumei）。設計書 §27
 // メニュー → その他 → せつめい文 → ①番号（まちがい→直す）→ ②切れ目 → ③文さがし a・b・c → おわり。画面に収まるかも調べる
 import http from 'node:http';
 import fs from 'node:fs';
@@ -31,7 +31,7 @@ await page.waitForSelector('#app .menu', { timeout: 10000 });
 
 await page.locator('#go-other').click();
 await page.waitForSelector('.chooser .big[data-id="setsumei"]');
-check(true, 'その他画面に「せつめい文の くみたて」がある');
+check(true, 'その他画面に「説明文の分解」がある');
 await page.locator('.chooser .big[data-id="setsumei"]').click();
 await page.waitForSelector('.sm-col');
 const t = await page.evaluate(() => KANZI_SETSUMEI[0]);

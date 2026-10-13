@@ -1,4 +1,4 @@
-// せつめい文の くみたて（設計書 §27）の検査: 本文データの形・行の組み方・照合・記録と統合・1回1文章の選び方
+// 説明文の分解（設計書 §27）の検査: 本文データの形・行の組み方・照合・記録と統合・1回1文章の選び方
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
