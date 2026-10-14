@@ -439,7 +439,10 @@ check((await cur()) === '去' && (await page.textContent('.card .word rt')) === 
 await shot('5-read-ruby');
 await page.fill('#yomi', 'かこ'); await page.keyboard.press('Enter'); await page.waitForSelector('#next');
 check((await page.textContent('#rmsg')).includes('正かい'), 'よむ: 過去 → かこ');
+check(await page.locator('.flash-ok').count() === 1 && (await page.textContent('.flash-ok')).includes('せいかい') && await page.evaluate(() => { const r = document.querySelector('.flash-ok').getBoundingClientRect(); return r.width >= innerWidth - 1 && getComputedStyle(document.querySelector('.flash-ok')).pointerEvents === 'none'; }), '正解の瞬間: 画面いっぱいに「せいかい！」（押す操作は じゃましない）');
+await page.screenshot({ path: path.join(SHOTS, 'flash-correct.png') });
 await page.click('#next'); await page.waitForSelector('#yomi');
+await page.waitForTimeout(1000); check(await page.locator('.flash-ok').count() === 0, '正解の表示は 一瞬で消える');
 check((await cur()) === '港' && (await page.textContent('.card .word')) === '港に船が入る' && (await page.$('.card.part')) && (await page.textContent('label.q')).includes('線を引いた字') && !(await page.$('.okuri-after')), 'よむ: かなを含む句は 線を引いた字の読みだけを問う（港に船が入る）');
 check(await page.evaluate(() => getComputedStyle(document.querySelector('.card .tg')).textDecorationLine.includes('underline')), 'よむ: 問う字に下線');
 await shot('5-read-part');

@@ -689,8 +689,17 @@ body.sm-screen .bar { flex: none; margin-bottom: 4px; }
 .sm-tbl { border-collapse: collapse; font-size: 16px; width: 100%; }
 .sm-tbl th, .sm-tbl td { border-bottom: 1px solid var(--line); padding: 4px 8px; text-align: left; }
 .sm-tbl rt { font-size: .5em; }
+/* 正解の瞬間の大きな表示（画面中央。押す操作は じゃましない） */
+.flash-ok { position: fixed; inset: 0; z-index: 80; pointer-events: none; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, rgba(255, 214, 0, .45) 0%, rgba(255, 214, 0, 0) 65%); animation: flash-ok-bg .9s ease-out forwards; }
+.flash-ok-in { position: relative; display: flex; align-items: center; justify-content: center; width: min(80vw, 80vh); height: min(80vw, 80vh); animation: flash-ok-in .9s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+.flash-ok-in svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.flash-ok-in circle { fill: none; stroke: #FF3D00; stroke-width: 9; }
+.flash-ok-in span { position: relative; font-family: var(--font-sans); font-weight: 900; font-size: min(16vw, 15vh); color: #FF3D00; -webkit-text-stroke: .04em #fff; paint-order: stroke fill; text-shadow: 0 0 .08em #fff, 0 .05em .15em rgba(0, 0, 0, .25); white-space: nowrap; }
+@keyframes flash-ok-in { 0% { transform: scale(.4); opacity: 0; } 25% { transform: scale(1.05); opacity: 1; } 70% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.08); opacity: 0; } }
+@keyframes flash-ok-bg { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .flash-ok-in { animation: flash-ok-fade .9s linear forwards; } @keyframes flash-ok-fade { 0%, 75% { opacity: 1; } 100% { opacity: 0; } } }
 </style>
-<meta name="kanzi-ver" content="9defb9a">
+<meta name="kanzi-ver" content="354f444">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -5285,6 +5294,15 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     return '<h1 class="title">漢字の' + mori + (extra ? '<span class="title-extra">' + extra + '</span>' : '') + '</h1>';
   }
 
+  // 正解した瞬間に、画面の中央に 大きく明るく「せいかい！」を一瞬出す（利用者の指定。押す操作は じゃましない）
+  function flashCorrect() {
+    var old = document.querySelector('.flash-ok'); if (old) old.remove();
+    var el = document.createElement('div');
+    el.className = 'flash-ok'; el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = '<div class="flash-ok-in"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg><span>せいかい！</span></div>';
+    document.body.appendChild(el);
+    setTimeout(function () { el.remove(); }, 900);
+  }
   // ================= 児童画面のボタンのオン・オフ（学級ごと。先生が おためし画面のチップで切り替える）
   // いま使わない活動を、先生の説明なしで児童が見分けられるようにする。キーは Sched.GATE_KEYS
   //   児童: オフのボタンは押せず、うすく見える（disabled。「選んだ漢字がない」時と同じ見た目）
@@ -5954,7 +5972,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       '</main>';
     on('#back', quit);
     var input = $('#yomi'), msg = $('#rmsg'), composing = false, tries = 0, done = false;
-    function say(t, cls) { msg.textContent = t; msg.className = 'rmsg' + (cls ? ' ' + cls : ''); }
+    function say(t, cls) { msg.textContent = t; msg.className = 'rmsg' + (cls ? ' ' + cls : ''); if (cls === 'good') flashCorrect(); }
     // 入力をひらがなだけに保つ（変換中は触らない）
     function tidy() {
       if (composing) return;
@@ -6054,6 +6072,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     function result(ok, orderMiss) {
       var box = document.createElement('div');
       box.className = 'result';
+      if (ok) flashCorrect();
       box.innerHTML = '<p class="res ' + (ok ? 'good' : 'again') + '">' + (ok ? '✓ できた！' : K('↺ また [今|こん][度|ど] [書|か]こう')) + '</p>' +
         (orderMiss ? K('<p class="res-note">[書|か]き[順|じゅん]を たしかめたよ</p>') : '') +
         K('<button class="big primary" id="next">[次|つぎ]へ</button>');
@@ -6444,7 +6463,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       S.session.results[prob.id] = ok;
       Sched.answerBunkai(S.p, prob.id, ok, { role: st.errs.role, link: st.errs.link }, nowMs());
       commit();
-      if (ok) { prob.segs.forEach(function (s, i) { st.locked[i] = true; }); say('✓ せいかい！', 'good'); }
+      if (ok) { prob.segs.forEach(function (s, i) { st.locked[i] = true; }); say('✓ せいかい！', 'good'); flashCorrect(); }
       else say(K('こたえを みよう'), 'err');
       paint();
       $('#bknextrow').innerHTML = '<button type="button" class="big primary" id="bknext">つぎへ</button>';
@@ -6720,7 +6739,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
         $('#smcheck').onclick = function () { $('#smcheck').onclick = null; go(); };
         $('#smcheck').disabled = false; $('#smidk').disabled = true;
       } else {
-        say('✓ せいかい！', 'good');
+        say('✓ せいかい！', 'good'); flashCorrect();
         $('#smcheck').disabled = true;
         setTimeout(function () { if (document.body.contains(text)) go(); }, 900);
       }

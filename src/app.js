@@ -113,6 +113,15 @@
     return '<h1 class="title">漢字の' + mori + (extra ? '<span class="title-extra">' + extra + '</span>' : '') + '</h1>';
   }
 
+  // 正解した瞬間に、画面の中央に 大きく明るく「せいかい！」を一瞬出す（利用者の指定。押す操作は じゃましない）
+  function flashCorrect() {
+    var old = document.querySelector('.flash-ok'); if (old) old.remove();
+    var el = document.createElement('div');
+    el.className = 'flash-ok'; el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = '<div class="flash-ok-in"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg><span>せいかい！</span></div>';
+    document.body.appendChild(el);
+    setTimeout(function () { el.remove(); }, 900);
+  }
   // ================= 児童画面のボタンのオン・オフ（学級ごと。先生が おためし画面のチップで切り替える）
   // いま使わない活動を、先生の説明なしで児童が見分けられるようにする。キーは Sched.GATE_KEYS
   //   児童: オフのボタンは押せず、うすく見える（disabled。「選んだ漢字がない」時と同じ見た目）
@@ -782,7 +791,7 @@
       '</main>';
     on('#back', quit);
     var input = $('#yomi'), msg = $('#rmsg'), composing = false, tries = 0, done = false;
-    function say(t, cls) { msg.textContent = t; msg.className = 'rmsg' + (cls ? ' ' + cls : ''); }
+    function say(t, cls) { msg.textContent = t; msg.className = 'rmsg' + (cls ? ' ' + cls : ''); if (cls === 'good') flashCorrect(); }
     // 入力をひらがなだけに保つ（変換中は触らない）
     function tidy() {
       if (composing) return;
@@ -882,6 +891,7 @@
     function result(ok, orderMiss) {
       var box = document.createElement('div');
       box.className = 'result';
+      if (ok) flashCorrect();
       box.innerHTML = '<p class="res ' + (ok ? 'good' : 'again') + '">' + (ok ? '✓ できた！' : K('↺ また [今|こん][度|ど] [書|か]こう')) + '</p>' +
         (orderMiss ? K('<p class="res-note">[書|か]き[順|じゅん]を たしかめたよ</p>') : '') +
         K('<button class="big primary" id="next">[次|つぎ]へ</button>');
@@ -1272,7 +1282,7 @@
       S.session.results[prob.id] = ok;
       Sched.answerBunkai(S.p, prob.id, ok, { role: st.errs.role, link: st.errs.link }, nowMs());
       commit();
-      if (ok) { prob.segs.forEach(function (s, i) { st.locked[i] = true; }); say('✓ せいかい！', 'good'); }
+      if (ok) { prob.segs.forEach(function (s, i) { st.locked[i] = true; }); say('✓ せいかい！', 'good'); flashCorrect(); }
       else say(K('こたえを みよう'), 'err');
       paint();
       $('#bknextrow').innerHTML = '<button type="button" class="big primary" id="bknext">つぎへ</button>';
@@ -1548,7 +1558,7 @@
         $('#smcheck').onclick = function () { $('#smcheck').onclick = null; go(); };
         $('#smcheck').disabled = false; $('#smidk').disabled = true;
       } else {
-        say('✓ せいかい！', 'good');
+        say('✓ せいかい！', 'good'); flashCorrect();
         $('#smcheck').disabled = true;
         setTimeout(function () { if (document.body.contains(text)) go(); }, 900);
       }
