@@ -134,7 +134,8 @@
     for (var i = 1; i <= 30; i++) {
       var used = rnd() > 0.1, sessions = used ? Math.floor(rnd() * 40) : 0;
       out.push({ no: i, name: 'じどう' + i, last: used ? now - Math.floor(rnd() * 12) * 86400000 : 0, sessions: sessions, items: sessions * 8,
-        learned: used ? Math.floor(rnd() * 120) : 0, miss: used ? [0, 1, 2].map(function () { return chars.charAt(Math.floor(rnd() * 200)); }) : [] });
+        learned: used ? Math.floor(rnd() * 120) : 0, miss: used ? [0, 1, 2].map(function () { return chars.charAt(Math.floor(rnd() * 200)); }) : [],
+        tp: used && rnd() > 0.3 ? { avg: 40 + Math.floor(rnd() * 61), n: 1 + Math.floor(rnd() * 6) } : null });
     }
     return out;
   }

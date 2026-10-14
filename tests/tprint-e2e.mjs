@@ -173,6 +173,7 @@ check(r.score === 4, `点数（2問正解 → ${r.score}点）`);
   });
   check(g.small && !g.other, `字の採点: 小さめ・片寄り・かたむいた字は正解、別の字は不正解（${JSON.stringify(g)}）`);
 }
+check(await page.evaluate((sc) => Object.values(KanziState.p.tp || {}).some((e) => e[0] === sc && e[1] === 50), r.score), '丸つけの点を 先生画面用に記録（点・問題数）');
 check(r.wrong.includes(items[13].c) && r.wrong.includes(items[41].c), `まちがえた字（${r.wrong.slice(0, 6).join('')}…）`);
 check((await page.locator('.tp-all .tp-q .tp-mark').count()) === 50, '① 全部の問題に ○✓');
 check(await page.evaluate(() => [...document.querySelectorAll('.tp-all .tp-q')].every((q) => { const m = q.querySelector('.tp-box > svg.tp-mark'); if (!m) return false; const a = m.getBoundingClientRect(), b = q.querySelector('.tp-box').getBoundingClientRect(); return a.left <= b.left && a.right >= b.right && a.top <= b.top && a.bottom >= b.bottom; })), '○✓は 四角に かぶさる');

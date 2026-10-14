@@ -699,7 +699,7 @@ body.sm-screen .bar { flex: none; margin-bottom: 4px; }
 @keyframes flash-ok-bg { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .flash-ok-in { animation: flash-ok-fade .9s linear forwards; } @keyframes flash-ok-fade { 0%, 75% { opacity: 1; } 100% { opacity: 0; } } }
 </style>
-<meta name="kanzi-ver" content="354f444">
+<meta name="kanzi-ver" content="acb94f4">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -738,12 +738,13 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   // old: [境目の時刻, 回数, 問題数] … 境目より前に終えた回の合計（サーバーが compact でまとめる。done が際限なく増えないように）
   // bunkai: ぶんかいの問題ごとの記録 { 問題id: [答えた回数, まちがい回数, 最後に答えた時刻, 最後にまちがえた時刻, 役割まちがい累計, 係り先まちがい累計] }
   // setsumei: せつめい文の くみたて（§27）の文章ごとの記録 { 文章id: [答えた回数, まちがい回数, 最後に答えた時刻, 最後にまちがえた時刻, ①段落番号まちがい累計, ②切れ目まちがい累計, ③文さがしまちがい累計] }
+  // tp: れんしゅうプリント（漢字テストの練習）の丸つけの記録 { 丸つけした時刻: [点(0〜100), 問題数] }（先生画面の 直近2週間の平均点）
   function newProgress() {
-    return { v: 2, read: {}, write: {}, sel: {}, done: {}, old: [0, 0, 0], bunkai: {}, setsumei: {} };
+    return { v: 2, read: {}, write: {}, sel: {}, done: {}, old: [0, 0, 0], bunkai: {}, setsumei: {}, tp: {} };
   }
   function norm(p) {
     p = p || newProgress();
-    p.read = p.read || {}; p.write = p.write || {}; p.sel = p.sel || {}; p.done = p.done || {}; p.bunkai = p.bunkai || {}; p.setsumei = p.setsumei || {};
+    p.read = p.read || {}; p.write = p.write || {}; p.sel = p.sel || {}; p.done = p.done || {}; p.bunkai = p.bunkai || {}; p.setsumei = p.setsumei || {}; p.tp = p.tp || {};
     p.old = Array.isArray(p.old) && p.old.length === 3 ? p.old : [0, 0, 0];
     return p;
   }
@@ -983,6 +984,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     });
     p.forest = { v: 2, archive: archive, modes: modes };
     p.old = o;
+    for (var t in p.tp) if (Number(t) < before) delete p.tp[t]; // れんしゅうプリントの点は 古い分を捨てる（見るのは直近2週間）
     return p;
   }
   // まとめる境目: 3か月前の月の1日（その時点の現地時刻）
@@ -1102,6 +1104,9 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       var sx = out.setsumei[sb], sy = b.setsumei[sb];
       if (!sx || sy[2] > sx[2] || (sy[2] === sx[2] && sy[0] > sx[0])) out.setsumei[sb] = sy.slice();
     }
+    var t;
+    for (t in a.tp) out.tp[t] = a.tp[t].slice();
+    for (t in b.tp) out.tp[t] = b.tp[t].slice();
     // まとめた合計は境目の新しい方（同じなら回数の多い方）。境目より前の回は、その合計に入っているので捨てる
     var o = b.old[0] > a.old[0] || (b.old[0] === a.old[0] && b.old[1] > a.old[1]) ? b.old : a.old, d;
     out.old = o.slice();
@@ -1157,8 +1162,21 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       var se = p.setsumei[c];
       if (!(Array.isArray(se) && se.length === 7 && se.every(function (x) { return Number.isFinite(x) && x >= 0; }))) bad.push('setsumei ' + c);
     }
+    for (c in p.tp || {}) {
+      var te = p.tp[c];
+      if (!(Array.isArray(te) && te.length === 2 && te[0] >= 0 && te[0] <= 100 && te[1] > 0)) bad.push('tp ' + c);
+    }
     if (p.v !== undefined && p.v !== 2) bad.push('v');
     return bad;
+  }
+
+  // れんしゅうプリントの丸つけを記録する
+  function addTprint(p, now, score, n) { norm(p); p.tp[String(now)] = [score, n]; }
+  // 直近 days 日の れんしゅうプリントの平均点 { avg: 平均点（整数）, n: 回数 }。1回もなければ null
+  function tprintAvg(p, now, days) {
+    var from = now - days * 86400000, sum = 0, n = 0;
+    for (var t in (p && p.tp) || {}) if (Number(t) >= from && Number(t) <= now + 86400000) { sum += p.tp[t][0]; n++; }
+    return n ? { avg: Math.round(sum / n), n: n } : null;
   }
 
   var api = {
@@ -1167,7 +1185,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList, classMissTop: classMissTop,
     FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, forestGrowth: forestGrowth, forestActivity: forestActivity, forestRegionLog: forestRegionLog,
-    compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check, checkEntry: checkEntry,
+    compact: compact, addTprint: addTprint, tprintAvg: tprintAvg, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check, checkEntry: checkEntry,
     normTests: normTests, activeTest: activeTest, GATE_KEYS: GATE_KEYS, normGates: normGates, normBunkai: normBunkai, bunkaiPick: bunkaiPick, setsumeiPick: setsumeiPick
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
@@ -1311,7 +1329,8 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     for (var i = 1; i <= 30; i++) {
       var used = rnd() > 0.1, sessions = used ? Math.floor(rnd() * 40) : 0;
       out.push({ no: i, name: 'じどう' + i, last: used ? now - Math.floor(rnd() * 12) * 86400000 : 0, sessions: sessions, items: sessions * 8,
-        learned: used ? Math.floor(rnd() * 120) : 0, miss: used ? [0, 1, 2].map(function () { return chars.charAt(Math.floor(rnd() * 200)); }) : [] });
+        learned: used ? Math.floor(rnd() * 120) : 0, miss: used ? [0, 1, 2].map(function () { return chars.charAt(Math.floor(rnd() * 200)); }) : [],
+        tp: used && rnd() > 0.3 ? { avg: 40 + Math.floor(rnd() * 61), n: 1 + Math.floor(rnd() * 6) } : null });
     }
     return out;
   }
@@ -5697,6 +5716,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       result.score = Math.round(result.ok * 100 / items.length);
       result.wrong = wrong;
       st.result = result; save();
+      Sched.addTprint(S.p, now, result.score, items.length); // 先生画面の 直近2週間の平均点
       Sched.finishSession(S.p, st.startedAt, items.filter(function (_, i) { return answered(i); }).length, 'write'); // 書いた問題の数だけ 森が育つ（書くと同じ）
       commit(); flush();
       reveal();
@@ -6920,13 +6940,14 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       (function () {
         var order = orderOf(tgrade), pointer = pointers[tgrade] || 0, isTop = tgrade === Math.max.apply(null, grades);
         var classes = (S.info.classes || []).length > 1 ? '<p><label>学級 <select id="klass">' + S.info.classes.map(function (k) { return '<option value="' + esc(k) + '"' + (k === klass ? ' selected' : '') + '>' + esc(klassLabel(k)) + '</option>'; }).join('') + '</select></label></p>' : '';
-        var kidsHtml = '<section><h2>子どもごとの記録（' + kids.length + '人）</h2><p class="hint">この画面だけに出します（児童の画面には出しません）。「終えた回」は よむ・かく・カード・ぶんかいを最後までやった回数、「おぼえた字」は よむで続けて正解して箱3以上になった字の数。</p>' +
-          (kids.length ? '<div class="kids-wrap"><table class="kids"><thead><tr><th>番号</th><th>名前</th><th>最後に使った日</th><th>終えた回（問題数）</th><th>おぼえた字</th><th>まちがいの多い字</th></tr></thead><tbody>' +
+        // 子どもごとの記録は たたむ（利用者の指定）。見出しに 人数だけ出す
+        var kidsHtml = '<details class="tset kids-fold" id="d-kids"' + (S.open['d-kids'] ? ' open' : '') + '><summary><span class="ts-title">子どもごとの記録</span><span class="ts-now">' + kids.length + '人</span></summary><div class="ts-body"><p class="hint">この画面だけに出します（児童の画面には出しません）。「終えた回」は よむ・かく・カード・ぶんかいを最後までやった回数、「おぼえた字」は よむで続けて正解して箱3以上になった字の数、「テスト練習」は れんしゅうプリントの 直近2週間の平均点（丸つけした回数）。</p>' +
+          (kids.length ? '<div class="kids-wrap"><table class="kids"><thead><tr><th>番号</th><th>名前</th><th>最後に使った日</th><th>終えた回（問題数）</th><th>おぼえた字</th><th>テスト練習（2週間）</th><th>まちがいの多い字</th></tr></thead><tbody>' +
             kids.map(function (k) {
               var idle = !k.last || (Date.now() - k.last) > 7 * 86400000;
               return '<tr' + (idle ? ' class="idle"' : '') + '><td>' + esc(k.no) + '</td><td>' + esc(k.name) + '</td><td>' + (idle ? '▲ ' : '') + esc(dateLabel(k.last)) + '</td>' +
-                '<td>' + k.sessions + '（' + k.items + '）</td><td>' + k.learned + '</td><td class="kmiss">' + esc((k.miss || []).join(' ')) + '</td></tr>';
-            }).join('') + '</tbody></table></div><p class="hint">▲＝7日以上 使っていない</p>' : '<p>名簿に この学級の子どもが いません（「名簿」シートの 学年・組 を確認してください）。</p>') + '</section>';
+                '<td>' + k.sessions + '（' + k.items + '）</td><td>' + k.learned + '</td><td>' + (k.tp ? k.tp.avg + '点（' + k.tp.n + '回）' : '—') + '</td><td class="kmiss">' + esc((k.miss || []).join(' ')) + '</td></tr>';
+            }).join('') + '</tbody></table></div><p class="hint">▲＝7日以上 使っていない</p>' : '<p>名簿に この学級の子どもが いません（「名簿」シートの 学年・組 を確認してください）。</p>') + '</div></details>';
         // 学級で まちがいのおおい字（その学年の字。上位20字）
         var hard = Sched.classMissTop(st.perChar, { chars: Object.keys(st.perChar).filter(function (c) { return D.kanji[c] && D.kanji[c].g === tgrade; }), top: 20 });
         var gradeTabs = grades.length > 1 ? '<nav class="tabs t" role="tablist">' + grades.map(function (g) { return '<button role="tab" class="ttab" data-g="' + g + '" aria-selected="' + (g === tgrade) + '">' + g + '年</button>'; }).join('') + '</nav>' : '';

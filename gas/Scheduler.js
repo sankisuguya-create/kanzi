@@ -23,12 +23,13 @@
   // old: [境目の時刻, 回数, 問題数] … 境目より前に終えた回の合計（サーバーが compact でまとめる。done が際限なく増えないように）
   // bunkai: ぶんかいの問題ごとの記録 { 問題id: [答えた回数, まちがい回数, 最後に答えた時刻, 最後にまちがえた時刻, 役割まちがい累計, 係り先まちがい累計] }
   // setsumei: せつめい文の くみたて（§27）の文章ごとの記録 { 文章id: [答えた回数, まちがい回数, 最後に答えた時刻, 最後にまちがえた時刻, ①段落番号まちがい累計, ②切れ目まちがい累計, ③文さがしまちがい累計] }
+  // tp: れんしゅうプリント（漢字テストの練習）の丸つけの記録 { 丸つけした時刻: [点(0〜100), 問題数] }（先生画面の 直近2週間の平均点）
   function newProgress() {
-    return { v: 2, read: {}, write: {}, sel: {}, done: {}, old: [0, 0, 0], bunkai: {}, setsumei: {} };
+    return { v: 2, read: {}, write: {}, sel: {}, done: {}, old: [0, 0, 0], bunkai: {}, setsumei: {}, tp: {} };
   }
   function norm(p) {
     p = p || newProgress();
-    p.read = p.read || {}; p.write = p.write || {}; p.sel = p.sel || {}; p.done = p.done || {}; p.bunkai = p.bunkai || {}; p.setsumei = p.setsumei || {};
+    p.read = p.read || {}; p.write = p.write || {}; p.sel = p.sel || {}; p.done = p.done || {}; p.bunkai = p.bunkai || {}; p.setsumei = p.setsumei || {}; p.tp = p.tp || {};
     p.old = Array.isArray(p.old) && p.old.length === 3 ? p.old : [0, 0, 0];
     return p;
   }
@@ -268,6 +269,7 @@
     });
     p.forest = { v: 2, archive: archive, modes: modes };
     p.old = o;
+    for (var t in p.tp) if (Number(t) < before) delete p.tp[t]; // れんしゅうプリントの点は 古い分を捨てる（見るのは直近2週間）
     return p;
   }
   // まとめる境目: 3か月前の月の1日（その時点の現地時刻）
@@ -387,6 +389,9 @@
       var sx = out.setsumei[sb], sy = b.setsumei[sb];
       if (!sx || sy[2] > sx[2] || (sy[2] === sx[2] && sy[0] > sx[0])) out.setsumei[sb] = sy.slice();
     }
+    var t;
+    for (t in a.tp) out.tp[t] = a.tp[t].slice();
+    for (t in b.tp) out.tp[t] = b.tp[t].slice();
     // まとめた合計は境目の新しい方（同じなら回数の多い方）。境目より前の回は、その合計に入っているので捨てる
     var o = b.old[0] > a.old[0] || (b.old[0] === a.old[0] && b.old[1] > a.old[1]) ? b.old : a.old, d;
     out.old = o.slice();
@@ -442,8 +447,21 @@
       var se = p.setsumei[c];
       if (!(Array.isArray(se) && se.length === 7 && se.every(function (x) { return Number.isFinite(x) && x >= 0; }))) bad.push('setsumei ' + c);
     }
+    for (c in p.tp || {}) {
+      var te = p.tp[c];
+      if (!(Array.isArray(te) && te.length === 2 && te[0] >= 0 && te[0] <= 100 && te[1] > 0)) bad.push('tp ' + c);
+    }
     if (p.v !== undefined && p.v !== 2) bad.push('v');
     return bad;
+  }
+
+  // れんしゅうプリントの丸つけを記録する
+  function addTprint(p, now, score, n) { norm(p); p.tp[String(now)] = [score, n]; }
+  // 直近 days 日の れんしゅうプリントの平均点 { avg: 平均点（整数）, n: 回数 }。1回もなければ null
+  function tprintAvg(p, now, days) {
+    var from = now - days * 86400000, sum = 0, n = 0;
+    for (var t in (p && p.tp) || {}) if (Number(t) >= from && Number(t) <= now + 86400000) { sum += p.tp[t][0]; n++; }
+    return n ? { avg: Math.round(sum / n), n: n } : null;
   }
 
   var api = {
@@ -452,7 +470,7 @@
     dueList: dueList, isSel: isSel, setSel: setSel, selected: selected, missList: missList, classMissTop: classMissTop,
     FOREST_TREES: FOREST_TREES, FOREST_STEP: FOREST_STEP, FOREST_CAP: FOREST_CAP,
     activity: activity, forestLog: forestLog, forestGrowth: forestGrowth, forestActivity: forestActivity, forestRegionLog: forestRegionLog,
-    compact: compact, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check, checkEntry: checkEntry,
+    compact: compact, addTprint: addTprint, tprintAvg: tprintAvg, compactBefore: compactBefore, finishSession: finishSession, learned: learned, merge: merge, check: check, checkEntry: checkEntry,
     normTests: normTests, activeTest: activeTest, GATE_KEYS: GATE_KEYS, normGates: normGates, normBunkai: normBunkai, bunkaiPick: bunkaiPick, setsumeiPick: setsumeiPick
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
@@ -460,4 +478,4 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 // GAS 版ずれ検知の版（tools/build-gas.mjs が埋め込む）
-Sched.VER = "354f444";
+Sched.VER = "acb94f4";

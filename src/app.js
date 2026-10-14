@@ -504,6 +504,7 @@
       result.score = Math.round(result.ok * 100 / items.length);
       result.wrong = wrong;
       st.result = result; save();
+      Sched.addTprint(S.p, now, result.score, items.length); // 先生画面の 直近2週間の平均点
       Sched.finishSession(S.p, st.startedAt, items.filter(function (_, i) { return answered(i); }).length, 'write'); // 書いた問題の数だけ 森が育つ（書くと同じ）
       commit(); flush();
       reveal();
@@ -1727,13 +1728,14 @@
       (function () {
         var order = orderOf(tgrade), pointer = pointers[tgrade] || 0, isTop = tgrade === Math.max.apply(null, grades);
         var classes = (S.info.classes || []).length > 1 ? '<p><label>学級 <select id="klass">' + S.info.classes.map(function (k) { return '<option value="' + esc(k) + '"' + (k === klass ? ' selected' : '') + '>' + esc(klassLabel(k)) + '</option>'; }).join('') + '</select></label></p>' : '';
-        var kidsHtml = '<section><h2>子どもごとの記録（' + kids.length + '人）</h2><p class="hint">この画面だけに出します（児童の画面には出しません）。「終えた回」は よむ・かく・カード・ぶんかいを最後までやった回数、「おぼえた字」は よむで続けて正解して箱3以上になった字の数。</p>' +
-          (kids.length ? '<div class="kids-wrap"><table class="kids"><thead><tr><th>番号</th><th>名前</th><th>最後に使った日</th><th>終えた回（問題数）</th><th>おぼえた字</th><th>まちがいの多い字</th></tr></thead><tbody>' +
+        // 子どもごとの記録は たたむ（利用者の指定）。見出しに 人数だけ出す
+        var kidsHtml = '<details class="tset kids-fold" id="d-kids"' + (S.open['d-kids'] ? ' open' : '') + '><summary><span class="ts-title">子どもごとの記録</span><span class="ts-now">' + kids.length + '人</span></summary><div class="ts-body"><p class="hint">この画面だけに出します（児童の画面には出しません）。「終えた回」は よむ・かく・カード・ぶんかいを最後までやった回数、「おぼえた字」は よむで続けて正解して箱3以上になった字の数、「テスト練習」は れんしゅうプリントの 直近2週間の平均点（丸つけした回数）。</p>' +
+          (kids.length ? '<div class="kids-wrap"><table class="kids"><thead><tr><th>番号</th><th>名前</th><th>最後に使った日</th><th>終えた回（問題数）</th><th>おぼえた字</th><th>テスト練習（2週間）</th><th>まちがいの多い字</th></tr></thead><tbody>' +
             kids.map(function (k) {
               var idle = !k.last || (Date.now() - k.last) > 7 * 86400000;
               return '<tr' + (idle ? ' class="idle"' : '') + '><td>' + esc(k.no) + '</td><td>' + esc(k.name) + '</td><td>' + (idle ? '▲ ' : '') + esc(dateLabel(k.last)) + '</td>' +
-                '<td>' + k.sessions + '（' + k.items + '）</td><td>' + k.learned + '</td><td class="kmiss">' + esc((k.miss || []).join(' ')) + '</td></tr>';
-            }).join('') + '</tbody></table></div><p class="hint">▲＝7日以上 使っていない</p>' : '<p>名簿に この学級の子どもが いません（「名簿」シートの 学年・組 を確認してください）。</p>') + '</section>';
+                '<td>' + k.sessions + '（' + k.items + '）</td><td>' + k.learned + '</td><td>' + (k.tp ? k.tp.avg + '点（' + k.tp.n + '回）' : '—') + '</td><td class="kmiss">' + esc((k.miss || []).join(' ')) + '</td></tr>';
+            }).join('') + '</tbody></table></div><p class="hint">▲＝7日以上 使っていない</p>' : '<p>名簿に この学級の子どもが いません（「名簿」シートの 学年・組 を確認してください）。</p>') + '</div></details>';
         // 学級で まちがいのおおい字（その学年の字。上位20字）
         var hard = Sched.classMissTop(st.perChar, { chars: Object.keys(st.perChar).filter(function (c) { return D.kanji[c] && D.kanji[c].g === tgrade; }), top: 20 });
         var gradeTabs = grades.length > 1 ? '<nav class="tabs t" role="tablist">' + grades.map(function (g) { return '<button role="tab" class="ttab" data-g="' + g + '" aria-selected="' + (g === tgrade) + '">' + g + '年</button>'; }).join('') + '</nav>' : '';
