@@ -322,29 +322,41 @@
     }));
   }
   // まとめて判定する。dList: お手本の画、drawn: 書いた線 [[[x,y],...],...]、level: 'normal'|'easy'（「書く」と同じ許容）。
-  // 書いた1画ずつ、まだ合っていない画のうち いちばん近いものに当てる（字全体のずれは「書く」と同じく補正）。
+  // 字の大きさ・位置をお手本にそろえてから、書いた線と お手本の画を ずれの小さい組から順に1対1で当てる。
   // 正解 = 全部の画に当たり、余った線がない。書き順・書く向きは問わない（紙のテストでは見えないので、紙のテストと同じ基準）
   function grade(dList, drawn, level) {
-    var tpl = templateOf(dList), L = LEVELS[level] || LEVELS.normal, done = tpl.map(function () { return false; }), shifts = [], extra = 0;
-    (drawn || []).forEach(function (s) {
-      if (!s.length) return;
-      var raw = s.map(function (p) { return { x: p[0], y: p[1] }; }), d = resample(raw), dlen = polyLen(raw);
-      var off = shifts.length ? centroid(shifts) : { x: 0, y: 0 };
-      off = { x: Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, off.x)), y: Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, off.y)) };
-      var best = -1, bestS = Infinity;
-      tpl.forEach(function (t, i) {
-        if (done[i]) return;
-        var sc = Math.min(meanDist(d, t.pts, off, false), meanDist(d, t.pts, off, true));
-        var lenOk = t.len < 22 || (dlen > t.len * L.minLen && dlen < t.len * L.maxLen + 15);
-        if (lenOk && sc <= L.tol && sc < bestS) { best = i; bestS = sc; }
-      });
-      if (best < 0) { extra++; return; }
-      done[best] = true;
-      var dc = centroid(d);
-      shifts.push({ x: dc.x - tpl[best].c.x, y: dc.y - tpl[best].c.y });
+    var tpl = templateOf(dList), L = LEVELS[level] || LEVELS.normal;
+    var strokes = (drawn || []).filter(function (s) { return s.length; }).map(function (s) { return s.map(function (p) { return { x: p[0], y: p[1] }; }); });
+    if (!strokes.length) return { ok: false, extra: 0, missing: tpl.length };
+    // 1. 字の大きさ・位置をそろえる（手書きは四角より小さめ・片寄りがち。紙のテストでも大きさは問わない）。
+    //    書いた線全体の外枠を お手本の外枠に合わせる。縦横の倍率の差は 1.25倍まで（字の形をゆがめすぎない）。
+    //    細い字（一・二）は 細い向きの倍率を もう一方に合わせる
+    function box(list) { var b = { l: Infinity, t: Infinity, r: -Infinity, b: -Infinity }; list.forEach(function (ps) { ps.forEach(function (p) { b.l = Math.min(b.l, p.x); b.r = Math.max(b.r, p.x); b.t = Math.min(b.t, p.y); b.b = Math.max(b.b, p.y); }); }); return b; }
+    var tb = box(tpl.map(function (t) { return t.pts; })), db = box(strokes);
+    var tw = tb.r - tb.l, th = tb.b - tb.t, dw = db.r - db.l, dh = db.b - db.t;
+    var sx = tw > 25 && dw > 8 ? tw / dw : null, sy = th > 25 && dh > 8 ? th / dh : null;
+    if (sx === null && sy === null) sx = sy = 1; else if (sx === null) sx = sy; else if (sy === null) sy = sx;
+    var g = Math.sqrt(sx * sy), k = Math.min(1.25, Math.max(0.8, sx / sy));
+    sx = g * Math.sqrt(k); sy = g / Math.sqrt(k);
+    var mx = (db.l + db.r) / 2, my = (db.t + db.b) / 2, tx = (tb.l + tb.r) / 2, ty = (tb.t + tb.b) / 2, zero = { x: 0, y: 0 };
+    var ds = strokes.map(function (raw) {
+      var q = raw.map(function (p) { return { x: (p.x - mx) * sx + tx, y: (p.y - my) * sy + ty }; });
+      return { d: resample(q), len: polyLen(q) };
     });
-    var missing = done.filter(function (x) { return !x; }).length;
-    return { ok: extra === 0 && missing === 0 && (drawn || []).length > 0, extra: extra, missing: missing };
+    // 2. 書いた線と お手本の画の組を、ずれの小さい組から順に決める（書いた順に当てると、先の線が 後の線の画を取ってしまう）
+    var pairs = [];
+    ds.forEach(function (s, a) {
+      tpl.forEach(function (t, i) {
+        var sc = Math.min(meanDist(s.d, t.pts, zero, false), meanDist(s.d, t.pts, zero, true));
+        var lenOk = t.len < 22 || (s.len > t.len * L.minLen && s.len < t.len * L.maxLen + 15);
+        if (lenOk && sc <= L.tol) pairs.push([sc, a, i]);
+      });
+    });
+    pairs.sort(function (x, y) { return x[0] - y[0]; });
+    var usedS = {}, usedT = {}, hit = 0;
+    pairs.forEach(function (x) { if (!usedS[x[1]] && !usedT[x[2]]) { usedS[x[1]] = usedT[x[2]] = true; hit++; } });
+    var extra = ds.length - hit, missing = tpl.length - hit;
+    return { ok: extra === 0 && missing === 0, extra: extra, missing: missing };
   }
 
   root.Ink = { LEVELS: LEVELS, Pad: Pad, animate: animate, Recorder: Recorder, grade: grade, strokesSvg: strokesSvg, _resample: resample, _scribble: scribble };
