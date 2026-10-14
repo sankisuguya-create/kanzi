@@ -161,6 +161,18 @@ await page.click('#tp-pop-close');
 check(await page.locator('.tp-pop').count() === 0 && await page.locator('.tp-result').count() === 1, 'とじると プリントの上に 点数が残る');
 check(r.items[12].ok && !r.items[13].ok && r.items[40].ok && !r.items[41].ok, '丸つけ: 正しく書いた問題は○、1画だけ・送りがなちがいは×');
 check(r.score === 4, `点数（2問正解 → ${r.score}点）`);
+// 字の採点（利用者の指摘: 先生が満点のつもりで書いても 6割ほどになる）: 小さめ・片寄り・少しかたむいた字は正解、別の字は不正解
+{
+  const g = await page.evaluate(() => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); document.body.appendChild(svg);
+    const hand = (c, s, dx, dy, th) => KANZI_STROKES[c].map((d) => { const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', d); svg.appendChild(p); const L = p.getTotalLength(), o = [];
+      for (let i = 0; i <= 20; i++) { const q = p.getPointAtLength(L * i / 20), X = (q.x - 54.5) * s, Y = (q.y - 54.5) * s; o.push([X * Math.cos(th) - Y * Math.sin(th) + 54.5 + dx, X * Math.sin(th) + Y * Math.cos(th) + 54.5 + dy]); } p.remove(); return o; });
+    const r = { small: ['港', '業', '係', '薬', '勝'].every((c) => Ink.grade(KANZI_STROKES[c], hand(c, 0.7, -12, 10, 0.06), 'normal').ok),
+      other: ['港', '業', '係'].some((c, i) => Ink.grade(KANZI_STROKES[c], hand(['湖', '業', '係'][i] === c ? '暑' : '湖', 0.9, 0, 0, 0), 'normal').ok) };
+    svg.remove(); return r;
+  });
+  check(g.small && !g.other, `字の採点: 小さめ・片寄り・かたむいた字は正解、別の字は不正解（${JSON.stringify(g)}）`);
+}
 check(r.wrong.includes(items[13].c) && r.wrong.includes(items[41].c), `まちがえた字（${r.wrong.slice(0, 6).join('')}…）`);
 check((await page.locator('.tp-all .tp-q .tp-mark').count()) === 50, '① 全部の問題に ○✓');
 check(await page.evaluate(() => [...document.querySelectorAll('.tp-all .tp-q')].every((q) => { const m = q.querySelector('.tp-box > svg.tp-mark'); if (!m) return false; const a = m.getBoundingClientRect(), b = q.querySelector('.tp-box').getBoundingClientRect(); return a.left <= b.left && a.right >= b.right && a.top <= b.top && a.bottom >= b.bottom; })), '○✓は 四角に かぶさる');
