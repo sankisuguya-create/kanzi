@@ -113,12 +113,12 @@
     return '<h1 class="title">漢字の' + mori + (extra ? '<span class="title-extra">' + extra + '</span>' : '') + '</h1>';
   }
 
-  // 正解した瞬間に、画面の中央に 大きく明るく「せいかい！」を一瞬出す（利用者の指定。押す操作は じゃましない）
-  function flashCorrect() {
-    var old = document.querySelector('.flash-ok'); if (old) old.remove();
+  // 答えあわせの瞬間に、画面の中央に 大きく 正解は赤い ○、まちがいは青い ✕ を一瞬出す（利用者の指定。押す操作は じゃましない）
+  function flashMark(ok) {
+    var old = document.querySelector('.flash-mark'); if (old) old.remove();
     var el = document.createElement('div');
-    el.className = 'flash-ok'; el.setAttribute('aria-hidden', 'true');
-    el.innerHTML = '<div class="flash-ok-in"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg><span>せいかい！</span></div>';
+    el.className = 'flash-mark ' + (ok ? 'ok' : 'ng'); el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = '<svg viewBox="0 0 100 100">' + (ok ? '<circle cx="50" cy="50" r="40"/>' : '<path d="M20 20L80 80M80 20L20 80"/>') + '</svg>';
     document.body.appendChild(el);
     setTimeout(function () { el.remove(); }, 900);
   }
@@ -792,7 +792,7 @@
       '</main>';
     on('#back', quit);
     var input = $('#yomi'), msg = $('#rmsg'), composing = false, tries = 0, done = false;
-    function say(t, cls) { msg.textContent = t; msg.className = 'rmsg' + (cls ? ' ' + cls : ''); if (cls === 'good') flashCorrect(); }
+    function say(t, cls) { msg.textContent = t; msg.className = 'rmsg' + (cls ? ' ' + cls : ''); if (cls === 'good') flashMark(true); }
     // 入力をひらがなだけに保つ（変換中は触らない）
     function tidy() {
       if (composing) return;
@@ -812,6 +812,7 @@
       if (!v) { say('ひらがなで 入れてね'); return; }
       if (answers.indexOf(v) >= 0) return finish(tries === 0, true);
       tries++;
+      flashMark(false);
       if (tries < 2) { say(K('× ちがうよ。もう[一|いち][度|ど]'), 'ng'); input.select(); return; }
       finish(false, false);
     });
@@ -892,7 +893,7 @@
     function result(ok, orderMiss) {
       var box = document.createElement('div');
       box.className = 'result';
-      if (ok) flashCorrect();
+      if (ok || !S.session.skipped[c]) flashMark(ok); // 「わからない」で答えを見た時は出さない
       box.innerHTML = '<p class="res ' + (ok ? 'good' : 'again') + '">' + (ok ? '✓ できた！' : K('↺ また [今|こん][度|ど] [書|か]こう')) + '</p>' +
         (orderMiss ? K('<p class="res-note">[書|か]き[順|じゅん]を たしかめたよ</p>') : '') +
         K('<button class="big primary" id="next">[次|つぎ]へ</button>');
@@ -1232,7 +1233,7 @@
         var wrong = [];
         prob.segs.forEach(function (s, i) { if (st.role[i] !== s.r) wrong.push(i); });
         if (!wrong.length) return goLink();
-        st.errs.role += wrong.length;
+        st.errs.role += wrong.length; flashMark(false);
         if (++st.tries >= 2) return reveal(false);
         prob.segs.forEach(function (s, i) { if (wrong.indexOf(i) < 0) st.locked[i] = true; else { st.role[i] = null; flashBad(i); } });
         st.sel = -1;
@@ -1242,7 +1243,7 @@
         var wrongL = [];
         prob.segs.forEach(function (s, i) { if (s.r === '修' && st.target[i] !== s.m - 1) wrongL.push(i); }); // st.target は0始まり、s.m は1始まりの係り先番号
         if (!wrongL.length) return finishProblem();
-        st.errs.link += wrongL.length;
+        st.errs.link += wrongL.length; flashMark(false);
         if (++st.tries >= 2) return reveal(false);
         wrongL.forEach(function (i) { st.target[i] = null; flashBad(i); });
         st.sel = -1; st.picking = false;
@@ -1255,7 +1256,8 @@
       st.sel = -1; st.picking = false;
       if (!needLinks()) return finishProblem();
       st.phase = 'link'; st.tries = 0;
-      say(K('しゅうしょくご が くわしくする ことばを つないで'), 'good');
+      flashMark(true);
+      say(K('しゅうしょくご が くわしくする ことばを つないで'));
       paint();
     }
     // 答えを見せる。役割の段で見せたら係り先の段へ進み、係り先の段なら終える
@@ -1283,7 +1285,7 @@
       S.session.results[prob.id] = ok;
       Sched.answerBunkai(S.p, prob.id, ok, { role: st.errs.role, link: st.errs.link }, nowMs());
       commit();
-      if (ok) { prob.segs.forEach(function (s, i) { st.locked[i] = true; }); say('✓ せいかい！', 'good'); flashCorrect(); }
+      if (ok) { prob.segs.forEach(function (s, i) { st.locked[i] = true; }); say('✓ せいかい！', 'good'); flashMark(true); }
       else say(K('こたえを みよう'), 'err');
       paint();
       $('#bknextrow').innerHTML = '<button type="button" class="big primary" id="bknext">つぎへ</button>';
@@ -1522,7 +1524,7 @@
         if (!ok) st.pick.forEach(function (r) { if (gs.some(function (g) { return g.indexOf(r) >= 0; })) st.lockPick[r] = true; });
       }
       if (ok) return next(false);
-      st.errs[st.step - 1]++; st.wrong = true;
+      st.errs[st.step - 1]++; st.wrong = true; flashMark(false);
       if (++st.tries >= 2) return reveal(false);
       // まちがいだけ消す
       if (st.step === 1) { for (var c in st.num) if (!st.lockNum[c]) delete st.num[c]; }
@@ -1559,7 +1561,7 @@
         $('#smcheck').onclick = function () { $('#smcheck').onclick = null; go(); };
         $('#smcheck').disabled = false; $('#smidk').disabled = true;
       } else {
-        say('✓ せいかい！', 'good'); flashCorrect();
+        say('✓ せいかい！', 'good'); flashMark(true);
         $('#smcheck').disabled = true;
         setTimeout(function () { if (document.body.contains(text)) go(); }, 900);
       }

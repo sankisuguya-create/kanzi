@@ -442,10 +442,14 @@ check((await cur()) === '去' && (await page.textContent('.card .word rt')) === 
 await shot('5-read-ruby');
 await page.fill('#yomi', 'かこ'); await page.keyboard.press('Enter'); await page.waitForSelector('#next');
 check((await page.textContent('#rmsg')).includes('正かい'), 'よむ: 過去 → かこ');
-check(await page.locator('.flash-ok').count() === 1 && (await page.textContent('.flash-ok')).includes('せいかい') && await page.evaluate(() => { const r = document.querySelector('.flash-ok').getBoundingClientRect(); return r.width >= innerWidth - 1 && getComputedStyle(document.querySelector('.flash-ok')).pointerEvents === 'none'; }), '正解の瞬間: 画面いっぱいに「せいかい！」（押す操作は じゃましない）');
+check(await page.locator('.flash-mark.ok circle').count() === 1 && await page.locator('.flash-mark.ng').count() === 0 && await page.evaluate(() => { const r = document.querySelector('.flash-mark').getBoundingClientRect(); return r.width >= innerWidth - 1 && getComputedStyle(document.querySelector('.flash-mark')).pointerEvents === 'none'; }), '正解の瞬間: 画面中央に 大きな赤い○（押す操作は じゃましない）');
+check(await page.evaluate(() => document.querySelector('#rmsg').getBoundingClientRect().height <= 1), '正解の文字（青い 正かい！）は 画面に出さない');
 await page.screenshot({ path: path.join(SHOTS, 'flash-correct.png') });
 await page.click('#next'); await page.waitForSelector('#yomi');
-await page.waitForTimeout(1000); check(await page.locator('.flash-ok').count() === 0, '正解の表示は 一瞬で消える');
+await page.waitForTimeout(1000); check(await page.locator('.flash-mark').count() === 0, '正解の表示は 一瞬で消える');
+await page.fill('#yomi', 'ああ'); await page.keyboard.press('Enter');
+check(await page.locator('.flash-mark.ng path').count() === 1, 'まちがいの瞬間: 大きな青い✕');
+await page.screenshot({ path: path.join(SHOTS, 'flash-wrong.png') }); await page.waitForTimeout(1000);
 check((await cur()) === '港' && (await page.textContent('.card .word')) === '港に船が入る' && (await page.$('.card.part')) && (await page.textContent('label.q')).includes('線を引いた字') && !(await page.$('.okuri-after')), 'よむ: かなを含む句は 線を引いた字の読みだけを問う（港に船が入る）');
 check(await page.evaluate(() => getComputedStyle(document.querySelector('.card .tg')).textDecorationLine.includes('underline')), 'よむ: 問う字に下線');
 await shot('5-read-part');

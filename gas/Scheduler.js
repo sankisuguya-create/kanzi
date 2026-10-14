@@ -478,4 +478,4 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 // GAS 版ずれ検知の版（tools/build-gas.mjs が埋め込む）
-Sched.VER = "acb94f4";
+Sched.VER = "a55e5fe";
