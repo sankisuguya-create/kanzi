@@ -177,3 +177,17 @@ test('漢字テストの範囲: 複数管理と 見せる1つ（旧形式も読�
   // 送りがなで出す字（印）: 範囲の字の中だけ・重なりなし
   assert.deepEqual(S.activeTest({ active: 'a', list: [{ id: 'a', label: '', chars: '悪安暑', okuri: '悪悪港暑' }] }), { label: '', chars: '悪安暑', okuri: '悪暑' });
 });
+
+test('れんしゅうプリントの点: 記録・平均・統合・検査・古い分の整理', () => {
+  const D = 86400000, now = 100 * D, p = S.newProgress();
+  assert.equal(S.tprintAvg(p, now, 14), null);
+  S.addTprint(p, now - D, 90, 50); S.addTprint(p, now - 3 * D, 71, 10); S.addTprint(p, now - 15 * D, 0, 50);
+  assert.deepEqual(S.tprintAvg(p, now, 14), { avg: 81, n: 2 });
+  const q = S.newProgress(); S.addTprint(q, now, 50, 10);
+  const m = S.merge(p, q);
+  assert.equal(Object.keys(m.tp).length, 4);
+  assert.deepEqual(S.check(m), []);
+  m.tp.bad = [120, 10]; assert.deepEqual(S.check(m), ['tp bad']); delete m.tp.bad;
+  S.compact(m, now - 10 * D);
+  assert.equal(Object.keys(m.tp).length, 3);
+});
