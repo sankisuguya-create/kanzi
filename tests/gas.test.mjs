@@ -137,7 +137,7 @@ test('保存: 本人の行だけを更新し、meta に えらんだ漢字・終
   const m = JSON.parse(env.api_save(JSON.stringify(p)));
   assert.ok(m.read['暗']);
   const row = env.book['進捗'].find((r) => r[0] === K2);
-  assert.deepEqual(JSON.parse(row[3]), { sel: { 暗: [1, 5] }, done: {}, old: [JSON.parse(row[3]).old[0], 1, 5], bunkai: {}, setsumei: {} }); // 古い回は合計にまとめる
+  assert.deepEqual(JSON.parse(row[3]), { sel: { 暗: [1, 5] }, done: {}, old: [JSON.parse(row[3]).old[0], 1, 5], bunkai: {}, setsumei: {}, tp: {} }); // 古い回は合計にまとめる
   assert.throws(() => makeEnv(base(), T).api_save('{}'), /児童のアカウントではありません/);
 });
 
@@ -472,4 +472,13 @@ test('漢字テストの範囲: 送りがなで出す字の印を保存する（
   const t = env.api_setTests('3-1', JSON.stringify({ active: 't1', list: [{ id: 't1', label: '9月', chars: '悪安暑', okuri: '悪x港暑悪' }] }));
   assert.equal(t.list[0].okuri, '悪暑');
   assert.equal(makeEnv(env.book, K1).api_init().test.okuri, '悪暑');
+});
+
+test('れんしゅうプリントの点: 保存して、先生画面に 直近2週間の平均点（古い回・形の違う回は入れない）', () => {
+  const env = makeEnv(base(), K2), now = Date.now(), D = 86400000;
+  env.api_save(JSON.stringify({ read: {}, write: {}, sel: {}, done: {}, tp: { [now - D]: [80, 50], [now - 2 * D]: [60, 10], [now - 20 * D]: [0, 50], [now]: [500, 10], x: [50, 10] } }));
+  const row = env.book['進捗'].find((r) => r[0] === K2);
+  assert.equal(Object.keys(JSON.parse(row[3]).tp).length, 3);
+  const T2 = makeEnv(env.book, T).api_teacherView('3-1').students.find((k) => k.name === 'はると').tp;
+  assert.deepEqual({ ...T2 }, { avg: 70, n: 2 });
 });

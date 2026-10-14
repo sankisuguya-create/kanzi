@@ -215,7 +215,7 @@ function parseProgress_(read, write, meta) {
   var p = Sched.newProgress();
   try { p.read = JSON.parse(read || '{}'); } catch (e) {}
   try { p.write = JSON.parse(write || '{}'); } catch (e) {}
-  try { var m = JSON.parse(meta || '{}'); p.sel = m.sel || {}; p.done = m.done || {}; if (m.old) p.old = m.old; if (m.bunkai) p.bunkai = m.bunkai; if (m.setsumei) p.setsumei = m.setsumei; } catch (e) {} // 旧版の行（D列が日付）は無視
+  try { var m = JSON.parse(meta || '{}'); p.sel = m.sel || {}; p.done = m.done || {}; if (m.old) p.old = m.old; if (m.bunkai) p.bunkai = m.bunkai; if (m.setsumei) p.setsumei = m.setsumei; if (m.tp) p.tp = m.tp; } catch (e) {} // 旧版の行（D列が日付）は無視
   return Sched.norm(p);
 }
 
@@ -242,6 +242,8 @@ function api_save(json) {
   // 形の違う字エントリは字単位で直す（旧形式は補完）・落としてから統合する。
   // 全体を拒否すると、一部だけ壊れた端末の進捗が永遠に保存できなくなる
   dropBadEntries_(incoming.read, 1); dropBadEntries_(incoming.write, 0);
+  // れんしゅうプリントの点も 形の違う回だけ落とす（[点 0〜100, 問題数]）
+  Object.keys(incoming.tp).forEach(function (t) { var e = incoming.tp[t]; if (!(isFinite(Number(t)) && Array.isArray(e) && e.length === 2 && e[0] >= 0 && e[0] <= 100 && e[1] > 0)) delete incoming.tp[t]; });
   // 同じ児童の2台からの同時保存だけを順番にする（別の児童の行は独立。appendRow は1回で行を足すので競合しない）。
   // ユーザー単位のロックにして、学級の30人が同時に終えても互いを待たせない
   var lock = LockService.getUserLock();
@@ -249,7 +251,7 @@ function api_save(json) {
   try {
     var cur = loadProgress_(me.email);
     var m = Sched.compact(Sched.merge(cur.p, incoming), Sched.compactBefore(new Date()));
-    var row = [me.email, JSON.stringify(m.read), JSON.stringify(m.write), JSON.stringify({ sel: m.sel, done: m.done, old: m.old, bunkai: m.bunkai, setsumei: m.setsumei }), new Date()];
+    var row = [me.email, JSON.stringify(m.read), JSON.stringify(m.write), JSON.stringify({ sel: m.sel, done: m.done, old: m.old, bunkai: m.bunkai, setsumei: m.setsumei, tp: m.tp }), new Date()];
     if (row[1].length >= 50000 || row[2].length >= 50000 || row[3].length >= 50000) throw new Error('進捗が大きすぎます'); // I6
     writeProgress_(progressSheet_(), cur.row, row, m.forest);
     return JSON.stringify(m);
@@ -275,7 +277,7 @@ function api_teacherView(klass) {
   if (m > 0) sh.getRange(2, 1, m, 4).getValues().forEach(function (r) { rows[String(r[0]).toLowerCase()] = r; });
   var per = {}, perP = {}, perS = {};
   var students = kids.map(function (k) {
-    var r = rows[k.email], out = { no: k.no, name: k.name || k.email.split('@')[0], last: 0, sessions: 0, items: 0, learned: 0, miss: [] };
+    var r = rows[k.email], out = { no: k.no, name: k.name || k.email.split('@')[0], last: 0, sessions: 0, items: 0, learned: 0, miss: [], tp: null };
     if (!r) return out;
     var p = parseProgress_(r[1], r[2], r[3]), miss = [], c, d;
     // ぶんかい: 問題ごとに [答えた人数, 最後の答えがまちがいの人数, 役割まちがいの累計, 係り先まちがいの累計]
@@ -308,6 +310,7 @@ function api_teacherView(klass) {
       }
     }
     for (c in p.write) if (p.write[c][2] > 0 && (p.write[c][4] || 0) > 0) miss.push({ c: c, r: p.write[c][4] / p.write[c][2] });
+    out.tp = Sched.tprintAvg(p, Date.now(), 14); // れんしゅうプリントの 直近2週間の平均点
     out.sessions = p.old[1]; out.items = p.old[2];
     for (d in p.done) { out.sessions++; out.items += p.done[d]; if (Number(d) > out.last) out.last = Number(d); }
     var seen = {};
