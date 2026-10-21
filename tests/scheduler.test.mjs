@@ -182,7 +182,13 @@ test('れんしゅうプリントの点: 記録・平均・統合・検査・古
   const D = 86400000, now = 100 * D, p = S.newProgress();
   assert.equal(S.tprintAvg(p, now, 14), null);
   S.addTprint(p, now - D, 90, 50); S.addTprint(p, now - 3 * D, 71, 10); S.addTprint(p, now - 15 * D, 0, 50);
-  assert.deepEqual(S.tprintAvg(p, now, 14), { avg: 81, n: 2 });
+  assert.deepEqual(S.tprintAvg(p, now, 14), { avg: 81, n: 2, hint: 0 });
+  // ヒントありの回は平均に入れず、回数だけ数える
+  const ph = S.newProgress(); S.addTprint(ph, now, 100, 10, true);
+  assert.deepEqual(S.tprintAvg(ph, now, 14), { avg: null, n: 0, hint: 1 });
+  assert.deepEqual(S.check(ph), []);
+  S.addTprint(ph, now - D, 60, 10); assert.deepEqual(S.tprintAvg(ph, now, 14), { avg: 60, n: 1, hint: 1 });
+  ph.tp.bad = [50, 10, 2]; assert.deepEqual(S.check(ph), ['tp bad']);
   const q = S.newProgress(); S.addTprint(q, now, 50, 10);
   const m = S.merge(p, q);
   assert.equal(Object.keys(m.tp).length, 4);

@@ -22,7 +22,7 @@
   // old: [境目の時刻, 回数, 問題数] … 境目より前に終えた回の合計（サーバーが compact でまとめる。done が際限なく増えないように）
   // bunkai: ぶんかいの問題ごとの記録 { 問題id: [答えた回数, まちがい回数, 最後に答えた時刻, 最後にまちがえた時刻, 役割まちがい累計, 係り先まちがい累計] }
   // setsumei: せつめい文の くみたて（§27）の文章ごとの記録 { 文章id: [答えた回数, まちがい回数, 最後に答えた時刻, 最後にまちがえた時刻, ①段落番号まちがい累計, ②切れ目まちがい累計, ③文さがしまちがい累計] }
-  // tp: れんしゅうプリント（漢字テストの練習）の丸つけの記録 { 丸つけした時刻: [点(0〜100), 問題数] }（先生画面の 直近2週間の平均点）
+  // tp: れんしゅうプリント（漢字テストの練習）の丸つけの記録 { 丸つけした時刻: [点(0〜100), 問題数] または [点, 問題数, 1]（ヒントあり） }（先生画面の 直近2週間の平均点）
   function newProgress() {
     return { v: 2, read: {}, write: {}, sel: {}, done: {}, old: [0, 0, 0], bunkai: {}, setsumei: {}, tp: {} };
   }
@@ -287,7 +287,7 @@
   // ---- 児童画面のボタンのオン・オフ（学級ごと。先生がおためし画面で切り替える）
   // 持つのはオフにしたボタンのキーだけ。m.＝メニューのボタン、s.＝「どの字で やる？」の選び方（読む・書く・カードで共通）
   // 先生画面・児童画面・GAS サーバーが同じ一覧を使う（ここが唯一の定義）
-  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 'm.other', 'o.bunkai', 'o.setsumei', 's.test', 's.due', 's.sel', 's.rnd', 's.miss', 't.p50', 't.p10', 't.paper'];
+  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 'm.other', 'o.bunkai', 'o.setsumei', 's.test', 's.due', 's.sel', 's.rnd', 's.miss', 't.p50', 't.p10', 't.hint', 't.paper'];
   // 配列・「,」区切りの文字列のどちらでも受け、知らないキー・重なりを除いて GATE_KEYS の順に並べる
   function normGates(v) {
     var list = Array.isArray(v) ? v.map(String) : String(v || '').split(',');
@@ -448,19 +448,20 @@
     }
     for (c in p.tp || {}) {
       var te = p.tp[c];
-      if (!(Array.isArray(te) && te.length === 2 && te[0] >= 0 && te[0] <= 100 && te[1] > 0)) bad.push('tp ' + c);
+      if (!(Array.isArray(te) && (te.length === 2 || (te.length === 3 && te[2] === 1)) && te[0] >= 0 && te[0] <= 100 && te[1] > 0)) bad.push('tp ' + c);
     }
     if (p.v !== undefined && p.v !== 2) bad.push('v');
     return bad;
   }
 
   // れんしゅうプリントの丸つけを記録する
-  function addTprint(p, now, score, n) { norm(p); p.tp[String(now)] = [score, n]; }
-  // 直近 days 日の れんしゅうプリントの平均点 { avg: 平均点（整数）, n: 回数 }。1回もなければ null
+  // hint: ヒントモード（2画目までを先に書いた形）で丸つけした回。平均点には入れず、回数だけ別に数える
+  function addTprint(p, now, score, n, hint) { norm(p); p.tp[String(now)] = hint ? [score, n, 1] : [score, n]; }
+  // 直近 days 日の れんしゅうプリントの平均点 { avg: ヒントなしの平均点（整数。なければ null）, n: ヒントなしの回数, hint: ヒントありの回数 }。1回もなければ null
   function tprintAvg(p, now, days) {
-    var from = now - days * 86400000, sum = 0, n = 0;
-    for (var t in (p && p.tp) || {}) if (Number(t) >= from && Number(t) <= now + 86400000) { sum += p.tp[t][0]; n++; }
-    return n ? { avg: Math.round(sum / n), n: n } : null;
+    var from = now - days * 86400000, sum = 0, n = 0, h = 0;
+    for (var t in (p && p.tp) || {}) if (Number(t) >= from && Number(t) <= now + 86400000) { if (p.tp[t][2]) h++; else { sum += p.tp[t][0]; n++; } }
+    return n || h ? { avg: n ? Math.round(sum / n) : null, n: n, hint: h } : null;
   }
 
   var api = {

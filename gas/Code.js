@@ -243,7 +243,7 @@ function api_save(json) {
   // 全体を拒否すると、一部だけ壊れた端末の進捗が永遠に保存できなくなる
   dropBadEntries_(incoming.read, 1); dropBadEntries_(incoming.write, 0);
   // れんしゅうプリントの点も 形の違う回だけ落とす（[点 0〜100, 問題数]）
-  Object.keys(incoming.tp).forEach(function (t) { var e = incoming.tp[t]; if (!(isFinite(Number(t)) && Array.isArray(e) && e.length === 2 && e[0] >= 0 && e[0] <= 100 && e[1] > 0)) delete incoming.tp[t]; });
+  Object.keys(incoming.tp).forEach(function (t) { var e = incoming.tp[t]; if (!(isFinite(Number(t)) && Array.isArray(e) && (e.length === 2 || (e.length === 3 && e[2] === 1)) && e[0] >= 0 && e[0] <= 100 && e[1] > 0)) delete incoming.tp[t]; });
   // 同じ児童の2台からの同時保存だけを順番にする（別の児童の行は独立。appendRow は1回で行を足すので競合しない）。
   // ユーザー単位のロックにして、学級の30人が同時に終えても互いを待たせない
   var lock = LockService.getUserLock();

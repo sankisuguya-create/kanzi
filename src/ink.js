@@ -321,6 +321,8 @@
       return { pts: pts, len: L, c: centroid(pts) };
     }));
   }
+  // お手本の画を 書いた線と同じ形（[[x,y],...]）に。ヒントモードで先に書いた画を 丸つけに足すため
+  function pathPoints(dList) { return templateOf(dList).map(function (t) { return t.pts.map(function (q) { return [Math.round(q.x * 10) / 10, Math.round(q.y * 10) / 10]; }); }); }
   // まとめて判定する。dList: お手本の画、drawn: 書いた線 [[[x,y],...],...]、level: 'normal'|'easy'（「書く」と同じ許容）。
   // 字の大きさ・位置をお手本にそろえてから、書いた線と お手本の画を ずれの小さい組から順に1対1で当てる。
   // 正解 = 全部の画に当たり、余った線がない。書き順・書く向きは問わない（紙のテストでは見えないので、紙のテストと同じ基準）
@@ -359,5 +361,5 @@
     return { ok: extra === 0 && missing === 0, extra: extra, missing: missing };
   }
 
-  root.Ink = { LEVELS: LEVELS, Pad: Pad, animate: animate, Recorder: Recorder, grade: grade, strokesSvg: strokesSvg, _resample: resample, _scribble: scribble };
+  root.Ink = { LEVELS: LEVELS, Pad: Pad, animate: animate, Recorder: Recorder, grade: grade, strokesSvg: strokesSvg, pathPoints: pathPoints, _resample: resample, _scribble: scribble };
 })(this);
