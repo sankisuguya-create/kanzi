@@ -103,15 +103,15 @@ check(await fits(), '②③ ページはスクロールなし');
 await shot('tprint-2-block');
 
 // 書く: お手本の線をなぞる（ok=false なら 線を1本だけ）
-async function write(ok) {
-  const c = (await state()).items[(await state()).cur].c;
+async function write(ok, skip = 0, c0) {
+  const c = c0 || (await state()).items[(await state()).cur].c;
   const strokes = await page.evaluate((c) => {
     const svg = document.querySelector('#tp-pad svg');
     return KANZI_STROKES[c].map((d) => { const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', d); svg.appendChild(p); const L = p.getTotalLength(), pts = []; for (let i = 0; i <= 12; i++) { const q = p.getPointAtLength(L * i / 12); pts.push([q.x, q.y]); } p.remove(); return pts; });
   }, c);
   const box = await page.locator('#tp-pad svg').boundingBox();
   const P = ([x, y]) => [box.x + x / 109 * box.width, box.y + y / 109 * box.height];
-  for (const s of ok ? strokes : strokes.slice(0, 1)) {
+  for (const s of ok ? strokes.slice(skip) : strokes.slice(0, 1)) {
     await page.mouse.move(...P(s[0])); await page.mouse.down();
     for (const q of s.slice(1)) await page.mouse.move(...P(q), { steps: 2 });
     await page.mouse.up();
@@ -186,6 +186,28 @@ await shot('tprint-5-graded');
 await page.click('#back'); await page.click('#tp-10'); await page.waitForSelector('.tp-all .tp-q');
 const it10 = await page.evaluate(() => JSON.parse(localStorage.getItem('kanzi.tprint.demo.10')).items);
 check(it10.length === 10 && it10.slice(8).every((x) => x.okuri), '10問版（送りがなは最後の2問）');
+// ヒントモード（2画目までを先に書く。2画以下の字は最後の1画を残す）
+{
+  await page.goto(URL0); await page.waitForSelector('#go-test'); await page.click('#go-test'); await page.click('#tp-10'); await page.waitForSelector('.tp-all .tp-q');
+  await page.click('#tp-new'); await page.waitForSelector('.tp-all .tp-q'); // 前の書きかけを使わない
+  const K10 = 'kanzi.tprint.demo.10', st10 = () => page.evaluate((k) => JSON.parse(localStorage.getItem(k)), K10);
+  check(await page.locator('#tp-hint[aria-pressed="false"]').count() === 1 && await page.locator('.tp-hint path').count() === 0, 'ヒント: はじめは オフ');
+  await page.click('#tp-hint');
+  const its = (await st10()).items, KANZI_N = await page.evaluate((cs) => Object.fromEntries(cs.map((c) => [c, KANZI_STROKES[c].length])), (await st10()).items.map((it) => it.c)), want = its.reduce((n, it) => n + Math.max(0, Math.min(2, KANZI_N[it.c] - 1)), 0);
+  check(await page.locator('#tp-hint[aria-pressed="true"]').count() === 1 && await page.locator('.tp-paper .tp-hint path').count() === want, 'ヒント: オンで どの問題も2画目まで（2画以下は最後の1画を残す）');
+  const wBefore = await page.evaluate(() => JSON.stringify(KanziState.p.write));
+  await page.click('.tp-paper .tp-q[data-i="0"]'); await page.waitForSelector('#tp-pad svg');
+  check(await page.locator('#tp-pad .tp-hint path').count() === Math.min(2, KANZI_N[its[0].c] - 1), 'ヒント: 書く欄にも うすく出る');
+  await write(true, Math.min(2, KANZI_N[its[0].c] - 1), its[0].c);
+  await shot('tprint-7-hint');
+  await page.click('#tp-grade'); await page.click('#tp-grade'); await page.waitForSelector('.tp-pop', { timeout: 15000 });
+  const r = (await st10()).result;
+  check(r.hint === true && r.items[0].ok === true && r.score === 10, 'ヒント: 先に書いた画を足して丸つけ（残りを書けば正解）');
+  check(await page.locator('.tp-pop').textContent().then((t) => t.includes('ヒントあり')), 'ヒント: 点数に「ヒントあり」');
+  const tp = await page.evaluate(() => KanziState.p.tp), last = tp[Object.keys(tp).sort().pop()];
+  check(last.length === 3 && last[2] === 1 && await page.evaluate((w) => JSON.stringify(KanziState.p.write) === w, wBefore), 'ヒント: 記録は [点, 問題数, 1]、「書く」の記録には入れない');
+  await page.click('#tp-pop-close');
+}
 // 紙で練習（50問・10問。どの学年にも出す）
 await page.click('#back'); await page.click('#tpp-50'); await page.waitForSelector('.tp-paper .tp-q');
 check(await page.locator('.tp-paper .tp-q').count() === 50 && await page.locator('.tp-akanji').count() === 0, '紙で練習: 50問、はじめは答えを出さない');

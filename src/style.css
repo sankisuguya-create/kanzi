@@ -606,6 +606,11 @@ svg.tp-mark path { fill: none; stroke: #E0262B; stroke-width: 7; stroke-linecap:
 .tp-padbox { aspect-ratio: 1; width: 100%; }
 .tp-pad .stroke-rec, .tp-done polyline { fill: none; stroke: var(--ink); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
 .tp-done { border: 3px solid var(--cat-1); }
+/* ヒントモード: 先に書いておく画（2画目まで）。児童が書く線と見分けられるよう うすい灰色 */
+.tp-hint path { fill: none; stroke: var(--ink-sub); stroke-opacity: .45; stroke-linecap: round; stroke-linejoin: round; }
+.tp-mini .tp-hint path { stroke-width: 7; }
+.tp-pad .tp-hint path { stroke-width: 4.5; }
+.tp-hintbtn[aria-pressed="true"] { background: var(--fill-a); border-color: var(--solid-on); font-weight: bold; }
 .tp-done.ng { border: 3px dashed var(--ink-alert); }
 .tp-tools { display: flex; gap: 6px; margin: 4px 0 0; }
 .tp-tools button, .tp-move button, .tp-correct button, .tp-result button { min-height: 48px; padding: 0 12px; font-size: 17px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); }

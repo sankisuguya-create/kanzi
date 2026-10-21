@@ -129,7 +129,7 @@
   var GATE_LABEL = { 'm.browse': 'ぜんぶ見る', 'm.read': '読む', 'm.write': '書く', 'm.fk': 'カード（漢字→読み）', 'm.fy': 'カード（読み→漢字）',
     'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': '一文の分解', 'o.setsumei': '説明文の分解', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
     's.sel': '出す字: 選んだ漢字', 's.rnd': '出す字: ランダム', 's.miss': '出す字: まちがいの多い漢字',
-    't.p50': 'れんしゅうプリント50問', 't.p10': 'れんしゅうプリント10問', 't.paper': '紙で練習' };
+    't.p50': 'れんしゅうプリント50問', 't.p10': 'れんしゅうプリント10問', 't.hint': 'れんしゅうプリントのヒント', 't.paper': '紙で練習' };
   var GATE_POLL_MS = 30000;
   function gateOff(k) { return S.gates.indexOf(k) >= 0; }
   function paintGates() {
@@ -328,6 +328,11 @@
     function answered(i) { var a = st.ans[i]; return !!a && a.s.length > 0; }
     function res(i) { return st.result && i <= revealUpTo ? st.result.items[i] : null; }
     function revealing() { return revealUpTo !== Infinity; }
+    // ヒントモード（利用者の指定）: どの問題も 2画目までを先に書いておく（うすい色）。画数が2以下の字は 最後の1画を残す（一はヒントなし）。
+    // 丸つけでは 先に書いた画を足して判定する。1回でも使ったプリントは「ヒントあり」として記録し、平均点・「書く」の記録には入れない
+    function hintOn() { return !!st.hint && !(gateOff('t.hint') && !S.trial); }
+    function hintD(i) { var d = ST[items[i].c] || []; return hintOn() ? d.slice(0, Math.max(0, Math.min(2, d.length - 1))) : []; }
+    function hintPaths(i) { return hintD(i).map(function (d) { return '<path d="' + d + '"/>'; }).join(''); }
     document.body.classList.add('tp-screen');
     cleanup.push(function () { document.body.classList.remove('tp-screen'); });
 
@@ -339,7 +344,8 @@
     }
     function boxInner(i) {
       var a = st.ans[i], r = res(i);
-      return (a && a.s.length ? Ink.strokesSvg(a.s, 'tp-mini') : '') + (r ? markSvg(r.ok) : '');
+      var h = hintPaths(i);
+      return (a && a.s.length || h ? '<svg viewBox="0 0 109 109" class="tp-mini"><g class="tp-hint">' + h + '</g>' + (a ? a.s : []).map(function (s) { return '<polyline points="' + s.join(' ') + '"/>'; }).join('') + '</svg>' : '') + (r ? markSvg(r.ok) : '');
     }
     function boxHtml(i) {
       var r = res(i);
@@ -358,12 +364,14 @@
       var done = items.filter(function (_, i) { return answered(i); }).length;
       return '<header class="bar tp-bar"><button class="back" id="back">もどる</button>' +
         '<span class="prog" id="tp-prog">' + (revealing() ? K('[丸|まる]つけ[中|ちゅう]…') : st.result ? st.result.score + K('[点|てん]') + '（' + st.result.ok + ' / ' + items.length + '）' : K('れんしゅうプリント ') + done + ' / ' + items.length) + '</span>' +
-        '<span class="nav">' + (revealing() ? '' : (nav || '') + '<button id="tp-new">' + K('[新|あたら]しい プリント') + '</button>' + (st.result ? '' : '<button class="primary" id="tp-grade">' + K('[丸|まる]つけ') + '</button>')) + '</span></header>';
+        '<span class="nav">' + (revealing() ? '' : (nav || '') + '<button id="tp-new">' + K('[新|あたら]しい プリント') + '</button>' + (st.result ? '' : (gateOff('t.hint') && !S.trial ? '' : '<button class="tp-hintbtn" id="tp-hint" data-gate="t.hint" aria-pressed="' + hintOn() + '">' + K('ヒント（2[画|かく]めまで）') + (hintOn() ? ' ✓' : '') + '</button>') + '<button class="primary" id="tp-grade">' + K('[丸|まる]つけ') + '</button>')) + '</span></header>';
     }
     function bindHeader() {
       on('#back', function () { save(); testOverview(); });
       on('#tp-new', function () { tprint(n, true); });
       on('#tp-grade', grade);
+      on('#tp-hint', function () { st.hint = !st.hint; if (st.hint) st.hintUsed = true; save(); render(); });
+      if ($('#tp-hint')) paintGates();
     }
     function render() { clearScreen(); document.body.classList.add('tp-screen'); cleanup.push(function () { document.body.classList.remove('tp-screen'); }); (st.view === 'block' ? blockView : allView)(); }
 
@@ -459,8 +467,9 @@
         (r ? '<div class="tp-correct">' + kanjiSvg(it.c, 'tp-ans', false) + '<button id="tp-show">' + K('[書|か]き[順|じゅん]を [見|み]る') + '</button></div>' : '') +
         '<p class="tp-move"><button id="tp-prev"' + (i > from ? '' : ' disabled') + '>← ' + K('まえ') + '</button><button id="tp-next"' + (i < to - 1 ? '' : ' disabled') + '>' + K('つぎ') + ' →</button></p>';
       var pad = null;
-      if (r) $('#tp-pad').innerHTML = Ink.strokesSvg(a.s, 'pad tp-pad tp-done ' + (r.ok ? 'ok' : 'ng'));
+      if (r) $('#tp-pad').innerHTML = Ink.strokesSvg(a.s, 'pad tp-pad tp-done ' + (r.ok ? 'ok' : 'ng')).replace('>', '><g class="tp-hint">' + (r.h ? (ST[it.c] || []).slice(0, r.h).map(function (d) { return '<path d="' + d + '"/>'; }).join('') : '') + '</g>');
       else pad = new Ink.Recorder($('#tp-pad'), a.s, function (s) { a.s = s.map(function (x) { return x.slice(); }); save(); paintStrip(); });
+      if (pad && hintD(i).length) pad.ink.insertAdjacentHTML('beforebegin', '<g class="tp-hint">' + hintPaths(i) + '</g>');
       on('#tp-undo', function () { pad.undo(); });
       on('#tp-clear', function () { pad.clear(); });
       on('#tp-close', function () { st.open = false; save(); box.hidden = true; paintStrip(); });
@@ -491,20 +500,20 @@
         $('#tp-prog').textContent = K('まだ ') + blank + K('[問|もん] [書|か]いていないよ。もう[一|いち][度|ど] おすと [丸|まる]つけ');
         return;
       }
-      var result = { items: [], ok: 0 }, now = nowMs(), seen = {}, wrong = [];
+      var hint = !!st.hintUsed, result = { items: [], ok: 0, hint: hint }, now = nowMs(), seen = {}, wrong = [];
       items.forEach(function (it, i) {
-        var a = ans(i), kOk = a.s.length ? Ink.grade(ST[it.c], a.s, S.writeLevel === 'easy' ? 'easy' : 'normal').ok : false;
+        var a = ans(i), hd = hintD(i), kOk = a.s.length ? Ink.grade(ST[it.c], (hd.length ? Ink.pathPoints(hd) : []).concat(a.s), S.writeLevel === 'easy' ? 'easy' : 'normal').ok : false;
         var ok = kOk && (!it.okuri || a.o === it.okuri);
-        result.items.push({ ok: ok, k: kOk });
+        result.items.push(hd.length ? { ok: ok, k: kOk, h: hd.length } : { ok: ok, k: kOk });
         if (ok) result.ok++;
         if (!ok && wrong.indexOf(it.c) < 0) wrong.push(it.c);
         // 書いた字だけを「書く」の記録に入れる（何も書いていない問題は数えない。同じ字は1回）
-        if (a.s.length && !seen[it.c]) { seen[it.c] = true; Sched.answerWrite(S.p, it.c, kOk, today(), now); }
+        if (!hint && a.s.length && !seen[it.c]) { seen[it.c] = true; Sched.answerWrite(S.p, it.c, kOk, today(), now); }
       });
       result.score = Math.round(result.ok * 100 / items.length);
       result.wrong = wrong;
       st.result = result; save();
-      Sched.addTprint(S.p, now, result.score, items.length); // 先生画面の 直近2週間の平均点
+      Sched.addTprint(S.p, now, result.score, items.length, hint); // 先生画面の 直近2週間の平均点（ヒントありは 回数だけ別に）
       Sched.finishSession(S.p, st.startedAt, items.filter(function (_, i) { return answered(i); }).length, 'write'); // 書いた問題の数だけ 森が育つ（書くと同じ）
       commit(); flush();
       reveal();
@@ -531,7 +540,7 @@
     function popup() {
       var r = st.result, el = document.createElement('div');
       el.className = 'tp-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true');
-      el.innerHTML = '<div class="tp-pop-box"><p class="tp-pop-score">' + r.score + '<small>' + K('[点|てん]') + '</small></p>' +
+      el.innerHTML = '<div class="tp-pop-box"><p class="tp-pop-score">' + r.score + '<small>' + K('[点|てん]') + '</small></p>' + (r.hint ? '<p class="tp-pop-sub">' + K('ヒントあり') + '</p>' : '') +
         '<p class="tp-pop-sub">' + r.ok + ' / ' + items.length + K('[問|もん] [正|せい][解|かい]') + '</p>' +
         (r.wrong.length ? '<p class="tp-pop-h">' + K('まちがえた[字|じ]') + '</p><p class="tp-pop-wrong">' + r.wrong.map(esc).join('') + '</p>' +
           '<p><button id="tp-pop-sel">' + K('まちがえた[字|じ]を [選|えら]んだ[漢|かん][字|じ]に [入|い]れる') + '</button> <span id="tp-pop-msg" aria-live="polite"></span></p>' : '<p class="tp-pop-h">' + K('ぜんぶ [正|せい][解|かい]！') + '</p>') +
@@ -544,7 +553,7 @@
     }
     function resultHtml() {
       var r = st.result;
-      return '<div class="tp-result"><span class="tp-score">' + r.score + K('[点|てん]') + '</span>' +
+      return '<div class="tp-result"><span class="tp-score">' + r.score + K('[点|てん]') + (r.hint ? K('（ヒントあり）') : '') + '</span>' +
         (r.wrong.length ? '<span>' + K('まちがえた[字|じ]: ') + '<span class="tp-wrong">' + r.wrong.map(esc).join(' ') + '</span></span>' +
           '<button id="tp-sel">' + K('まちがえた[字|じ]を [選|えら]んだ[漢|かん][字|じ]に [入|い]れる') + '</button><span id="tp-selmsg" aria-live="polite"></span>' : '<span>' + K('ぜんぶ [正|せい][解|かい]！') + '</span>') + '</div>';
     }
@@ -1731,12 +1740,12 @@
         var order = orderOf(tgrade), pointer = pointers[tgrade] || 0, isTop = tgrade === Math.max.apply(null, grades);
         var classes = (S.info.classes || []).length > 1 ? '<p><label>学級 <select id="klass">' + S.info.classes.map(function (k) { return '<option value="' + esc(k) + '"' + (k === klass ? ' selected' : '') + '>' + esc(klassLabel(k)) + '</option>'; }).join('') + '</select></label></p>' : '';
         // 子どもごとの記録は たたむ（利用者の指定）。見出しに 人数だけ出す
-        var kidsHtml = '<details class="tset kids-fold" id="d-kids"' + (S.open['d-kids'] ? ' open' : '') + '><summary><span class="ts-title">子どもごとの記録</span><span class="ts-now">' + kids.length + '人</span></summary><div class="ts-body"><p class="hint">この画面だけに出します（児童の画面には出しません）。「終えた回」は よむ・かく・カード・ぶんかいを最後までやった回数、「おぼえた字」は よむで続けて正解して箱3以上になった字の数、「テスト練習」は れんしゅうプリントの 直近2週間の平均点（丸つけした回数）。</p>' +
+        var kidsHtml = '<details class="tset kids-fold" id="d-kids"' + (S.open['d-kids'] ? ' open' : '') + '><summary><span class="ts-title">子どもごとの記録</span><span class="ts-now">' + kids.length + '人</span></summary><div class="ts-body"><p class="hint">この画面だけに出します（児童の画面には出しません）。「終えた回」は よむ・かく・カード・ぶんかいを最後までやった回数、「おぼえた字」は よむで続けて正解して箱3以上になった字の数、「テスト練習」は れんしゅうプリントの 直近2週間の平均点（丸つけした回数。ヒントありの回は平均に入れず、回数だけ別に出す）。</p>' +
           (kids.length ? '<div class="kids-wrap"><table class="kids"><thead><tr><th>番号</th><th>名前</th><th>最後に使った日</th><th>終えた回（問題数）</th><th>おぼえた字</th><th>テスト練習（2週間）</th><th>まちがいの多い字</th></tr></thead><tbody>' +
             kids.map(function (k) {
               var idle = !k.last || (Date.now() - k.last) > 7 * 86400000;
               return '<tr' + (idle ? ' class="idle"' : '') + '><td>' + esc(k.no) + '</td><td>' + esc(k.name) + '</td><td>' + (idle ? '▲ ' : '') + esc(dateLabel(k.last)) + '</td>' +
-                '<td>' + k.sessions + '（' + k.items + '）</td><td>' + k.learned + '</td><td>' + (k.tp ? k.tp.avg + '点（' + k.tp.n + '回）' : '—') + '</td><td class="kmiss">' + esc((k.miss || []).join(' ')) + '</td></tr>';
+                '<td>' + k.sessions + '（' + k.items + '）</td><td>' + k.learned + '</td><td>' + (k.tp ? (k.tp.n ? k.tp.avg + '点（' + k.tp.n + '回）' : '—') + (k.tp.hint ? '<br>ヒントあり ' + k.tp.hint + '回' : '') : '—') + '</td><td class="kmiss">' + esc((k.miss || []).join(' ')) + '</td></tr>';
             }).join('') + '</tbody></table></div><p class="hint">▲＝7日以上 使っていない</p>' : '<p>名簿に この学級の子どもが いません（「名簿」シートの 学年・組 を確認してください）。</p>') + '</div></details>';
         // 学級で まちがいのおおい字（その学年の字。上位20字）
         var hard = Sched.classMissTop(st.perChar, { chars: Object.keys(st.perChar).filter(function (c) { return D.kanji[c] && D.kanji[c].g === tgrade; }), top: 20 });
