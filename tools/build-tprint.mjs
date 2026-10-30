@@ -119,7 +119,19 @@ for (let g = 1; g <= 6; g++) {
       }
       if (why.length) { report.push(`${c}: ${raw} … ${why.join('・')}`); continue; }
       kept++;
-      list.push([p.pre, p.rt, p.post, p.okuri]);
+      // 二字熟語モード: 四角の字と となりの字で1語（解析の語がちょうど2字で、となりが ルビなしの その学年までの字）なら、となりの字と読みを足す
+      // [前, よみ, 後, 送りがな, [向き(-1=前の字 / 1=後の字), となりのよみ]]。となりの読みは 語の読みから 四角のよみを除いた残り
+      let jk = null;
+      if (!p.okuri && cover && cover.surface_form.length === 2) {
+        const side = cover.surface_form[1] === c && strip(p.pre).endsWith(cover.surface_form[0]) && !p.pre.endsWith('}') ? -1
+          : cover.surface_form[0] === c && p.post.startsWith(cover.surface_form[1]) ? 1 : 0;
+        const k = side < 0 ? cover.surface_form[0] : cover.surface_form[1];
+        if (side && D.kanji[k] && D.kanji[k].g <= g) {
+          const nr = side < 0 ? (cr.endsWith(p.rt) ? cr.slice(0, -p.rt.length) : '') : (cr.startsWith(p.rt) ? cr.slice(p.rt.length) : '');
+          if (nr) jk = [side, nr];
+        }
+      }
+      list.push(jk ? [p.pre, p.rt, p.post, p.okuri, jk] : [p.pre, p.rt, p.post, p.okuri]);
     }
     if (!list.some((x) => !x[3])) report.push(`★ ${c}: 四角の問題が1つも残らない`);
     out[c] = list;
@@ -131,4 +143,4 @@ console.log(`文 ${kept}/${total} を採用。四角の問題が無い字 ${miss
 if (process.argv.includes('--check')) process.exit(0);
 if (missing.length) { console.error('四角の問題が無い字: ' + missing.join('')); process.exit(1); }
 fs.writeFileSync(path.join(ROOT, 'src', 'tprint-data.js'),
-  '// 自動生成（tools/build-tprint.mjs）。正本は data-src/tprint-gN.txt。\n// { 字: [[四角の前, 四角のよみ, 四角の後, 送りがな], ...] }。前・後の {字|よみ} はルビ\nvar KANZI_TPRINT = ' + JSON.stringify(out) + ';\n');
+  '// 自動生成（tools/build-tprint.mjs）。正本は data-src/tprint-gN.txt。\n// { 字: [[四角の前, 四角のよみ, 四角の後, 送りがな(, [二字熟語のとなりの向き -1/1, そのよみ])], ...] }。前・後の {字|よみ} はルビ\nvar KANZI_TPRINT = ' + JSON.stringify(out) + ';\n');

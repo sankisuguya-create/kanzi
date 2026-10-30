@@ -288,7 +288,7 @@
   // ---- 児童画面のボタンのオン・オフ（学級ごと。先生がおためし画面で切り替える）
   // 持つのはオフにしたボタンのキーだけ。m.＝メニューのボタン、s.＝「どの字で やる？」の選び方（読む・書く・カードで共通）
   // 先生画面・児童画面・GAS サーバーが同じ一覧を使う（ここが唯一の定義）
-  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 'm.other', 'o.bunkai', 'o.setsumei', 's.test', 's.due', 's.sel', 's.rnd', 's.miss', 't.p50', 't.p10', 't.hint', 't.paper'];
+  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 'm.other', 'o.bunkai', 'o.setsumei', 's.test', 's.due', 's.sel', 's.rnd', 's.miss', 't.p50', 't.p10', 't.hint', 't.paper', 't.juku'];
   // 配列・「,」区切りの文字列のどちらでも受け、知らないキー・重なりを除いて GATE_KEYS の順に並べる
   function normGates(v) {
     var list = Array.isArray(v) ? v.map(String) : String(v || '').split(',');
@@ -479,4 +479,4 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 // GAS 版ずれ検知の版（tools/build-gas.mjs が埋め込む）
-Sched.VER = "a048381";
+Sched.VER = "4e35e34";
