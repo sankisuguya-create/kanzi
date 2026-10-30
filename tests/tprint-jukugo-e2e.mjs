@@ -1,5 +1,5 @@
-// れんしゅうプリントの 二字熟語モード（npm run e2e:tprint-jukugo）。Chromium が必要: CHROMIUM=/path/to/chrome
-// テストの範囲 → 二字熟語モード（20問）→ 2字とも手書き → 丸つけ（○×は1字ずつ、点は2字そろって1問）
+// れんしゅうプリントの 二文字モード（npm run e2e:tprint-jukugo）。Chromium が必要: CHROMIUM=/path/to/chrome
+// テストの範囲 → 二文字モード（20問）→ 2字とも手書き → 丸つけ（○×は1字ずつ、点は2字そろって1問）
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -32,7 +32,7 @@ const state = () => page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KE
 await page.goto(URL0);
 await page.evaluate((chars) => { localStorage.clear(); localStorage.setItem('kanzi.settings', JSON.stringify({ grades: { '3-1': [1, 2, 3] }, tests: { '3-1': { active: 't1', list: [{ id: 't1', label: '2学期', chars }] } } })); }, CHARS);
 await page.goto(URL0); await page.waitForSelector('#go-test'); await page.click('#go-test'); await page.waitForSelector('#tpj-20');
-check(await page.locator('#tpj-20.tp-hard .tp-hard-stars').count() === 1, '二字熟語モードのボタン（★つきの濃い地）');
+check(await page.locator('#tpj-20.tp-hard .tp-hard-stars').count() === 1, '二文字モードのボタン（★つきの濃い地）');
 await shot('tprint-j-1-button');
 await page.click('#tpj-20'); await page.waitForSelector('.tp-all .tp-q');
 const st = await state();

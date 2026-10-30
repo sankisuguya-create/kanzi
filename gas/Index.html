@@ -712,7 +712,7 @@ body.sm-screen .bar { flex: none; margin-bottom: 4px; }
 /* 正解の文字（青い「正解！」）は 画面に出さない（大きな ○ が代わり。読み上げ用に残す） */
 .rmsg.good, .res.good, .bk-hint.good, .sm-ask.good { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
-<meta name="kanzi-ver" content="8847c5d">
+<meta name="kanzi-ver" content="4e35e34">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -5381,7 +5381,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
   var GATE_LABEL = { 'm.browse': 'ぜんぶ見る', 'm.read': '読む', 'm.write': '書く', 'm.fk': 'カード（漢字→読み）', 'm.fy': 'カード（読み→漢字）',
     'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': '一文の分解', 'o.setsumei': '説明文の分解', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
     's.sel': '出す字: 選んだ漢字', 's.rnd': '出す字: ランダム', 's.miss': '出す字: まちがいの多い漢字',
-    't.p50': 'れんしゅうプリント50問', 't.p10': 'れんしゅうプリント10問', 't.hint': 'れんしゅうプリントのヒント', 't.paper': '紙で練習', 't.juku': '二字熟語モード' };
+    't.p50': 'れんしゅうプリント50問', 't.p10': 'れんしゅうプリント10問', 't.hint': 'れんしゅうプリントのヒント', 't.paper': '紙で練習', 't.juku': '二文字モード' };
   var GATE_POLL_MS = 30000;
   function gateOff(k) { return S.gates.indexOf(k) >= 0; }
   function paintGates() {
@@ -5528,8 +5528,8 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       (chars.length ? '<div class="tp-start">' + [50, 10].map(function (n) {
         return '<button class="big' + (n === 50 ? ' primary' : '') + '" id="tp-' + n + '" data-gate="t.p' + n + '">' + K('れんしゅうプリント') + '<span class="meta">' + n + K('[問|もん]・テストと にた[問|もん][題|だい]') + '</span></button>';
       }).join('') + '</div>' +
-        // 二字熟語モード（利用者の指定）: テストと同じ二字熟語を 2字とも書く。ボタンは「むずかしそう」に見せる（濃い地・金の二重わく・★）
-        '<div class="tp-start"><button class="big tp-hard" id="tpj-20" data-gate="t.juku"><span class="tp-hard-stars" aria-hidden="true">★★★</span>' + K('[二|に][字|じ][熟|じゅく][語|ご]モード') + '<span class="meta">' + K('20[問|もん]・2[字|じ]とも [書|か]く ちょうせん') + '</span></button></div>' +
+        // 二文字モード（利用者の指定）: テストと同じ二字熟語を 2字とも書く。ボタンは「むずかしそう」に見せる（濃い地・金の二重わく・★）
+        '<div class="tp-start"><button class="big tp-hard" id="tpj-20" data-gate="t.juku"><span class="tp-hard-stars" aria-hidden="true">★★★</span>' + K('[二|に][文|も][字|じ]モード') + '<span class="meta">' + K('20[問|もん]・2[字|じ]とも [書|か]く ちょうせん') + '</span></button></div>' +
         // 紙で練習（利用者の指定）
         '<div class="tp-start">' + [50, 10].map(function (n) {
           return '<button class="big" id="tpp-' + n + '" data-gate="t.paper">' + K('[紙|かみ]で[練|れん][習|しゅう]') + '<span class="meta">' + n + K('[問|もん]・[紙|かみ]に [書|か]いて [答|こた]えあわせ') + '</span></button>';
@@ -5566,7 +5566,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
   function circled(i) { return String.fromCharCode(i <= 20 ? 0x245F + i : i <= 35 ? 0x3250 + i - 20 : 0x32B0 + i - 35); }
   // 問題文の {字|よみ} をルビに
   function tpRuby(s) { return esc(String(s)).replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>'); }
-  // jk: 二字熟語モード（利用者の指定）。範囲の字をふくむ二字熟語を 2字とも四角で書く。送りがなの問題はなし。丸つけの ○× は1字ずつ見せ、点は2字そろって1問
+  // jk: 二文字モード（利用者の指定）。範囲の字をふくむ二字熟語を 2字とも四角で書く。送りがなの問題はなし。丸つけの ○× は1字ずつ見せ、点は2字そろって1問
   function tprint(n, fresh, jk) {
     clearScreen();
     var chars = printChars(), sig = chars.join('') + '/' + testOkuri() + '/' + printExtra(chars);
@@ -5623,7 +5623,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     function header(nav) {
       var done = items.filter(function (_, i) { return answered(i); }).length;
       return '<header class="bar tp-bar"><button class="back" id="back">もどる</button>' +
-        '<span class="prog" id="tp-prog">' + (revealing() ? K('[丸|まる]つけ[中|ちゅう]…') : st.result ? st.result.score + K('[点|てん]') + '（' + st.result.ok + ' / ' + units + '）' : (jk ? K('[二|に][字|じ][熟|じゅく][語|ご] ') : K('れんしゅうプリント ')) + done + ' / ' + items.length) + '</span>' +
+        '<span class="prog" id="tp-prog">' + (revealing() ? K('[丸|まる]つけ[中|ちゅう]…') : st.result ? st.result.score + K('[点|てん]') + '（' + st.result.ok + ' / ' + units + '）' : (jk ? K('[二|に][文|も][字|じ] ') : K('れんしゅうプリント ')) + done + ' / ' + items.length) + '</span>' +
         '<span class="nav">' + (revealing() ? '' : (nav || '') + '<button id="tp-new">' + K('[新|あたら]しい プリント') + '</button>' + (st.result ? '' : (gateOff('t.hint') && !S.trial ? '' : '<button class="tp-hintbtn" id="tp-hint" data-gate="t.hint" aria-pressed="' + hintOn() + '">' + K('ヒント（2[画|かく]めまで）') + (hintOn() ? ' ✓' : '') + '</button>') + '<button class="primary" id="tp-grade">' + K('[丸|まる]つけ') + '</button>')) + '</span></header>';
     }
     function bindHeader() {
@@ -5710,7 +5710,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       });
       var main = $('.tp-block'); if (main && main.classList.contains('open') !== !!st.open) { main.classList.toggle('open', !!st.open); fitRow(); }
       var done = items.filter(function (_, i) { return answered(i); }).length;
-      if (!st.result) $('#tp-prog').textContent = (jk ? K('[二|に][字|じ][熟|じゅく][語|ご] ') : K('れんしゅうプリント ')) + done + ' / ' + items.length;
+      if (!st.result) $('#tp-prog').textContent = (jk ? K('[二|に][文|も][字|じ] ') : K('れんしゅうプリント ')) + done + ' / ' + items.length;
     }
     function paintInput() {
       var i = st.cur, it = items[i], a = ans(i), r = res(i), box = $('#tp-input');
