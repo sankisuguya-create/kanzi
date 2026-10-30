@@ -1,5 +1,5 @@
 // れんしゅうプリントの 二字熟語モード（npm run e2e:tprint-jukugo）。Chromium が必要: CHROMIUM=/path/to/chrome
-// テストの範囲 → 二字熟語モード（20問）→ 2字とも手書き → 丸つけ（1字ずつ ○×、点数は字の数で）
+// テストの範囲 → 二字熟語モード（20問）→ 2字とも手書き → 丸つけ（○×は1字ずつ、点は2字そろって1問）
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -69,8 +69,8 @@ await shot('tprint-j-3-input');
 await page.click('#tp-grade'); await page.click('#tp-grade'); await page.waitForSelector('.tp-pop', { timeout: 20000 });
 const r = (await state()).result;
 check(r.items[0].ks.join() === 'true,true' && r.items[1].ks.join() === 'true,false', '1字ずつ ○×');
-check(r.ok === 3 && r.score === Math.round(3 * 100 / 40), '点数は字の数で（40字中3字）');
-check((await page.textContent('.tp-pop')).includes('3 / 40'), 'ポップに 3 / 40字');
+check(r.ok === 1 && r.score === 5, '点は2字そろって1問（1字だけ正しい問題は0点。20問中1問＝5点）');
+check(r.items[1].ok === false && (await page.textContent('.tp-pop')).includes('1 / 20'), 'ポップに 1 / 20問');
 await shot('tprint-j-4-result');
 // 通常のプリントは これまでどおり
 await page.click('#tp-pop-close'); await page.click('#back'); await page.click('#tp-10'); await page.waitForSelector('.tp-all .tp-q');

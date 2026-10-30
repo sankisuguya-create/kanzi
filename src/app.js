@@ -314,7 +314,7 @@
   function circled(i) { return String.fromCharCode(i <= 20 ? 0x245F + i : i <= 35 ? 0x3250 + i - 20 : 0x32B0 + i - 35); }
   // 問題文の {字|よみ} をルビに
   function tpRuby(s) { return esc(String(s)).replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>'); }
-  // jk: 二字熟語モード（利用者の指定）。範囲の字をふくむ二字熟語を 2字とも四角で書く。送りがなの問題はなし。丸つけは1字ずつ ○×、点数は字の数で
+  // jk: 二字熟語モード（利用者の指定）。範囲の字をふくむ二字熟語を 2字とも四角で書く。送りがなの問題はなし。丸つけの ○× は1字ずつ見せ、点は2字そろって1問
   function tprint(n, fresh, jk) {
     clearScreen();
     var chars = printChars(), sig = chars.join('') + '/' + testOkuri() + '/' + printExtra(chars);
@@ -333,7 +333,7 @@
     function strokes(a, b) { return !a ? [] : b ? a.s2 || [] : a.s; } // b 番目の四角に書いた画
     function answered(i) { var a = st.ans[i]; return !!a && (a.s.length > 0 || strokes(a, 1).length > 0); }
     function boxOk(r, b) { return r.ks ? r.ks[b] : r.ok; }
-    var units = jk ? items.reduce(function (t, _, i) { return t + BX(i).length; }, 0) : items.length; // 点数の分母（二字熟語モードは字の数）
+    var units = items.length; // 点数の分母は問題の数（二字熟語は 2字そろって1問。利用者の指定）
     function res(i) { return st.result && i <= revealUpTo ? st.result.items[i] : null; }
     function revealing() { return revealUpTo !== Infinity; }
     // ヒントモード（利用者の指定）: どの問題も 2画目までを先に書いておく（うすい色）。画数が2以下の字は 最後の1画を残す（一はヒントなし）。
@@ -522,7 +522,7 @@
         BX(i).forEach(function (x, b) {
           var sk = strokes(a, b), hd = hintD(i, b), kOk = sk.length ? Ink.grade(ST[x.c], (hd.length ? Ink.pathPoints(hd) : []).concat(sk), S.writeLevel === 'easy' ? 'easy' : 'normal').ok : false;
           ks.push(kOk); hs.push(hd.length);
-          if (jk) { if (kOk) result.ok++; else if (wrong.indexOf(x.c) < 0) wrong.push(x.c); }
+          if (jk && !kOk && wrong.indexOf(x.c) < 0) wrong.push(x.c); // まちがえた字は 1字ずつ
           // 書いた字だけを「書く」の記録に入れる（何も書いていない四角は数えない。同じ字は1回）
           if (!hint && sk.length && !seen[x.c] && D.kanji[x.c]) { seen[x.c] = true; Sched.answerWrite(S.p, x.c, kOk, today(), now); }
         });
@@ -530,7 +530,8 @@
         var ri = { ok: ok, k: ks[0] };
         if (jk) { ri.ks = ks; if (hs.some(Boolean)) ri.hs = hs; } else if (hs[0]) ri.h = hs[0];
         result.items.push(ri);
-        if (!jk) { if (ok) result.ok++; else if (wrong.indexOf(it.c) < 0) wrong.push(it.c); }
+        if (ok) result.ok++; // ○×は1字ずつ見せるが、点は 2字そろって正しい時だけ（利用者の指定）
+        if (!jk && !ok && wrong.indexOf(it.c) < 0) wrong.push(it.c);
       });
       result.score = Math.round(result.ok * 100 / units);
       result.wrong = wrong;
@@ -563,7 +564,7 @@
       var r = st.result, el = document.createElement('div');
       el.className = 'tp-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true');
       el.innerHTML = '<div class="tp-pop-box"><p class="tp-pop-score">' + r.score + '<small>' + K('[点|てん]') + '</small></p>' + (r.hint ? '<p class="tp-pop-sub">' + K('ヒントあり') + '</p>' : '') +
-        '<p class="tp-pop-sub">' + r.ok + ' / ' + units + (jk ? K('[字|じ] [正|せい][解|かい]') : K('[問|もん] [正|せい][解|かい]')) + '</p>' +
+        '<p class="tp-pop-sub">' + r.ok + ' / ' + units + K('[問|もん] [正|せい][解|かい]') + '</p>' +
         (r.wrong.length ? '<p class="tp-pop-h">' + K('まちがえた[字|じ]') + '</p><p class="tp-pop-wrong">' + r.wrong.map(esc).join('') + '</p>' +
           '<p><button id="tp-pop-sel">' + K('まちがえた[字|じ]を [選|えら]んだ[漢|かん][字|じ]に [入|い]れる') + '</button> <span id="tp-pop-msg" aria-live="polite"></span></p>' : '<p class="tp-pop-h">' + K('ぜんぶ [正|せい][解|かい]！') + '</p>') +
         '<p><button class="primary" id="tp-pop-close">' + K('とじる') + '</button></p></div>';
