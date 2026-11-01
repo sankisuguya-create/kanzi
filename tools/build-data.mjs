@@ -56,7 +56,7 @@ function readingType(ch, r) {
 
 const entries = new Map();
 const readings = new Map();
-const orders = {};
+const orders = {}, terms = {};
 for (const GRADE of GRADES) {
 const gradeChars = dic.filter((k) => k.grade === GRADE).map((k) => k.literal); // 辞書の並び（JIS順）＝配当表の音順にほぼ同じ
 const of = `order-g${GRADE}.txt`;
@@ -64,6 +64,8 @@ const order = fs.existsSync(path.join(ROOT, 'data-src', of)) ? [...lines(of).joi
 if (order.length !== gradeChars.length || new Set(order).size !== order.length || !order.every((c) => gradeOf(c) === GRADE))
   err(`${of} が${GRADE}年の${gradeChars.length}字の並べ替えになっていない（${order.length}字）`);
 orders[GRADE] = order;
+// 学期の区切り（order-gN.txt の1行＝1学期。字数の並び）。行が1つなら区切りなし
+if (fs.existsSync(path.join(ROOT, 'data-src', of))) { const t = lines(of).map((l) => l.replace(/\s/g, '').length).filter(Boolean); if (t.length > 1) terms[GRADE] = t; }
 const seen = new Set();
 for (const line of lines(`words-g${GRADE}.txt`)) {
   const ch = line.slice(0, line.indexOf('|')), rest = line.slice(line.indexOf('|') + 1); // 例語の中の {字|よみ} の | で切らない
@@ -195,7 +197,7 @@ if (errors.length) { console.error(`--- エラー ${errors.length}件\n` + error
 const kanji = {};
 for (const g of GRADES) for (const c of orders[g]) kanji[c] = { g, n: strokes[c].length, w: entries.get(c), on: readings.get(c).on, kun: readings.get(c).kun };
 const grades = {};
-for (const g of GRADES) grades[g] = { order: orders[g].join('') };
+for (const g of GRADES) grades[g] = terms[g] ? { order: orders[g].join(''), terms: terms[g] } : { order: orders[g].join('') };
 for (const s of Object.keys(KANA)) grades[s] = { order: KANA[s].order }; // h＝ひらがな・k＝カタカナ
 const head = '// 自動生成（tools/build-data.mjs）。直接編集しない。正本は data-src/。\n';
 fs.writeFileSync(path.join(ROOT, 'src', 'data.js'), head + `var KANZI_DATA = ${JSON.stringify({ grades, kanji, kana })};\n`);

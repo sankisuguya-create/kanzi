@@ -30,6 +30,14 @@
 
   // 学年ごとの出題順（先生が貼り付けた順があればそれ、なければ配当表の順）
   function orderOf(g) { return S.orders[g] || D.grades[g].order; }
+  // 漢字一覧の学期の区切り（利用者の指定）: i 字目が学期のはじめなら、行はじめに小さく「1学期」などを出す（グリッドの1マス目から改行）。
+  // 区切りは data-src/order-gN.txt の行（いまは3年だけ）。先生が別の出題順を貼った時は 区切りが合わないので出さない
+  function termLabel(g, i) {
+    var t = D.grades[g] && D.grades[g].terms;
+    if (!t || orderOf(g) !== D.grades[g].order) return '';
+    for (var k = 0, at = 0; k < t.length; at += t[k++]) if (at === i) return '<span class="term-label" aria-hidden="true">' + (k + 1) + '学期</span>';
+    return '';
+  }
   function maxGrade() { return Math.max.apply(null, S.grades); }
   // ひらがな・カタカナ（1年。先生が見せると決めた時だけタブに出る）。学年と同じ「タブ」として扱い、キーは h・k。
   // 漢字ではないので、できるのは「見る」と「書く」だけ。字の情報は D.kana にある（D.kanji と同じ形: n 画数・w 例語）
@@ -1754,9 +1762,12 @@
       return;
     }
     var cached = reuse && S.view && S.view.klass === klass;
+    // 読み込み中に「書き順を 大きく見せる」などへ移ったら、届いたデータで その画面を上書きしない（読んだデータは使えるように残す）
+    var alive = true; cleanup.push(function () { alive = false; });
     (cached ? Promise.resolve(S.view) : Platform.teacherView(klass)).then(function (view) {
       view.klass = klass; view.pointers = view.pointers || {}; S.view = view;
       view.gates = Sched.normGates(view.gates);
+      if (!alive) return;
       var kids = view.students || [], tests = Sched.normTests(view.tests !== undefined ? view.tests : view.test), st = view.stats || { students: 0, perChar: {} };
       // view.grades は見せるタブ全部（かなを含む）。学年タブ・進度・出題順は漢字の学年だけ
       var shown = view.grades, grades = shown.filter(function (g) { return !isKana(g); }).map(Number), pointers = view.pointers;
@@ -1810,14 +1821,14 @@
             '<p class="picked" id="test-picked"></p>' +
             '<p class="tmode">字を押すと: <span class="seg" role="group"><button id="tm-range">範囲に入れる・はずす</button><button id="tm-okuri">送りがなで出す（<b>送</b>の印）</button></span></p>' +
             '<p class="hint">テストで送りがなを問う字に <b>送</b> の印をつけると、児童の「れんしゅうプリント」の送りがなの問題は その字だけから出ます（印のない字は 四角の問題だけ）。</p>' +
-            '<div class="grid">' + Array.from(order).map(function (c) { return '<button class="tcell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
+            '<div class="grid">' + Array.from(order).map(function (c, i) { return termLabel(tgrade, i) + '<button class="tcell" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
             '<p class="hint">あかい わくは、学級で まちがいの おおい字です（よむで3人以上が答え、まちがいが3割以上）</p>' +
             '<p><button id="test-clear">このテストの範囲を ぜんぶ はずす</button> <span id="test-msg" aria-live="polite"></span></p></div>') +
           fold('d-ptr', tgrade + '年の 授業の進度', isTop ? (pointer ? pointer + '字目まで' : '未設定（全部）') : '全部（下の学年）',
             '<p class="hint">' + (isTop
               ? '授業で習った最後の字を押すと、そこまでが「習った漢字」になります（「ならった漢字から ランダム」の出題範囲）。設定しないと ' + tgrade + '年の字は全部が対象です。いまは <b id="ptr">' + (pointer || '未設定') + '</b>' + (pointer ? ' 字目まで' : '') + '。'
               : tgrade + '年は下の学年なので、全部の字が「習った漢字」です。') + '</p>' +
-            (isTop ? '<div class="grid">' + Array.from(order).map(function (c, i) { return '<button class="cell' + (i < pointer ? ' taught' : '') + '" data-i="' + i + '" aria-pressed="' + (i < pointer) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
+            (isTop ? '<div class="grid">' + Array.from(order).map(function (c, i) { return termLabel(tgrade, i) + '<button class="cell' + (i < pointer ? ' taught' : '') + '" data-i="' + i + '" aria-pressed="' + (i < pointer) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
               '<p><button id="unset">進度を 未設定にもどす</button></p>' : '')) +
           fold('d-order', tgrade + '年の 出題順', S.orders[tgrade] ? '設定済みの順' : '配当表の順（仮）',
             '<p class="hint">教科書の新出順を貼り付けます。' + tgrade + '年の' + D.grades[tgrade].order.length + '字を順番どおりに（区切りの空白・改行はあってもよい）。</p>' +
@@ -2055,7 +2066,7 @@
           Platform.setOrder(tgrade, v).then(function () { S.orders[tgrade] = v; m.textContent = '✓ 保存しました'; $('#d-order-now').textContent = '設定済みの順'; }, function (e) { m.textContent = '× ' + (e && e.message || '保存できませんでした'); });
         });
       })();
-    }).catch(function (e) { $('.teacher').innerHTML = '<p>よみこめませんでした: ' + esc(e && e.message || e) + '</p>'; });
+    }).catch(function (e) { if (alive) $('.teacher').innerHTML = '<p>よみこめませんでした: ' + esc(e && e.message || e) + '</p>'; });
   }
 
   // ================= 書き順の提示（先生がモニターに映す）
@@ -2082,7 +2093,7 @@
       '<main class="teacher">' +
       '<nav class="tabs t" role="tablist">' + ALL_TABS.map(function (g) { return '<button role="tab" class="ptab" data-g="' + g + '" aria-selected="' + (g === pg) + '">' + gName(g) + '</button>'; }).join('') + '</nav>' +
       '<p class="hint">' + (hasView ? '<span class="learned-mark">みどり</span>の 線が ある字は この学級が 習った字' : '習った漢字は 出せません（学級の設定を開くと出ます）') + '</p>' +
-      '<div class="grid">' + Array.from(orderOf(pg)).map(function (c) { return '<button class="cell' + (learned[c] ? ' learned' : '') + '" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
+      '<div class="grid">' + Array.from(orderOf(pg)).map(function (c, i) { return termLabel(pg, i) + '<button class="cell' + (learned[c] ? ' learned' : '') + '" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
       '<p class="picked" id="picked"></p>' +
       '<p><label class="opt"><input type="checkbox" id="opt-base"' + (showOpts().base ? ' checked' : '') + '> 完成した字を うすく表示して、その上に書き順を黒で重ねる</label></p>' +
       '<p><label class="opt"><input type="checkbox" id="opt-color"' + (showOpts().color ? ' checked' : '') + '> 一〜四画目に色をつける（' +
