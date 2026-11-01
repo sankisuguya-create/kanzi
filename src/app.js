@@ -688,11 +688,12 @@
     }).join('');
   }
   // 書き順をくり返し再生する。終わったら1.5秒止めてから最初から。戻り値で止める
-  function playLoop(svgs) {
+  var STAGE_GAP = 600; // 書き順を大きく見せる: 1画と1画の間を 0.6秒 空ける（空書きが追いつくように。利用者の指定）
+  function playLoop(svgs, gap) {
     var me = { stop: false };
     (function play() {
       if (me.stop) return;
-      Promise.all(svgs.map(function (svg) { return Ink.animate(Array.from(svg.querySelectorAll('.ink path')), 0.9); }))
+      Promise.all(svgs.map(function (svg) { return Ink.animate(Array.from(svg.querySelectorAll('.ink path')), 0.9, gap); }))
         .then(function () { setTimeout(function () {
           if (me.stop) return;
           svgs.forEach(function (svg) { svg.querySelectorAll('.ink path').forEach(function (p) { p.getAnimations().forEach(function (a) { a.cancel(); }); }); });
@@ -2135,7 +2136,7 @@
         '<div class="big-kanji">' + kanjiSvg(c, 'show-svg', base, color) + '</div>' +
         '<div class="on" aria-label="音読み" style="font-size:' + readSize(k.on, H, side) + '">' + readingHtml(k.on, false) + '</div>' +
         '<div class="stage-pos">' + (idx + 1) + ' / ' + list.length + '</div>';
-      stopAnim = playLoop(Array.from(stage.querySelectorAll('.show-svg')));
+      stopAnim = playLoop(Array.from(stage.querySelectorAll('.show-svg')), STAGE_GAP);
     }
     // ならべて表示: 字がいちばん大きくなる行数を選ぶ
     function all() {
@@ -2149,7 +2150,7 @@
       stage.className = 'all';
       stage.innerHTML = '<div class="all-grid" style="gap:' + gap + 'px;grid-template-columns:repeat(' + best.cols + ',' + Math.floor(best.size) + 'px);grid-auto-rows:' + Math.floor(best.size) + 'px">' +
         list.map(function (c) { return kanjiSvg(c, 'show-svg', base, color); }).join('') + '</div>';
-      stopAnim = playLoop(Array.from(stage.querySelectorAll('.show-svg')));
+      stopAnim = playLoop(Array.from(stage.querySelectorAll('.show-svg')), STAGE_GAP);
     }
     function next() { if (idx < list.length - 1) { idx++; single(); } else if (idx === list.length - 1) { idx++; all(); } }
     function prev() { if (idx > 0) { idx = Math.min(idx, list.length) - 1; single(); } }
