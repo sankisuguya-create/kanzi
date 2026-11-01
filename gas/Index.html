@@ -209,6 +209,11 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
 .cswatch.s2 { border-bottom-color: var(--stroke-2); }
 .opt { font-size: 20px; display: inline-flex; gap: 10px; align-items: center; }
 .opt input { width: 26px; height: 26px; }
+/* 書き順を大きく見せる: 1画ごとに止まる時間（−／＋で0.1秒ずつ） */
+.gapset { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 20px; }
+.gapset button { min-width: 56px; min-height: 48px; font-size: 26px; font-weight: 700; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); }
+.gapset button[disabled] { opacity: .4; cursor: default; }
+.gapset output { min-width: 4.2em; text-align: center; font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
 #stage .show-svg path { fill: none; stroke: #111; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }
 /* 読み: 1文字ずつ縦に積み、読みが複数なら右から左へ列をならべる（教科書の縦書きと同じ並び） */
 #stage .kun, #stage .on { display: flex; flex-direction: row-reverse; gap: .35em; align-items: center; justify-content: center; height: 94vh; }
@@ -712,7 +717,7 @@ body.sm-screen .bar { flex: none; margin-bottom: 4px; }
 /* 正解の文字（青い「正解！」）は 画面に出さない（大きな ○ が代わり。読み上げ用に残す） */
 .rmsg.good, .res.good, .bk-hint.good, .sm-ask.good { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
-<meta name="kanzi-ver" content="4e35e34">
+<meta name="kanzi-ver" content="774b4b0">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -4169,7 +4174,8 @@ var KANZI_SETSUMEI = [
   }
 
   // お手本（筆順アニメ）。paths は SVG の path 要素の配列
-  function animate(paths, speed) {
+  // gap: 1画と1画の間の待ち（ミリ秒。既定120）。書き順を大きく見せる画面は 空書きが追いつくよう 600（利用者の指定）
+  function animate(paths, speed, gap) {
     var t = 0, anims = [];
     paths.forEach(function (p) {
       var len = p.getTotalLength();
@@ -4177,7 +4183,7 @@ var KANZI_SETSUMEI = [
       p.style.strokeDashoffset = len;
       var dur = (250 + len * 7) / (speed || 1);
       anims.push(p.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }], { duration: dur, delay: t, fill: 'forwards', easing: 'linear' }));
-      t += dur + 120;
+      t += dur + (gap == null ? 120 : gap);
     });
     return Promise.all(anims.map(function (a) { return a.finished; })).catch(function () {});
   }
@@ -5907,7 +5913,9 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
 
   // ================= 字の表示（先生のモニター表示と同じ形: 外枠・十字・うす文字の上を黒で書き順、左右に読み）
   var SHOW_OPTS_KEY = 'kanzi.showOpts';
-  function showOpts() { var o = Platform.store.get(SHOW_OPTS_KEY) || {}; return { base: o.base !== false, color: !!o.color }; }
+  // gap: 1画と1画の間に止まる時間（0.1秒単位の整数。既定6＝0.6秒、0〜30）。空書きが追いつくように 先生が決める（利用者の指定）
+  var GAP_MAX = 30;
+  function showOpts() { var o = Platform.store.get(SHOW_OPTS_KEY) || {}; return { base: o.base !== false, color: !!o.color, gap: typeof o.gap === 'number' ? Math.max(0, Math.min(GAP_MAX, Math.round(o.gap))) : 6 }; }
   function setShowOpt(k, v) { var o = showOpts(); o[k] = v; Platform.store.set(SHOW_OPTS_KEY, o); }
   // 一〜四画目の色分け（先生の提示）。何画目かは書き順の再生（描く順番）でも分かるので、色だけに頼らない。
   // 色は線用の4色（青・橙・茶・緑）。黒（5画目から）・うすい下地・白地と、どの色覚の型でも見分けられることを検査済み（docs/design.md §17）
@@ -5940,11 +5948,11 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     }).join('');
   }
   // 書き順をくり返し再生する。終わったら1.5秒止めてから最初から。戻り値で止める
-  function playLoop(svgs) {
+  function playLoop(svgs, gap) {
     var me = { stop: false };
     (function play() {
       if (me.stop) return;
-      Promise.all(svgs.map(function (svg) { return Ink.animate(Array.from(svg.querySelectorAll('.ink path')), 0.9); }))
+      Promise.all(svgs.map(function (svg) { return Ink.animate(Array.from(svg.querySelectorAll('.ink path')), 0.9, gap); }))
         .then(function () { setTimeout(function () {
           if (me.stop) return;
           svgs.forEach(function (svg) { svg.querySelectorAll('.ink path').forEach(function (p) { p.getAnimations().forEach(function (a) { a.cancel(); }); }); });
@@ -7337,6 +7345,8 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       '<p><label class="opt"><input type="checkbox" id="opt-base"' + (showOpts().base ? ' checked' : '') + '> 完成した字を うすく表示して、その上に書き順を黒で重ねる</label></p>' +
       '<p><label class="opt"><input type="checkbox" id="opt-color"' + (showOpts().color ? ' checked' : '') + '> 一〜四画目に色をつける（' +
         ['青', '橙', '茶', '緑'].map(function (n, i) { return '<span class="cswatch s' + (i + 1) + '">' + (i + 1) + n + '</span>'; }).join('') + '）</label></p>' +
+      '<p class="gapset"><span id="gap-label">1画ごとに 止まる時間</span> <button id="gap-dn" aria-label="0.1秒 みじかく">−</button>' +
+        '<output id="gap-v" aria-labelledby="gap-label" aria-live="polite"></output><button id="gap-up" aria-label="0.1秒 ながく">＋</button> <span class="hint">0.1秒きざみ（0〜3秒）。空書きが 追いつく長さに</span></p>' +
       '<p><button class="big primary" id="go" disabled>はじめる</button></p>' +
       '<p><button id="cancel">先生画面にもどる</button></p></main>';
     function paint() {
@@ -7359,6 +7369,10 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     app.querySelectorAll('.ptab').forEach(function (b) { b.addEventListener('click', function () { showPick(picked, tabKey(b.dataset.g)); }); });
     $('#opt-base').addEventListener('change', function () { setShowOpt('base', this.checked); });
     $('#opt-color').addEventListener('change', function () { setShowOpt('color', this.checked); });
+    function paintGap() { var g = showOpts().gap; $('#gap-v').textContent = (g / 10).toFixed(1) + '秒'; $('#gap-dn').disabled = g <= 0; $('#gap-up').disabled = g >= GAP_MAX; }
+    on('#gap-dn', function () { setShowOpt('gap', showOpts().gap - 1); paintGap(); });
+    on('#gap-up', function () { setShowOpt('gap', showOpts().gap + 1); paintGap(); });
+    paintGap();
     on('#go', function () { showStart(picked.slice(), function () { showPick(picked, pg); }); });
     on('#cancel', function () { teacher(S.klass); });
     paint();
@@ -7377,7 +7391,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       try { document.documentElement.requestFullscreen().catch(function () {}); } catch (e) {}
     }
     goFull();
-    var idx = 0, stopAnim = null, opts = showOpts(), base = opts.base, color = opts.color;
+    var idx = 0, stopAnim = null, opts = showOpts(), base = opts.base, color = opts.color, gapMs = opts.gap * 100;
     function stopLoop() { if (stopAnim) { stopAnim(); stopAnim = null; } }
     function single() {
       stopLoop();
@@ -7387,7 +7401,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
         '<div class="big-kanji">' + kanjiSvg(c, 'show-svg', base, color) + '</div>' +
         '<div class="on" aria-label="音読み" style="font-size:' + readSize(k.on, H, side) + '">' + readingHtml(k.on, false) + '</div>' +
         '<div class="stage-pos">' + (idx + 1) + ' / ' + list.length + '</div>';
-      stopAnim = playLoop(Array.from(stage.querySelectorAll('.show-svg')));
+      stopAnim = playLoop(Array.from(stage.querySelectorAll('.show-svg')), gapMs);
     }
     // ならべて表示: 字がいちばん大きくなる行数を選ぶ
     function all() {
@@ -7401,7 +7415,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       stage.className = 'all';
       stage.innerHTML = '<div class="all-grid" style="gap:' + gap + 'px;grid-template-columns:repeat(' + best.cols + ',' + Math.floor(best.size) + 'px);grid-auto-rows:' + Math.floor(best.size) + 'px">' +
         list.map(function (c) { return kanjiSvg(c, 'show-svg', base, color); }).join('') + '</div>';
-      stopAnim = playLoop(Array.from(stage.querySelectorAll('.show-svg')));
+      stopAnim = playLoop(Array.from(stage.querySelectorAll('.show-svg')), gapMs);
     }
     function next() { if (idx < list.length - 1) { idx++; single(); } else if (idx === list.length - 1) { idx++; all(); } }
     function prev() { if (idx > 0) { idx = Math.min(idx, list.length) - 1; single(); } }

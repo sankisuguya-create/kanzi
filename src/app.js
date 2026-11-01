@@ -655,7 +655,9 @@
 
   // ================= 字の表示（先生のモニター表示と同じ形: 外枠・十字・うす文字の上を黒で書き順、左右に読み）
   var SHOW_OPTS_KEY = 'kanzi.showOpts';
-  function showOpts() { var o = Platform.store.get(SHOW_OPTS_KEY) || {}; return { base: o.base !== false, color: !!o.color }; }
+  // gap: 1画と1画の間に止まる時間（0.1秒単位の整数。既定6＝0.6秒、0〜30）。空書きが追いつくように 先生が決める（利用者の指定）
+  var GAP_MAX = 30;
+  function showOpts() { var o = Platform.store.get(SHOW_OPTS_KEY) || {}; return { base: o.base !== false, color: !!o.color, gap: typeof o.gap === 'number' ? Math.max(0, Math.min(GAP_MAX, Math.round(o.gap))) : 6 }; }
   function setShowOpt(k, v) { var o = showOpts(); o[k] = v; Platform.store.set(SHOW_OPTS_KEY, o); }
   // 一〜四画目の色分け（先生の提示）。何画目かは書き順の再生（描く順番）でも分かるので、色だけに頼らない。
   // 色は線用の4色（青・橙・茶・緑）。黒（5画目から）・うすい下地・白地と、どの色覚の型でも見分けられることを検査済み（docs/design.md §17）
@@ -688,11 +690,11 @@
     }).join('');
   }
   // 書き順をくり返し再生する。終わったら1.5秒止めてから最初から。戻り値で止める
-  function playLoop(svgs) {
+  function playLoop(svgs, gap) {
     var me = { stop: false };
     (function play() {
       if (me.stop) return;
-      Promise.all(svgs.map(function (svg) { return Ink.animate(Array.from(svg.querySelectorAll('.ink path')), 0.9); }))
+      Promise.all(svgs.map(function (svg) { return Ink.animate(Array.from(svg.querySelectorAll('.ink path')), 0.9, gap); }))
         .then(function () { setTimeout(function () {
           if (me.stop) return;
           svgs.forEach(function (svg) { svg.querySelectorAll('.ink path').forEach(function (p) { p.getAnimations().forEach(function (a) { a.cancel(); }); }); });
@@ -2085,6 +2087,8 @@
       '<p><label class="opt"><input type="checkbox" id="opt-base"' + (showOpts().base ? ' checked' : '') + '> 完成した字を うすく表示して、その上に書き順を黒で重ねる</label></p>' +
       '<p><label class="opt"><input type="checkbox" id="opt-color"' + (showOpts().color ? ' checked' : '') + '> 一〜四画目に色をつける（' +
         ['青', '橙', '茶', '緑'].map(function (n, i) { return '<span class="cswatch s' + (i + 1) + '">' + (i + 1) + n + '</span>'; }).join('') + '）</label></p>' +
+      '<p class="gapset"><span id="gap-label">1画ごとに 止まる時間</span> <button id="gap-dn" aria-label="0.1秒 みじかく">−</button>' +
+        '<output id="gap-v" aria-labelledby="gap-label" aria-live="polite"></output><button id="gap-up" aria-label="0.1秒 ながく">＋</button> <span class="hint">0.1秒きざみ（0〜3秒）。空書きが 追いつく長さに</span></p>' +
       '<p><button class="big primary" id="go" disabled>はじめる</button></p>' +
       '<p><button id="cancel">先生画面にもどる</button></p></main>';
     function paint() {
@@ -2107,6 +2111,10 @@
     app.querySelectorAll('.ptab').forEach(function (b) { b.addEventListener('click', function () { showPick(picked, tabKey(b.dataset.g)); }); });
     $('#opt-base').addEventListener('change', function () { setShowOpt('base', this.checked); });
     $('#opt-color').addEventListener('change', function () { setShowOpt('color', this.checked); });
+    function paintGap() { var g = showOpts().gap; $('#gap-v').textContent = (g / 10).toFixed(1) + '秒'; $('#gap-dn').disabled = g <= 0; $('#gap-up').disabled = g >= GAP_MAX; }
+    on('#gap-dn', function () { setShowOpt('gap', showOpts().gap - 1); paintGap(); });
+    on('#gap-up', function () { setShowOpt('gap', showOpts().gap + 1); paintGap(); });
+    paintGap();
     on('#go', function () { showStart(picked.slice(), function () { showPick(picked, pg); }); });
     on('#cancel', function () { teacher(S.klass); });
     paint();
@@ -2125,7 +2133,7 @@
       try { document.documentElement.requestFullscreen().catch(function () {}); } catch (e) {}
     }
     goFull();
-    var idx = 0, stopAnim = null, opts = showOpts(), base = opts.base, color = opts.color;
+    var idx = 0, stopAnim = null, opts = showOpts(), base = opts.base, color = opts.color, gapMs = opts.gap * 100;
     function stopLoop() { if (stopAnim) { stopAnim(); stopAnim = null; } }
     function single() {
       stopLoop();
@@ -2135,7 +2143,7 @@
         '<div class="big-kanji">' + kanjiSvg(c, 'show-svg', base, color) + '</div>' +
         '<div class="on" aria-label="音読み" style="font-size:' + readSize(k.on, H, side) + '">' + readingHtml(k.on, false) + '</div>' +
         '<div class="stage-pos">' + (idx + 1) + ' / ' + list.length + '</div>';
-      stopAnim = playLoop(Array.from(stage.querySelectorAll('.show-svg')));
+      stopAnim = playLoop(Array.from(stage.querySelectorAll('.show-svg')), gapMs);
     }
     // ならべて表示: 字がいちばん大きくなる行数を選ぶ
     function all() {
@@ -2149,7 +2157,7 @@
       stage.className = 'all';
       stage.innerHTML = '<div class="all-grid" style="gap:' + gap + 'px;grid-template-columns:repeat(' + best.cols + ',' + Math.floor(best.size) + 'px);grid-auto-rows:' + Math.floor(best.size) + 'px">' +
         list.map(function (c) { return kanjiSvg(c, 'show-svg', base, color); }).join('') + '</div>';
-      stopAnim = playLoop(Array.from(stage.querySelectorAll('.show-svg')));
+      stopAnim = playLoop(Array.from(stage.querySelectorAll('.show-svg')), gapMs);
     }
     function next() { if (idx < list.length - 1) { idx++; single(); } else if (idx === list.length - 1) { idx++; all(); } }
     function prev() { if (idx > 0) { idx = Math.min(idx, list.length) - 1; single(); } }

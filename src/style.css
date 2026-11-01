@@ -205,6 +205,11 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
 .cswatch.s2 { border-bottom-color: var(--stroke-2); }
 .opt { font-size: 20px; display: inline-flex; gap: 10px; align-items: center; }
 .opt input { width: 26px; height: 26px; }
+/* 書き順を大きく見せる: 1画ごとに止まる時間（−／＋で0.1秒ずつ） */
+.gapset { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 20px; }
+.gapset button { min-width: 56px; min-height: 48px; font-size: 26px; font-weight: 700; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); }
+.gapset button[disabled] { opacity: .4; cursor: default; }
+.gapset output { min-width: 4.2em; text-align: center; font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
 #stage .show-svg path { fill: none; stroke: #111; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }
 /* 読み: 1文字ずつ縦に積み、読みが複数なら右から左へ列をならべる（教科書の縦書きと同じ並び） */
 #stage .kun, #stage .on { display: flex; flex-direction: row-reverse; gap: .35em; align-items: center; justify-content: center; height: 94vh; }

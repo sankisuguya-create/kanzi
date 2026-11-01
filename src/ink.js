@@ -75,7 +75,8 @@
   }
 
   // お手本（筆順アニメ）。paths は SVG の path 要素の配列
-  function animate(paths, speed) {
+  // gap: 1画と1画の間の待ち（ミリ秒。既定120）。書き順を大きく見せる画面は 空書きが追いつくよう 600（利用者の指定）
+  function animate(paths, speed, gap) {
     var t = 0, anims = [];
     paths.forEach(function (p) {
       var len = p.getTotalLength();
@@ -83,7 +84,7 @@
       p.style.strokeDashoffset = len;
       var dur = (250 + len * 7) / (speed || 1);
       anims.push(p.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }], { duration: dur, delay: t, fill: 'forwards', easing: 'linear' }));
-      t += dur + 120;
+      t += dur + (gap == null ? 120 : gap);
     });
     return Promise.all(anims.map(function (a) { return a.finished; })).catch(function () {});
   }
