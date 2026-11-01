@@ -158,8 +158,8 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
 .teacher h2 { font-size: 22px; margin: 0 0 6px; }
 .teacher .hint { color: var(--ink-sub); font-size: 16px; margin: 0 0 8px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 4px; }
-/* 学期の区切り: 1マス目に置いて改行させ、小さく「1学期」 */
-.grid .term-label { grid-column: 1; align-self: center; font-size: 13px; color: var(--ink-sub); white-space: nowrap; line-height: 1.2; }
+/* 学期の区切り: 見出しだけで1行（小さく「1学期」）、字は次の行から */
+.grid .term-label { grid-column: 1 / -1; margin-top: 6px; font-size: 13px; color: var(--ink-sub); white-space: nowrap; line-height: 1.2; }
 .cell { min-height: 46px; font-size: 22px; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
 .cell.learned { box-shadow: inset 0 -6px 0 #79B473; } /* 習った字: みどりの線 */
 .cell.taught { background: var(--fill-a); border: 2px solid var(--cat-1); font-weight: 700; }
@@ -719,7 +719,7 @@ body.sm-screen .bar { flex: none; margin-bottom: 4px; }
 /* 正解の文字（青い「正解！」）は 画面に出さない（大きな ○ が代わり。読み上げ用に残す） */
 .rmsg.good, .res.good, .bk-hint.good, .sm-ask.good { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
-<meta name="kanzi-ver" content="a77a2fc">
+<meta name="kanzi-ver" content="df7d4b8">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -5290,7 +5290,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
 
   // 学年ごとの出題順（先生が貼り付けた順があればそれ、なければ配当表の順）
   function orderOf(g) { return S.orders[g] || D.grades[g].order; }
-  // 漢字一覧の学期の区切り（利用者の指定）: i 字目が学期のはじめなら、行はじめに小さく「1学期」などを出す（グリッドの1マス目から改行）。
+  // 漢字一覧の学期の区切り（利用者の指定）: i 字目が学期のはじめなら、小さく「1学期」などを1行に出し、字は次の行から。
   // 区切りは data-src/order-gN.txt の行（いまは3年だけ）。先生が別の出題順を貼った時は 区切りが合わないので出さない
   function termLabel(g, i) {
     var t = D.grades[g] && D.grades[g].terms;

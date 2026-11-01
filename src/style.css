@@ -154,8 +154,8 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
 .teacher h2 { font-size: 22px; margin: 0 0 6px; }
 .teacher .hint { color: var(--ink-sub); font-size: 16px; margin: 0 0 8px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 4px; }
-/* 学期の区切り: 1マス目に置いて改行させ、小さく「1学期」 */
-.grid .term-label { grid-column: 1; align-self: center; font-size: 13px; color: var(--ink-sub); white-space: nowrap; line-height: 1.2; }
+/* 学期の区切り: 見出しだけで1行（小さく「1学期」）、字は次の行から */
+.grid .term-label { grid-column: 1 / -1; margin-top: 6px; font-size: 13px; color: var(--ink-sub); white-space: nowrap; line-height: 1.2; }
 .cell { min-height: 46px; font-size: 22px; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
 .cell.learned { box-shadow: inset 0 -6px 0 #79B473; } /* 習った字: みどりの線 */
 .cell.taught { background: var(--fill-a); border: 2px solid var(--cat-1); font-weight: 700; }
