@@ -236,7 +236,94 @@
     return Promise.resolve({ remaining: 0 }); // GAS版と同じ返り（画面は remaining を見て消去済みを出す）
   }
 
+
+  // ---- 説明文を書く（設計書 §28）。作品は打つたびに端末へ控え（下書き）、数秒ごとにサーバーへ送る。
+  // 端末の控え: kanzi.saku.<メール> = { 作品id: 作品 }（dirty=まだサーバーに届いていない）
+  function sakuKey() { return trial ? trial.key + '.saku' : 'kanzi.saku.' + (lastEmail || 'demo'); }
+  var lastEmail = '';
+  function sakuLocal() { return store.get(sakuKey()) || {}; }
+  function sakuPut(w, dirty) { var all = sakuLocal(); var o = Genko.normWork(w); if (dirty) o.dirty = true; all[o.id] = o; store.set(sakuKey(), all); return o; }
+  function sakuDemoAll() { return store.get('kanzi.saku.demoClass') || {}; } // デモ: 学級の全作品（先生画面・友だちの文が読む）
+  function sakuDemoPut(w) { var all = sakuDemoAll(); all[w.id] = Genko.normWork(w); store.set('kanzi.saku.demoClass', all); }
+  // 自分の作品: { share, works }。サーバーより新しい下書き（dirty）は端末のものを使い、あとで送る
+  function sakuMine(email) {
+    lastEmail = email || lastEmail;
+    var local = sakuLocal();
+    var p = (isGas && !trial) ? gas('api_sakuMine').then(JSON.parse) : Promise.resolve({ share: !!(demoSettings().sakuShare || {})['3-1'], works: Object.keys(local).map(function (k) { return local[k]; }).filter(function (w) { return !w.del; }) });
+    return p.then(function (r) {
+      var by = {};
+      (r.works || []).forEach(function (w) { by[w.id] = Genko.normWork(w); });
+      Object.keys(local).forEach(function (k) { var l = local[k]; if (l.dirty && !l.del && (!by[k] || l.updated >= by[k].updated)) { var o = Genko.normWork(l); o.dirty = true; if (by[k]) o.comments = by[k].comments; by[k] = o; } });
+      var works = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.updated - a.updated; });
+      return { share: !!r.share, works: works };
+    }, function () { // 通信できない時は端末の控えだけで書ける
+      return { share: false, offline: true, works: Object.keys(local).map(function (k) { return Genko.normWork(local[k]); }).filter(function (w) { return !local[w.id].del; }) };
+    });
+  }
+  // 打つたびに呼ぶ（端末へ控えるだけ。速い）
+  function sakuDraft(w) { w.updated = Date.now(); return sakuPut(w, true); }
+  // サーバーへ送る（デモ・おためしは端末だけ）。届いたら dirty を消す。失敗しても控えは残る
+  function sakuSave(w) {
+    var o = sakuPut(w, true);
+    if (!isGas || trial) {
+      o.dirty = false; sakuPut(o, false);
+      if (!trial) { var mine = sakuDemoAll(); if (o.show) Object.keys(mine).forEach(function (k) { if (k !== o.id && mine[k].show && !/^peer/.test(k)) { mine[k].show = false; } }); store.set('kanzi.saku.demoClass', mine); sakuDemoPut(o);
+        if (o.show) { var loc = sakuLocal(); Object.keys(loc).forEach(function (k) { if (k !== o.id) loc[k].show = false; }); store.set(sakuKey(), loc); } }
+      return Promise.resolve(o);
+    }
+    return gas('api_sakuSave', JSON.stringify(o)).then(function (r) {
+      var back = Genko.normWork(JSON.parse(r)), cur = sakuLocal()[back.id];
+      if (cur && cur.text === o.text && cur.show === o.show && cur.mode === o.mode) { back.dirty = false; sakuPut(back, false); }
+      if (back.show) { var loc = sakuLocal(); Object.keys(loc).forEach(function (k) { if (k !== back.id) loc[k].show = false; }); store.set(sakuKey(), loc); }
+      return back;
+    });
+  }
+  function sakuDelete(id) {
+    var all = sakuLocal(); if (all[id]) { all[id].del = true; store.set(sakuKey(), all); }
+    if (!isGas || trial) { var d = sakuDemoAll(); delete d[id]; store.set('kanzi.saku.demoClass', d); return Promise.resolve(true); }
+    return gas('api_sakuDelete', id);
+  }
+  function sakuRead(id, line) {
+    var all = sakuLocal(); if (all[id] && all[id].comments[line]) { all[id].comments[line].read = true; store.set(sakuKey(), all); }
+    if (!isGas || trial) { var d = sakuDemoAll(); if (d[id] && d[id].comments[line]) { d[id].comments[line].read = true; store.set('kanzi.saku.demoClass', d); } return Promise.resolve(true); }
+    return gas('api_sakuRead', id, line);
+  }
+  // 友だちの文（先生が開いている間だけ。本文だけ）
+  var SAKU_PEERS = [
+    [Genko.Z + Genko.Z + Genko.Z + 'すがたをかえる米', Genko.nameLine('れい　はると'), Genko.Z + '米には、いろいろな食べ方のくふうがあります。', Genko.Z + 'まず、米をその形のままたいて食べるくふうがあります。ごはんになります。', Genko.Z + 'このように、米は、くふうされて、いろいろなすがたになって食べられているのです。'].join('\n'),
+    [Genko.Z + Genko.Z + Genko.Z + 'すがたをかえる麦', Genko.nameLine('れい　さき'), Genko.Z + '麦には、いろいろな食べ方のくふうがあります。', Genko.Z + 'まず、こなにひいてパンにするくふうがあります。', Genko.Z + 'このように、麦は、くふうされて、いろいろなすがたになって食べられているのです。'].join('\n')];
+  function sakuFriends() {
+    if (isGas && !trial) return gas('api_sakuFriends').then(JSON.parse);
+    var on = !!(demoSettings().sakuShare || {})['3-1'];
+    return Promise.resolve({ share: on, works: on ? SAKU_PEERS.map(function (t, i) { return { id: 'peer' + i, text: t }; }) : [] });
+  }
+  // 先生: 学級の作品（児童ごと）
+  function sakuTeacher(klass) {
+    if (isGas) return gas('api_sakuTeacher', klass).then(JSON.parse);
+    var s = demoSettings(), mine = sakuDemoAll(), kids = demoStudents().slice(0, 8);
+    var works = Object.keys(mine).map(function (k) { return mine[k]; });
+    var students = kids.map(function (k, i) {
+      var list = i === 0 ? works : i < 3 ? [Genko.normWork({ id: 'peer' + (i - 1), text: SAKU_PEERS[i - 1], show: true, updated: Date.now() - i * 600000, comments: (s.sakuPeerC || {})['peer' + (i - 1)] || {} })] : [];
+      return { no: k.no, name: i === 0 ? 'デモの児童（この端末）' : k.name, works: list };
+    });
+    return Promise.resolve({ share: !!(s.sakuShare || {})[klass], students: students });
+  }
+  function sakuComment(klass, id, line, text) {
+    if (isGas) return gas('api_sakuComment', klass, id, line, text).then(JSON.parse);
+    text = String(text || '').trim().slice(0, 200);
+    var d = sakuDemoAll(), c;
+    if (d[id]) { c = d[id].comments; if (text) c[line] = { t: text, read: false, at: Date.now() }; else delete c[line]; store.set('kanzi.saku.demoClass', d);
+      var loc = store.get('kanzi.saku.demo') || {}; if (loc[id]) { loc[id].comments = c; store.set('kanzi.saku.demo', loc); } return Promise.resolve(c); }
+    var s = demoSettings(); s.sakuPeerC = s.sakuPeerC || {}; c = s.sakuPeerC[id] = s.sakuPeerC[id] || {};
+    if (text) c[line] = { t: text, read: false, at: Date.now() }; else delete c[line]; saveDemo(s); return Promise.resolve(c);
+  }
+  function sakuShare(klass, on) {
+    if (isGas) return gas('api_sakuShare', klass, !!on);
+    var s = demoSettings(); s.sakuShare = s.sakuShare || {}; s.sakuShare[klass] = !!on; saveDemo(s); return Promise.resolve(!!on);
+  }
+
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
     teacherView: teacherView, setTests: setTests, setWriteLevel: setWriteLevel, setGates: setGates, gates: gates, bunkai: bunkai, setBunkai: setBunkai, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder,
-    archiveYears: archiveYears, archiveView: archiveView, archiveSave: archiveSave, archiveAnonymize: archiveAnonymize, store: store };
+    archiveYears: archiveYears, archiveView: archiveView, archiveSave: archiveSave, archiveAnonymize: archiveAnonymize, store: store,
+    sakuMine: sakuMine, sakuDraft: sakuDraft, sakuSave: sakuSave, sakuDelete: sakuDelete, sakuRead: sakuRead, sakuFriends: sakuFriends, sakuTeacher: sakuTeacher, sakuComment: sakuComment, sakuShare: sakuShare };
 })(this);

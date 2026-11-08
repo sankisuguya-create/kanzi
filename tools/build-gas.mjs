@@ -27,4 +27,5 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, (_, f) => {
 html = html.replace('</head>', `<meta name="kanzi-ver" content="${VER}">\n</head>`);
 fs.writeFileSync(path.join(ROOT, 'gas', 'Index.html'), html);
 fs.writeFileSync(path.join(ROOT, 'gas', 'Scheduler.js'), '// 自動生成（tools/build-gas.mjs）。正本は src/scheduler.js\n' + read('src/scheduler.js') + `\n// GAS 版ずれ検知の版（tools/build-gas.mjs が埋め込む）\nSched.VER = ${JSON.stringify(VER)};\n`);
+fs.writeFileSync(path.join(ROOT, 'gas', 'Genko.js'), '// 自動生成（tools/build-gas.mjs）。正本は src/genko.js（作文の形をそろえる normWork をサーバーでも使う）\n' + read('src/genko.js'));
 console.log(`gas/Index.html ${(html.length / 1024).toFixed(0)}KB`);
