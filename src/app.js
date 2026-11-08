@@ -238,18 +238,17 @@
       '<main class="menu">' +
       '<section class="tree-box"><div id="forest"></div></section>' +
       '<section class="actions">' +
-      // 並び（ui-layout）: 毎回使う「読む・書く」を先頭に、2列グリッドに置く。大きさは文字量ではなく重要度の段で決める（主＝読む・書く、標準＝その他）
       (kana
-        ? '<button class="big primary" id="go-write" data-tier="main" data-gate="m.write">' + K('[書|か]く<span class="meta">') + (g === 'h' ? K('[聞|き]いて ひらがなを [書|か]く') : K('ひらがな → カタカナを [書|か]く')) + '</span></button>' +
-          '<button class="big" id="go-browse" data-tier="std" data-gate="m.browse">' + noun + K('を ぜんぶ[見|み]る<span class="meta">') + orderOf(g).length + K('[字|じ]・[見|み]る／[選|えら]ぶ</span></button>')
-        : K('<button class="big primary" id="go-read" data-tier="main" data-gate="m.read">[読|よ]む<span class="meta">[漢|かん][字|じ] → [読|よ]みを [書|か]く</span></button>') +
-          K('<button class="big primary" id="go-write" data-tier="main" data-gate="m.write">[書|か]く<span class="meta">[読|よ]み → [漢|かん][字|じ]を [書|か]く</span></button>') +
-          K('<button class="big" id="go-fk" data-tier="std" data-gate="m.fk">カード<span class="meta">[漢|かん][字|じ] → [読|よ]み</span></button>') +
-          K('<button class="big" id="go-fy" data-tier="std" data-gate="m.fy">カード<span class="meta">[読|よ]み → [漢|かん][字|じ]</span></button>') +
-          '<button class="big" id="go-browse" data-tier="std" data-gate="m.browse">' + K('ぜんぶ[見|み]る<span class="meta">') + g + K('年・') + orderOf(g).length + K('[字|じ]</span></button>')) +
-      '<button class="big" id="go-seen" data-tier="std" data-gate="m.seen"' + (nSel ? '' : ' disabled') + '>' + K('[選|えら]んだ') + noun + K('を[見|み]る') + '<span class="meta">' + (nSel ? nSel + K('[字|じ]') : K('まだ [選|えら]んでいないよ')) + '</span></button>' +
-      (!kana && testChars().length ? '<button class="big test" id="go-test" data-tier="std" data-gate="m.test">' + K('テストの はんい') + '<span class="meta">' + (S.test.label ? esc(S.test.label) + '・' : '') + testChars().length + K('[字|じ]') + '</span></button>' : '') +
-      '<button class="big" id="go-other" data-tier="std" data-gate="m.other">' + K('その[他|た]') + '<span class="meta">ぶんかい など</span></button>' +
+        ? '<button class="big" id="go-browse" data-gate="m.browse">' + noun + K('を ぜんぶ[見|み]る<span class="meta">') + orderOf(g).length + K('[字|じ]・[見|み]る／[選|えら]ぶ</span></button>') +
+          '<button class="big primary" id="go-write" data-gate="m.write">' + K('[書|か]く<span class="meta">') + (g === 'h' ? K('[聞|き]いて ひらがなを [書|か]く') : K('ひらがな → カタカナを [書|か]く')) + '</span></button>'
+        : '<button class="big" id="go-browse" data-gate="m.browse">' + g + K('年の[漢|かん][字|じ]を ぜんぶ[見|み]る<span class="meta">') + orderOf(g).length + K('[字|じ]・[見|み]る／[選|えら]ぶ</span></button>') +
+          K('<div class="two"><button class="big primary" id="go-read" data-gate="m.read">[読|よ]む<span class="meta">[漢|かん][字|じ] → [読|よ]みを [書|か]く</span></button>') +
+          K('<button class="big primary" id="go-write" data-gate="m.write">[書|か]く<span class="meta">[読|よ]み → [漢|かん][字|じ]を [書|か]く</span></button></div>') +
+          K('<div class="two"><button class="big" id="go-fk" data-gate="m.fk">カード<span class="meta">[漢|かん][字|じ] → [読|よ]み</span></button>') +
+          K('<button class="big" id="go-fy" data-gate="m.fy">カード<span class="meta">[読|よ]み → [漢|かん][字|じ]</span></button></div>') +
+          (testChars().length ? '<button class="big test" id="go-test" data-gate="m.test">' + K('[次|つぎ]の[漢|かん][字|じ]テストの はんいを [見|み]る') + '<span class="meta">' + (S.test.label ? esc(S.test.label) + '・' : '') + testChars().length + K('[字|じ]') + '</span></button>' : '')) +
+      '<button class="big" id="go-seen" data-gate="m.seen"' + (nSel ? '' : ' disabled') + '>' + K('[選|えら]んだ') + noun + K('を[見|み]る') + '<span class="meta">' + (nSel ? nSel + K('[字|じ]') : K('まだ [選|えら]んでいないよ')) + '</span></button>' +
+      '<button class="big" id="go-other" data-gate="m.other">' + K('その[他|た]') + '<span class="meta">ぶんかい など</span></button>' +
       '</section></main>' + (S.info.demo && !S.trial ? '<p class="demo-note">デモ（この端末にだけ保存）</p>' : '');
     // メニューは画面の高さに収める（スクロールしない）。ほかの画面に移る時に外す
     document.body.classList.add('menu-screen');

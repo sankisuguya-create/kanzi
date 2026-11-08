@@ -7,6 +7,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
+// 先生画面は区分タブで1区分ずつ見せる。隠れた区分の要素を操作する前に、そのタブを開く
+const tab = (p, name) => p.click(`.sect-tabs .stab:text-is("${name}")`);
+
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SHOTS = path.join(ROOT, 'tests', 'shots');
 fs.mkdirSync(SHOTS, { recursive: true });
@@ -228,21 +231,24 @@ check(await page.evaluate(() => KanziState.treeView.metrics().frames) === frames
 
 // ---- 先生画面: 見せる学年・進度
 await page.goto(URL0 + '?teacher=1');
-await page.waitForSelector('#d-grades');
+await page.waitForSelector('.sect-tabs');
 check((await page.textContent('.top .sub')).startsWith('3年1組'), '先生: 担当学級（3年1組）で開く');
 check((await page.$$('.kids tbody tr')).length === 30 && (await page.textContent('.kids thead')).includes('おぼえた字'), '先生: 担当学級の子どもごとの記録（30人）');
-check(await page.evaluate(() => !document.getElementById('d-kids').open) && (await page.textContent('#d-kids summary')).includes('30人'), '先生: 子どもごとの記録は たたんである（見出しに人数）');
-await page.click('#d-kids summary');
+check((await page.getAttribute('.sect-tabs .stab:first-child', 'aria-selected')) === 'true' && (await page.textContent('.sect-tabs .stab:first-child')) === '記録', '先生: はじめは「記録」タブ（いちばん左）');
+check(await page.evaluate(() => document.getElementById('d-kids').open) && (await page.textContent('#d-kids summary')).includes('30人'), '先生: 記録タブでは 子どもごとの記録が開いている（見出しに人数）');
 check(await page.locator('.kids tbody tr').first().isVisible() && (await page.textContent('.kids thead')).includes('テスト練習（2週間）') && /\d+点（\d+回）/.test(await page.textContent('.kids tbody')), '先生: 開くと テスト練習の 直近2週間の平均点');
-check(await page.evaluate(() => document.querySelector('.kids').getBoundingClientRect().top < document.querySelector('.tsets').getBoundingClientRect().top), '先生: いまの進捗（記録）は設定より上');
+check(await page.evaluate(() => [...document.querySelectorAll('.teacher > section.tsets')].filter((s) => !s.hidden).length === 1), '先生: 区分は1つずつ見せる');
 check(await page.evaluate(() => [...document.querySelectorAll('details.tset:not(#d-kids)')].every((d) => !d.open) && document.querySelectorAll('details.tset:not(#d-kids)').length === 8), '先生: 設定8つは はじめ たたんである');
 check((await page.textContent('#d-grades-now')) === '1〜3年' && (await page.textContent('#d-test-now')) === 'なし', '先生: たたんでも いまの値が見出しに出る');
 await shot('10-teacher-folded');
+await tab(page, '設定');
 await page.click('#d-grades summary');
 await page.check('.gchecks input[data-g="4"]');
+await tab(page, '学年の漢字');
 await page.waitForSelector('.ttab[data-g="4"]');
 check((await page.getAttribute('.ttab[data-g="4"]', 'aria-selected')) === 'true', '先生: 4年を足すと いちばん上の4年が開く');
 check(await page.evaluate(() => document.getElementById('d-grades').open), '先生: 開いた設定は 描き直しても開いたまま');
+await tab(page, '学年の漢字');
 await page.click('#d-ptr summary');
 await page.click('.cell[data-i="9"]');
 check((await page.textContent('#ptr')) === '10' && (await page.textContent('#d-ptr-now')) === '10字目まで', '先生: 4年の進度を10字目までに');
@@ -277,6 +283,7 @@ await shot('14-teacher-tests');
 
 // ---- 過年度データ: 年度ごとに残し・集計を見る・個人情報をまとめて消す（先生）
 check((await page.textContent('.teacher')).includes('過年度データ'), '先生: 過年度データの区画がある');
+await tab(page, '過年度データ');
 await page.waitForSelector('.atab');
 check((await page.textContent('#arch-tabs')).includes('年度'), '先生: 残した年度のタブ');
 await page.waitForSelector('#arch-body h3');
@@ -368,7 +375,7 @@ check(await page.evaluate((exp) => JSON.stringify(KanziState.session.items) === 
 await page.click('#back');
 await shot('11-trial');
 await page.click('#tb-back');
-await page.waitForSelector('#d-grades');
+await page.waitForSelector('.sect-tabs');
 
 // 同梱フォント（最後の受け皿）: 端末に日本語フォントが無い場合に使われる。全学年の漢字とかなを持っていること
 const cover = await page.evaluate(async () => {
@@ -429,7 +436,7 @@ await page.waitForSelector('.res', { timeout: 10000 });
 check((await page.textContent('.res')).includes('できた'), 'かな: カタカナを正しく書くと「できた」');
 await checkFonts('かな（書く）');
 await page.click('#back');
-await page.goto(URL0 + '?teacher=1'); await page.waitForSelector('#d-grades');
+await page.goto(URL0 + '?teacher=1'); await page.waitForSelector('.sect-tabs');
 check((await page.textContent('#d-grades-now')).startsWith('ひらがな・カタカナ・1年') && !!(await page.$('.gchecks input[data-g="h"]')), '先生: 見せる学年に ひらがな・カタカナ');
 
 // ---- 読む: 答えが一つに決まる問い方（かなを含む句は その字の読みだけ、字＋送り仮名は送り仮名を後ろに）
@@ -523,9 +530,9 @@ const lv = await page.evaluate(() => {
 });
 check(lv.easy >= lv.normal + 40, `判定: やさしい の方が ずれた字を正解にしやすい（200字中 ふつう ${lv.normal}・やさしい ${lv.easy}）`);
 // 先生が「やさしい」を選ぶと、おためしの児童画面の「書く」が やさしい になる
-await page.goto(URL0 + '?teacher=1'); await page.waitForSelector('#d-write');
+await page.goto(URL0 + '?teacher=1'); await page.waitForSelector('.sect-tabs');
 check((await page.textContent('#d-write-now')) === 'ふつう', '先生: 書く問題の判定は はじめ ふつう');
-await page.click('#d-write summary'); await page.check('input[name="wlevel"][value="easy"]');
+await tab(page, '設定'); await page.click('#d-write summary'); await page.check('input[name="wlevel"][value="easy"]');
 await page.waitForFunction(() => document.getElementById('wmsg').textContent.includes('保存'));
 check((await page.textContent('#d-write-now')) === 'やさしい', '先生: 書く問題の判定を やさしい に');
 await shot('18-teacher-write-level');

@@ -7,6 +7,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
+// 先生画面は区分タブで1区分ずつ見せる。隠れた区分の要素を操作する前に、そのタブを開く
+const tab = (p, name) => p.click(`.sect-tabs .stab:text-is("${name}")`);
+
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SHOTS = path.join(ROOT, 'tests', 'shots');
 fs.mkdirSync(SHOTS, { recursive: true });
@@ -271,6 +274,7 @@ await page.waitForSelector('#app .menu');
 await page.goto(URL0 + '?teacher=1');
 await page.waitForSelector('.teacher section.tsets');
 check(true, '先生画面が開く');
+await tab(page, '一文の分解');
 const bkSection = await page.locator('section.tsets', { hasText: '一文の分解' }).count();
 check(bkSection > 0, '先生画面に 一文の分解の区画がある');
 check(await page.locator('#bk-probs h3').isVisible(), 'まちがいの多い問題の見出しがある');
