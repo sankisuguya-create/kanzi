@@ -397,6 +397,6 @@ Progress {
 
 → [features/setsumei.md](features/setsumei.md)
 
-## 28. 説明文を書く（2026-11、利用者の指定による追加・未実装）
+## 28. 説明文を書く（2026-11、利用者の指定による追加）
 
-→ 要件: [requirements/setsumei-writing.md](requirements/setsumei-writing.md)（実装したら features/setsumei-writing.md に仕様を書き、要件は残す）
+→ 仕様: [features/setsumei-writing.md](features/setsumei-writing.md)（1回目まで実装。先生の修正案は2回目）／ 要件: [requirements/setsumei-writing.md](requirements/setsumei-writing.md)

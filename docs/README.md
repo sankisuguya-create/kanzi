@@ -16,7 +16,7 @@
 | 一文の分解 | [features/bunkai.md](features/bunkai.md) | §25 |
 | れんしゅうプリント | [features/tprint.md](features/tprint.md) | §26 |
 | 説明文の分解 | [features/setsumei.md](features/setsumei.md) | §27 |
-| 説明文を書く（未実装） | [requirements/setsumei-writing.md](requirements/setsumei-writing.md) | §28 |
+| 説明文を書く（修正案は未実装） | [features/setsumei-writing.md](features/setsumei-writing.md)（要件: [requirements/setsumei-writing.md](requirements/setsumei-writing.md)） | §28 |
 
 よむ・かく・カード・ひらがな・カタカナ・テストの範囲・ボタンのオン・オフ・過年度データは design.md の本文（§12〜§24）にある。
 

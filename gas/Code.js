@@ -2,7 +2,8 @@
 // シート: 名簿[メール, 学年, 組, 番号, 名前]（児童）／ 教師[メール, 学年, 組]（担当。1人で複数行可。組が空なら その学年の全学級）
 //         進捗[メール, read, write, meta, 更新] ／ 設定[キー, 値] ／ 名簿YYYY・進捗YYYY（年度末に「残す」でできる過年度データ）
 // 学級のキーは「学年-組」（例 3-1）。設定のキー: grades:<学級>（見せる学年 "1,2,3"）／ pointer:<学級>:<学年>（授業の進度）／ order:<学年>（出題順）
-//   ／ gates:<学級>（児童画面でオフにしたボタン "m.write,s.rnd"。Sched.GATE_KEYS）
+//   ／ gates:<学級>（児童画面でオフにしたボタン "m.write,s.rnd"。Sched.GATE_KEYS）／ sakuShare:<学級>（説明文を書く の読み合い "1"）
+//         作文[作品, メール, 学級, 本文, 型, 見せる, コメント, 更新]（説明文を書く §28。1作品＝1行）・作文YYYY（過年度）
 // 児童への応答には本人の進捗以外を含めない（不変条件 I7）。先生は担当学級のものだけ読み書きできる。
 var STUDENT_RE = /@kyoiku\.edu\.nishi\.or\.jp$/;
 var TEACHER_RE = /@edu\.nishi\.or\.jp$/;
@@ -21,6 +22,7 @@ function setup() {
   sheet_('教師', ['メール', '学年', '組']);
   sheet_('進捗', ['メール', 'read', 'write', 'meta', '更新']);
   sheet_('設定', ['キー', '値']);
+  sakuSheet_();
 }
 
 // 1回の実行（google.script.run の1呼び出し）の中だけで使う読み込みの控え。
@@ -225,7 +227,7 @@ function api_init() {
     var klass = classOf_(me.email);
     // 名簿にいない児童は どの学級の児童ページにも対応しない（学級なしを返し、画面は案内だけを出す。進捗・学級設定は読まない）
     if (!klass) return { role: 'student', email: me.email, klass: '', orders: orders, ver: ver };
-    return { role: 'student', email: me.email, klass: klass, progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders, test: Sched.activeTest(tests_(klass)), writeLevel: writeLevel_(klass), gates: gates_(klass), ver: ver };
+    return { role: 'student', email: me.email, klass: klass, name: (roster_().filter(function (x) { return x.email === me.email; })[0] || {}).name || '', progress: loadProgress_(me.email).p, grades: grades_(klass), pointers: pointers_(klass), orders: orders, test: Sched.activeTest(tests_(klass)), writeLevel: writeLevel_(klass), gates: gates_(klass), ver: ver };
   }
   if (me.role === 'teacher') return { role: 'teacher', email: me.email, classes: teacherClasses_(me.email), orders: orders, ver: ver };
   return { role: 'unknown', email: me.email, ver: ver };
@@ -389,7 +391,7 @@ function archSheets_() {
 // 途中で止まった時は 残っている行数が返るので、画面で続きを実行できる（済んだ行はメールが無いので自然に飛ばされる）
 function archAnonRemaining_(year) {
   var n = 0;
-  ['名簿', '進捗'].forEach(function (name) {
+  ['名簿', '進捗', '作文'].forEach(function (name) {
     var sh = sheetByName_(name + year);
     if (!sh) return;
     var m = sh.getLastRow() - 1, col = archCol_(sh, 'メール', true);
@@ -438,8 +440,10 @@ function api_archiveSave(year) {
   year = archYear_(year);
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   if (ss.getSheetByName('名簿' + year) || ss.getSheetByName('進捗' + year)) throw new Error(year + '年度は すでに残してあります');
-  ['名簿', '進捗'].forEach(function (name) {
-    var sh = ss.getSheetByName(name), dst = ss.insertSheet(name + year), n = sh.getLastRow(), w = sh.getLastColumn();
+  ['名簿', '進捗', '作文'].forEach(function (name) {
+    var sh = ss.getSheetByName(name);
+    if (!sh) return; // 作文は 説明文を書く を使っていない学校には無い
+    var dst = ss.insertSheet(name + year), n = sh.getLastRow(), w = sh.getLastColumn();
     if (n > 0 && w > 0) dst.getRange(1, 1, n, w).setValues(sh.getRange(1, 1, n, w).getValues());
     dst.setFrozenRows(1);
   });
@@ -511,7 +515,7 @@ function api_archiveAnonymize(year, confirmWord) {
 function anonymize_(year, me) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var rs = sheetByName_('名簿' + year), ps = sheetByName_('進捗' + year);
-  if (!rs && !ps) throw new Error(year + '年度のデータは ありません');
+  if (!rs && !ps && !sheetByName_('作文' + year)) throw new Error(year + '年度のデータは ありません');
   var mapName = '照合' + year, ms = sheetByName_(mapName) || ss.insertSheet(mapName);
   var ids = {}, m0 = ms.getLastRow(), added = [];
   if (m0 > 0) ms.getRange(1, 1, m0, 2).getValues().forEach(function (r) { var k = String(r[0]); if (k && !(k in ids)) ids[k] = String(r[1]); });
@@ -536,8 +540,14 @@ function anonymize_(year, me) {
     m2 = ps.getLastRow() - 1;
     if (m2 > 0) vals2 = ps.getRange(2, ec2, m2, 1).getValues();
   }
+  var ws = sheetByName_('作文' + year), wm = null, wt = null, wec = 0, wtc = 0, m3 = 0;
+  if (ws) {
+    wec = archCol_(ws, 'メール', true); wtc = archCol_(ws, '本文', false); m3 = ws.getLastRow() - 1;
+    if (m3 > 0) { wm = ws.getRange(2, wec, m3, 1).getValues(); if (wtc) wt = ws.getRange(2, wtc, m3, 1).getValues(); }
+  }
   if (mails) mails.forEach(function (r) { anon(r[0]); });
   if (vals2) vals2.forEach(function (r) { anon(r[0]); });
+  if (wm) wm.forEach(function (r) { anon(r[0]); });
   if (added.length) ms.getRange(m0 + 1, 1, added.length, 2).setValues(added);
   if (mails) {
     // 名前は、メールが残っている行（まだ消していない行）だけ空にする
@@ -548,6 +558,17 @@ function anonymize_(year, me) {
   if (vals2) {
     vals2.forEach(function (r) { r[0] = anon(r[0]); });
     ps.getRange(2, ec2, m2, 1).setValues(vals2);
+  }
+  // 作文（説明文を書く）: メールを同じ番号に、本文の2行目（原稿用紙の決まりで名前を書く行）を空に。
+  // 本文のほかの場所やコメントに書いた名前は見分けられないので消えない（画面と設計書 §28 に書く）
+  if (wm) {
+    wm.forEach(function (r, i) {
+      if (String(r[0]).indexOf('@') < 0) return;
+      r[0] = anon(r[0]);
+      if (wt) { var ls = String(wt[i][0]).split('\n'); if (ls.length > 1) ls[1] = ''; wt[i][0] = ls.join('\n'); }
+    });
+    if (wt) ws.getRange(2, wtc, m3, 1).setValues(wt);
+    ws.getRange(2, wec, m3, 1).setValues(wm);
   }
   var remaining = archAnonRemaining_(year);
   if (remaining === 0) {
@@ -599,4 +620,125 @@ function api_bunkai() {
   var v = cache.get('bunkai:' + klass);
   if (v === null) { v = JSON.stringify(bunkai_(klass)); cache.put('bunkai:' + klass, v, GATE_CACHE_SEC_); }
   return Sched.normBunkai(v ? JSON.parse(v) : null);
+}
+
+// ---- 説明文を書く（設計書 §28）。シート「作文」に 1作品＝1行。
+// 児童が書く列（学級・本文・型・見せる・更新）と 先生が書く列（コメント）を分け、保存は自分の列だけを書く
+// （同じ行を児童と先生が同時に書いても、相手の列を古い値で上書きしない: 要件 W5）。行は消さない（型を del にする）。
+// 児童が読めるのは自分の作品と、先生が「読み合う」を開いている間の 同じ学級の「見せる」作品の本文だけ（§1 の例外・§28）。
+var SAKU_HEAD_ = ['作品', 'メール', '学級', '本文', '型', '見せる', 'コメント', '更新'];
+var SAKU_COL_ = { id: 1, email: 2, klass: 3, text: 4, mode: 5, show: 6, comments: 7, updated: 8 };
+function sakuSheet_() { return sheet_('作文', SAKU_HEAD_); }
+function sakuRows_() {
+  return memo_('saku', function () {
+    var sh = sakuSheet_(), n = sh.getLastRow() - 1, out = [];
+    if (n < 1) return out;
+    sh.getRange(2, 1, n, SAKU_HEAD_.length).getValues().forEach(function (r, i) {
+      if (!r[0] || String(r[4]) === 'del') return;
+      var cm = {}; try { cm = JSON.parse(r[6] || '{}') || {}; } catch (e) {}
+      var w = Genko.normWork({ id: r[0], text: r[3], mode: r[4], show: r[5] === true || String(r[5]) === '1' || String(r[5]).toUpperCase() === 'TRUE', comments: cm, updated: r[7] instanceof Date ? r[7].getTime() : r[7] });
+      w.row = i + 2; w.email = String(r[1]).toLowerCase(); w.klass = String(r[2]);
+      out.push(w);
+    });
+    return out;
+  });
+}
+function sakuOut_(w) { var o = Genko.normWork(w); return o; } // 行番号・メールを外して返す
+function sakuShare_(klass) { return String(setting_('sakuShare:' + klass)) === '1'; }
+function sakuStudent_() {
+  var me = begin_();
+  if (me.role !== 'student') throw new Error('児童のアカウントではありません');
+  var klass = classOf_(me.email);
+  if (!klass) throw new Error('名簿に あなたが 入っていません（先生に いってください）');
+  me.klass = klass;
+  return me;
+}
+// 児童: 自分の作品の一覧と、読み合いが開いているか
+function api_sakuMine() {
+  var me = sakuStudent_();
+  return JSON.stringify({ share: sakuShare_(me.klass), works: sakuRows_().filter(function (w) { return w.email === me.email; }).map(sakuOut_) });
+}
+// 児童: 作品を保存（新しい作品は行を足す）。見せる作品は1人1つ（利用者の指定）なので、見せるにしたら自分のほかの作品を外す
+function api_sakuSave(json) {
+  var me = sakuStudent_(), w = Genko.normWork(JSON.parse(json || '{}'));
+  if (!/^w[0-9a-z]{4,30}$/.test(w.id)) throw new Error('作品の番号が正しくありません');
+  var lock = LockService.getScriptLock(); // 先生のコメントの書き込みと同じ行を扱うので、学級をまたいだスクリプトロックで順番にする
+  lock.waitLock(20000);
+  try {
+    delete MEMO_.saku;
+    var sh = sakuSheet_(), rows = sakuRows_(), mine = rows.filter(function (x) { return x.email === me.email; });
+    var cur = rows.filter(function (x) { return x.id === w.id; })[0];
+    if (cur && cur.email !== me.email) throw new Error('ほかの人の作品は 書きかえられません');
+    if (!cur && mine.length >= 30) throw new Error('作品は 30こまでです');
+    var now = new Date();
+    if (cur) sh.getRange(cur.row, SAKU_COL_.klass, 1, 4).setValues([[me.klass, w.text, w.mode, w.show]]);
+    else sh.appendRow([w.id, me.email, me.klass, w.text, w.mode, w.show, '{}', now]);
+    if (cur) sh.getRange(cur.row, SAKU_COL_.updated).setValue(now);
+    if (w.show) mine.forEach(function (x) { if (x.id !== w.id && x.show) sh.getRange(x.row, SAKU_COL_.show).setValue(false); });
+    w.updated = now.getTime(); if (cur) w.comments = cur.comments;
+    return JSON.stringify(sakuOut_(w));
+  } finally { lock.releaseLock(); }
+}
+// 児童: 作品を消す（行は残し、型を del にする）
+function api_sakuDelete(id) {
+  var me = sakuStudent_();
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    delete MEMO_.saku;
+    var cur = sakuRows_().filter(function (x) { return x.id === String(id) && x.email === me.email; })[0];
+    if (cur) sakuSheet_().getRange(cur.row, SAKU_COL_.mode).setValue('del');
+    return true;
+  } finally { lock.releaseLock(); }
+}
+// 児童: 先生のコメントを「よんだ」にする（コメントの列だけを書く）
+function api_sakuRead(id, line) {
+  var me = sakuStudent_();
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    delete MEMO_.saku;
+    var cur = sakuRows_().filter(function (x) { return x.id === String(id) && x.email === me.email; })[0];
+    if (!cur || !cur.comments[line]) return false;
+    cur.comments[line].read = true;
+    sakuSheet_().getRange(cur.row, SAKU_COL_.comments).setValue(JSON.stringify(cur.comments));
+    return true;
+  } finally { lock.releaseLock(); }
+}
+// 児童: 友だちの文（先生が開いている間だけ。同じ学級の「見せる」作品の本文だけ。コメント・字数・メールは返さない）
+function api_sakuFriends() {
+  var me = sakuStudent_();
+  if (!sakuShare_(me.klass)) return JSON.stringify({ share: false, works: [] });
+  var no = {}; roster_().forEach(function (x) { no[x.email] = Number(x.no) || 999; });
+  var list = sakuRows_().filter(function (w) { return w.klass === me.klass && w.show && w.email !== me.email && w.email in no && classOf_(w.email) === me.klass; })
+    .sort(function (a, b) { return no[a.email] - no[b.email]; })
+    .map(function (w) { return { id: w.id, text: w.text }; });
+  return JSON.stringify({ share: true, works: list });
+}
+// 先生: 担当学級の作品の一覧（児童ごと。名簿の番号順）と、読み合いが開いているか
+function api_sakuTeacher(klass) {
+  requireClass_(klass);
+  var kids = roster_().filter(function (x) { return x.klass === klass; }).sort(function (a, b) { return (Number(a.no) || 999) - (Number(b.no) || 999); });
+  var by = {}; sakuRows_().forEach(function (w) { if (w.klass === klass) (by[w.email] = by[w.email] || []).push(sakuOut_(w)); });
+  return JSON.stringify({ share: sakuShare_(klass), students: kids.map(function (k) { return { no: k.no, name: k.name, works: (by[k.email] || []).sort(function (a, b) { return b.updated - a.updated; }) }; }) });
+}
+// 先生: 段落（行番号）ごとのコメントを付ける・消す（text が空なら消す）。担当学級の作品だけ
+function api_sakuComment(klass, id, line, text) {
+  requireClass_(klass);
+  line = Number(line);
+  if (!(line >= 0 && line < 400)) throw new Error('段落の番号が正しくありません');
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    delete MEMO_.saku;
+    var cur = sakuRows_().filter(function (x) { return x.id === String(id) && x.klass === klass; })[0];
+    if (!cur) throw new Error('作品が見つかりません');
+    text = String(text || '').trim().slice(0, 200);
+    if (text) cur.comments[line] = { t: text, read: false, at: Date.now() }; else delete cur.comments[line];
+    sakuSheet_().getRange(cur.row, SAKU_COL_.comments).setValue(JSON.stringify(cur.comments));
+    return JSON.stringify(cur.comments);
+  } finally { lock.releaseLock(); }
+}
+// 先生: 読み合いを開く・閉じる（学級ごと。設定のキー sakuShare:<学級>）
+function api_sakuShare(klass, on) {
+  requireClass_(klass);
+  setSetting_('sakuShare:' + klass, on ? '1' : '');
+  return !!on;
 }

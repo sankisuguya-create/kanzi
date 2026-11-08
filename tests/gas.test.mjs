@@ -11,14 +11,14 @@ function makeEnv(sheets, email) {
   for (const [name, rows] of Object.entries(sheets)) if (name !== '__cache') book[name] = rows.map((r) => r.slice());
   function sheetObj(name) {
     const data = book[name];
-    const range = (r, c, nr = 1, nc = 1) => ({
+    const range = (r, c, nr = 1, nc = 1) => { const o = {
       getValues: tick(() => Array.from({ length: nr }, (_, i) => Array.from({ length: nc }, (_, j) => (data[r - 1 + i] || [])[c - 1 + j] ?? ''))),
-      setValues: tick((v) => { calls.log.push(name); v.forEach((row, i) => row.forEach((x, j) => { (data[r - 1 + i] = data[r - 1 + i] || [])[c - 1 + j] = x; })); }),
+      setValues: tick((v) => { calls.log.push(name); v.forEach((row, i) => row.forEach((x, j) => { (data[r - 1 + i] = data[r - 1 + i] || [])[c - 1 + j] = x; })); return o; }),
       getValue: tick(() => (data[r - 1] || [])[c - 1] ?? ''),
       setValue: tick((x) => { (data[r - 1] = data[r - 1] || [])[c - 1] = x; }),
       setFontWeight: () => {},
       createTextFinder: (t) => ({ matchEntireCell: () => ({ findNext: tick(() => { const i = data.findIndex((row) => String(row[0]) === t); return i >= 0 ? { getRow: () => i + 1 } : null; }) }) })
-    });
+    }; return o; };
     return {
       getName: () => name,
       getMaxColumns: () => Math.max(26, ...data.map((r) => r.length)), insertColumnsAfter: () => {},
@@ -37,6 +37,7 @@ function makeEnv(sheets, email) {
   };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(new URL('../src/scheduler.js', import.meta.url), 'utf8'), ctx);
+  vm.runInContext(fs.readFileSync(new URL('../src/genko.js', import.meta.url), 'utf8'), ctx);
   vm.runInContext(fs.readFileSync(new URL('../gas/Code.js', import.meta.url), 'utf8'), ctx);
   ctx.book = book; ctx.calls = calls;
   return ctx;
@@ -481,4 +482,81 @@ test('れんしゅうプリントの点: 保存して、先生画面に 直近2�
   assert.equal(Object.keys(JSON.parse(row[3]).tp).length, 4); // ヒントあり [点, 問題数, 1] は残り、3つめが1以外は捨てる
   const T2 = makeEnv(env.book, T).api_teacherView('3-1').students.find((k) => k.name === 'はると').tp;
   assert.deepEqual({ ...T2 }, { avg: 70, n: 2, hint: 1 }); // ヒントありは平均に入れず 回数だけ
+});
+
+// ---- 説明文を書く（§28）
+const sakuWork = (id, text, extra = {}) => JSON.stringify({ id, text, mode: 'tpl', ...extra });
+test('説明文を書く: 児童は自分の作品だけ保存・一覧でき、ほかの児童の作品は書きかえられない', () => {
+  const sheets = base();
+  let env = makeEnv(sheets, K1);
+  const r = JSON.parse(env.api_sakuSave(sakuWork('wabc01', '　　　すがたをかえる米\nabc')));
+  assert.equal(r.text, '　　　すがたをかえる米\nａｂｃ', '半角は全角にそろえる');
+  env.api_sakuSave(sakuWork('wabc02', '二つ目'));
+  const mine = JSON.parse(env.api_sakuMine());
+  assert.equal(mine.works.length, 2); assert.equal(mine.share, false);
+  sheets.作文 = env.book['作文'];
+  env = makeEnv(sheets, K2);
+  assert.throws(() => env.api_sakuSave(sakuWork('wabc01', 'のっとり')), /ほかの人/);
+  assert.equal(JSON.parse(env.api_sakuMine()).works.length, 0);
+  assert.throws(() => makeEnv(sheets, T).api_sakuSave(sakuWork('wabc09', 'x')), /児童/);
+});
+test('説明文を書く: 見せる作品は1人1つ（見せるにすると自分のほかの作品が外れる）', () => {
+  const sheets = base(); const env = makeEnv(sheets, K1);
+  env.api_sakuSave(sakuWork('wshow1', 'a', { show: true }));
+  env.api_sakuSave(sakuWork('wshow2', 'b', { show: true }));
+  const w = JSON.parse(env.api_sakuMine()).works;
+  assert.deepEqual(w.filter((x) => x.show).map((x) => x.id), ['wshow2']);
+});
+test('説明文を書く: 友だちの文は 先生が開いた間だけ、同じ学級の見せる作品の本文だけ', () => {
+  const sheets = base();
+  let env = makeEnv(sheets, K1); env.api_sakuSave(sakuWork('wk1aaa', 'あおいの文', { show: true })); env.api_sakuSave(sakuWork('wk1bbb', '見せない文')); sheets.作文 = env.book['作文'];
+  env = makeEnv(sheets, K3); env.api_sakuSave(sakuWork('wk3aaa', '2組の文', { show: true })); sheets.作文 = env.book['作文'];
+  env = makeEnv(sheets, K2);
+  assert.deepEqual(JSON.parse(env.api_sakuFriends()), { share: false, works: [] }, '閉じている間は何も返さない');
+  const t = makeEnv(sheets, T); t.api_sakuShare('3-1', true); sheets.設定 = t.book['設定']; sheets.__cache = {};
+  env = makeEnv(sheets, K2);
+  const f = JSON.parse(env.api_sakuFriends());
+  assert.equal(f.share, true);
+  assert.deepEqual(f.works.map((w) => w.text), ['あおいの文']);
+  assert.deepEqual(Object.keys(f.works[0]).sort(), ['id', 'text'], 'メール・コメントは返さない');
+  assert.throws(() => makeEnv(sheets, T).api_sakuShare('3-2', true), /担当/);
+});
+test('説明文を書く: 先生は担当学級の作品にコメントでき、児童の保存はコメントの列を上書きしない', () => {
+  const sheets = base();
+  let env = makeEnv(sheets, K1); env.api_sakuSave(sakuWork('wcmt01', '題\n名\n　本文')); sheets.作文 = env.book['作文'];
+  const t = makeEnv(sheets, T);
+  const v = JSON.parse(t.api_sakuTeacher('3-1'));
+  assert.equal(v.students.find((k) => k.name === 'あおい').works[0].id, 'wcmt01');
+  assert.ok(!JSON.stringify(v).includes('@'), '先生画面にもメールは送らない');
+  t.api_sakuComment('3-1', 'wcmt01', 2, 'よく書けたね');
+  sheets.作文 = t.book['作文'];
+  assert.throws(() => makeEnv(sheets, T).api_sakuTeacher('3-2'), /担当/);
+  assert.throws(() => makeEnv(sheets, T).api_sakuComment('3-2', 'wcmt01', 2, 'x'), /担当/);
+  env = makeEnv(sheets, K1);
+  // 児童が古いコメント（なし）を持ったまま保存しても、先生のコメントは残る
+  env.api_sakuSave(JSON.stringify({ id: 'wcmt01', text: '題\n名\n　本文を直した', comments: {} }));
+  const w = JSON.parse(env.api_sakuMine()).works[0];
+  assert.equal(w.comments[2].t, 'よく書けたね'); assert.equal(w.comments[2].read, false);
+  env.api_sakuRead('wcmt01', 2);
+  assert.equal(JSON.parse(env.api_sakuMine()).works[0].comments[2].read, true);
+});
+test('説明文を書く: 消した作品は一覧に出ない（行は残す）', () => {
+  const sheets = base(); const env = makeEnv(sheets, K1);
+  env.api_sakuSave(sakuWork('wdel01', 'a')); env.api_sakuDelete('wdel01');
+  assert.equal(JSON.parse(env.api_sakuMine()).works.length, 0);
+  assert.equal(env.book['作文'].length, 2);
+});
+test('説明文を書く: 過年度に残し、消去でメールと本文の名前の行（2行目）を消す', () => {
+  const sheets = base();
+  let env = makeEnv(sheets, K1); env.api_sakuSave(sakuWork('warc01', '題名\nあおい　たろう\n　本文')); sheets.作文 = env.book['作文'];
+  env = makeEnv(sheets, T2);
+  env.api_archiveSave('2025');
+  assert.ok(env.book['作文2025'], '作文も写す');
+  env.api_archiveAnonymize('2025', '2025');
+  const row = env.book['作文2025'][1];
+  assert.ok(!String(row[1]).includes('@'));
+  assert.equal(row[3], '題名\n\n　本文');
+  const id = env.book['名簿2025'].find((r) => r[3] === 1 && r[2] === 1)[0];
+  assert.equal(row[1], id, '名簿と同じ番号に置きかえる');
+  assert.equal(env.book['作文'][1][1], K1, '今年度の作文はそのまま');
 });
