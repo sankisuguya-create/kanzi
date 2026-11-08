@@ -22,7 +22,7 @@ test('森の定数は scheduler.js が正本で、forest.md の記述と一致�
   const m = read('src/scheduler.js').match(/FOREST_TREES = (\d+), FOREST_STEP = (\d+), FOREST_CAP = /);
   assert.ok(m, 'scheduler.js に森の定数がない');
   assert.deepEqual([Number(m[1]), Number(m[2])], [27, 36]); // CAP = 27×36 = 972
-  const forest = read('docs/forest.md');
+  const forest = read('docs/features/forest.md');
   assert.ok(/36段階/.test(forest) && /27本/.test(forest), 'forest.md に 36段階・27本 の記述がない');
   // tree.js に 36 ベタ書きの段階数が残っていない（行コメントを除いて検査する）
   const code = read('src/tree.js').split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');

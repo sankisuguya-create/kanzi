@@ -11,7 +11,7 @@
 //      （「あつい」の 暑い／熱い／厚い のように、どれも辞書の語になる文は文脈によらず除く。厳しめの基準）
 //   4. 辞書の上では語になるが、文の意味から入らないと目で確かめた字は、文の後ろに !字 と書いて除ける
 //      （例: 赤組に[負|ま]<ける>。!巻 ＝「巻ける」は語だが「赤組に巻ける」は文にならない）。
-//      除けた字は docs/tprint-report.txt の「目視で除外」に全部出す（あとから見直せるように）。検査で引っかからない字を書いたら警告
+//      除けた字は docs/reports/tprint-report.txt の「目視で除外」に全部出す（あとから見直せるように）。検査で引っかからない字を書いたら警告
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -138,8 +138,8 @@ for (let g = 1; g <= 6; g++) {
   }
 }
 const missing = ALL.filter((k) => !out[k] || !out[k].some((x) => !x[3]));
-fs.writeFileSync(path.join(ROOT, 'docs', 'tprint-report.txt'), report.join('\n') + '\n');
-console.log(`文 ${kept}/${total} を採用。四角の問題が無い字 ${missing.length}（docs/tprint-report.txt）`);
+fs.writeFileSync(path.join(ROOT, 'docs', 'reports', 'tprint-report.txt'), report.join('\n') + '\n');
+console.log(`文 ${kept}/${total} を採用。四角の問題が無い字 ${missing.length}（docs/reports/tprint-report.txt）`);
 if (process.argv.includes('--check')) process.exit(0);
 if (missing.length) { console.error('四角の問題が無い字: ' + missing.join('')); process.exit(1); }
 fs.writeFileSync(path.join(ROOT, 'src', 'tprint-data.js'),
