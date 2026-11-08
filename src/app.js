@@ -2061,7 +2061,7 @@
         var order = orderOf(tgrade), pointer = pointers[tgrade] || 0, isTop = tgrade === Math.max.apply(null, grades);
         var classes = (S.info.classes || []).length > 1 ? '<p><label>学級 <select id="klass">' + S.info.classes.map(function (k) { return '<option value="' + esc(k) + '"' + (k === klass ? ' selected' : '') + '>' + esc(klassLabel(k)) + '</option>'; }).join('') + '</select></label></p>' : '';
         // 子どもごとの記録は たたむ（利用者の指定）。見出しに 人数だけ出す
-        var kidsHtml = '<details class="tset kids-fold" id="d-kids"' + (S.open['d-kids'] ? ' open' : '') + '><summary><span class="ts-title">子どもごとの記録</span><span class="ts-now">' + kids.length + '人</span></summary><div class="ts-body"><p class="hint">この画面だけに出します（児童の画面には出しません）。「終えた回」は よむ・かく・カード・ぶんかいを最後までやった回数、「おぼえた字」は よむで続けて正解して箱3以上になった字の数、「テスト練習」は れんしゅうプリントの 直近2週間の平均点（丸つけした回数。ヒントありの回は平均に入れず、回数だけ別に出す）。</p>' +
+        var kidsHtml = '<details class="tset kids-fold" id="d-kids"' + (S.open['d-kids'] !== false ? ' open' : '') + '><summary><span class="ts-title">子どもごとの記録</span><span class="ts-now">' + kids.length + '人</span></summary><div class="ts-body"><p class="hint">この画面だけに出します（児童の画面には出しません）。「終えた回」は よむ・かく・カード・ぶんかいを最後までやった回数、「おぼえた字」は よむで続けて正解して箱3以上になった字の数、「テスト練習」は れんしゅうプリントの 直近2週間の平均点（丸つけした回数。ヒントありの回は平均に入れず、回数だけ別に出す）。</p>' +
           (kids.length ? '<div class="kids-wrap"><table class="kids"><thead><tr><th>番号</th><th>名前</th><th>最後に使った日</th><th>終えた回（問題数）</th><th>おぼえた字</th><th>テスト練習（2週間）</th><th>まちがいの多い字</th></tr></thead><tbody>' +
             kids.map(function (k) {
               var idle = !k.last || (Date.now() - k.last) > 7 * 86400000;
@@ -2082,7 +2082,7 @@
           return ks.concat([gl]).join('・');
         }
         // いまの進捗（子どもごとの記録）をいちばん上に。設定はその下
-        $('.teacher').innerHTML = classes + kidsHtml +
+        $('.teacher').innerHTML = '<section class="tsets" data-tab="記録">' + classes + kidsHtml + '</section>' +
           '<section class="tsets"><h2>設定</h2>' +
           fold('d-grades', '児童に見せる学年', esc(gradesNow(shown)),
             '<p class="hint">児童のメニューは、いちばん上の学年のタブで開きます。ひらがな・カタカナは「見る」と「書く」だけです（1年向け）。</p>' +
@@ -2097,7 +2097,7 @@
           fold('d-gates', '児童画面のボタン', esc(gatesNow(view.gates)),
             '<p class="hint">「児童画面を ためす」で、ボタンの右上の <b>✓</b>（児童が使える）／<b>✕</b>（使えない）を押して切り替えます（押すたびに自動で保存）。オフのボタンは、この学級の児童の画面で うすくなり、押せなくなります。開いたままの児童の画面にも 30秒ほどで とどきます。メニューのボタンと、読む・書く・カードの「どの字で やる？」の選び方を切り替えられます。</p>' +
             '<p><button id="gate-try">児童画面を ためして 切り替える</button>' + (view.gates.length ? ' <button id="gate-reset">ぜんぶ オンにもどす</button>' : '') + ' <span id="gate-msg" aria-live="polite"></span></p>') +
-          '</section><section class="tsets"><h2>' + tgrade + '年</h2>' + gradeTabs +
+          '</section><section class="tsets" data-tab="学年の漢字"><h2>' + tgrade + '年</h2>' + gradeTabs +
           fold('d-test', '漢字テストの範囲', '',
             '<p class="hint">テストごとに 範囲を 作り、児童に見せるテストを 1つ えらびます（押すたびに自動で保存）。上の学年タブを切り替えると、ほかの学年の字も足せます。見せているテストは、児童の「読む・書く・カード」の はじめかたと メニューに出ます。</p>' +
             '<div id="test-mgr"></div>' +
@@ -2139,6 +2139,23 @@
         app.querySelectorAll('details.tset').forEach(function (d) { d.addEventListener('toggle', function () { S.open[d.id] = d.open; }); });
         var sel = $('#klass'); if (sel) sel.addEventListener('change', function () { teacher(sel.value); });
         loadArch();
+        // 区分タブ（ui-layout）: 縦に長い1ページを、記録・設定・学年・分解・過年度に分けて1つずつ見せる。選んだタブは描き直しても保つ
+        (function () {
+          var secs = [].slice.call($('.teacher').querySelectorAll(':scope > section.tsets'));
+          var labels = secs.map(function (sec) { var h = sec.querySelector('h2'); return sec.dataset.tab || (h ? h.textContent.replace(/（.*$/, '') : ''); });
+          var cur = labels.indexOf(S.tTab) >= 0 ? S.tTab : labels[0];
+          var nav = document.createElement('nav');
+          nav.className = 'tabs t sect-tabs'; nav.setAttribute('role', 'tablist');
+          nav.innerHTML = labels.map(function (l) { return '<button role="tab" class="stab" aria-selected="' + (l === cur) + '">' + esc(l) + '</button>'; }).join('');
+          $('.teacher').insertBefore(nav, $('.teacher').firstChild);
+          function show(l) {
+            S.tTab = l;
+            secs.forEach(function (sec, i) { sec.hidden = labels[i] !== l; });
+            nav.querySelectorAll('.stab').forEach(function (b, i) { b.setAttribute('aria-selected', String(labels[i] === l)); });
+          }
+          nav.querySelectorAll('.stab').forEach(function (b, i) { b.addEventListener('click', function () { show(labels[i]); }); });
+          show(cur);
+        })();
         on('#gk-open', function () { sakubunTeacher(klass); });
         // 漢字テストの範囲: テストごとに管理。編集・見せる切替とも押すたびに保存（自動保存）
         // 学級で まちがいの おおい字（よむ: 3人以上が答え、最後の答えがまちがいの人が3割以上）→ あかい わく

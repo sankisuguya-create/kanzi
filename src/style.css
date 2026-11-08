@@ -715,6 +715,26 @@ body.sm-screen .bar { flex: none; margin-bottom: 4px; }
 /* 正解の文字（青い「正解！」）は 画面に出さない（大きな ○ が代わり。読み上げ用に残す） */
 .rmsg.good, .res.good, .bk-hint.good, .sm-ask.good { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
+/* ---- ui-layout の規則による改良（寸法を役割で揃える） */
+/* メニュー: 並びは元のまま。縦幅だけ揃える — 1列の行も2列の行も同じ高さ（行を等分）、字の大きさも行の種類で変えない */
+.menu .actions { grid-auto-rows: 1fr; }
+.menu .actions .big, .two .big { font-size: 26px; min-height: 96px; }
+@media (min-aspect-ratio: 1/1) and (min-width: 761px) and (min-height: 480px) {
+  body.menu-screen .actions { display: grid; grid-auto-rows: minmax(0, 1fr); }
+  body.menu-screen .actions .big, body.menu-screen .two .big { min-height: 0; height: 100%; font-size: clamp(20px, 4.2vh, 26px); }
+  body.menu-screen .tabs .tab { min-height: 56px; }
+  body.menu-screen .forest-tools button { min-height: 56px; }
+  body.menu-screen .forest-colors summary { min-height: 56px; }
+}
+/* 先生画面: 区分タブ。上の2つのボタンは同じ幅 */
+.top.t .try { width: 220px; margin-left: 0; }
+.top.t .try#show { margin-left: auto; }
+.sect-tabs { margin: 0 0 16px !important; border-bottom: 2px solid var(--line); }
+.sect-tabs .stab { min-height: 56px; width: 140px; padding: 0 8px; font-size: 18px; font-weight: 700; background: var(--card); border: 2px solid var(--line); border-bottom: 0; border-radius: 12px 12px 0 0; color: var(--ink-sub); }
+.teacher section[hidden] { display: none; }
+.tmgr select, .teacher input#test-label, .teacher input#arch-word, .teacher input#bk-new, .teacher input#arch-year { min-height: 48px; box-sizing: border-box; }
+.teacher input#arch-year { width: 6em; font-size: 18px; padding: 0 10px; }
+.teacher button#arch-save, .teacher .bk-del { min-height: 48px; min-width: 48px; padding: 0 16px; }
 /* ===== 説明文を書く（設計書 §28）: 左に操作、右（7割以上）に原稿用紙 ===== */
 :root { --gk-grid: #D9A88A; --gk-caret: #0F5EA8; }
 body.gk-screen #app { max-width: none; }

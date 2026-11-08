@@ -6,6 +6,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
+// 先生画面は区分タブで1区分ずつ見せる。隠れた区分の要素を操作する前に、そのタブを開く
+const tab = (p, name) => p.click(`.sect-tabs .stab:text-is("${name}")`);
+
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SHOTS = path.join(ROOT, 'tests', 'shots');
 fs.mkdirSync(SHOTS, { recursive: true });
@@ -33,8 +36,8 @@ await page.goto(URL0);
 // 先生の画面で「送りがなで出す字」の印をつける（写真のテストの㊵〜㊿の字）
 const OKU = '負祭悪注暑寒暗軽明返守', OKU3 = '負祭悪注暑寒暗軽返守'; // 明は2年の字なので 印をつけても出さない
 await page.evaluate((chars) => { localStorage.clear(); localStorage.setItem('kanzi.settings', JSON.stringify({ grades: { '3-1': [1, 2, 3] }, tests: { '3-1': { active: 't1', list: [{ id: 't1', label: '9・10月', chars }] } } })); }, CHARS);
-await page.goto(URL0 + '?teacher=1'); await page.waitForSelector('#d-test');
-await page.click('#d-test summary'); await page.click('#tm-okuri');
+await page.goto(URL0 + '?teacher=1'); await page.waitForSelector('.sect-tabs');
+await tab(page, '学年の漢字'); await page.click('#d-test summary'); await page.click('#tm-okuri');
 for (const c of OKU.replace('明', '')) await page.click(`.tcell[data-c="${c}"]`);
 await page.click('.ttab[data-g="2"]'); await page.waitForSelector('.tcell[data-c="明"]'); // 明は2年の字（学年タブを切り替えて つける）
 await page.click('#tm-okuri'); await page.click('.tcell[data-c="明"]');

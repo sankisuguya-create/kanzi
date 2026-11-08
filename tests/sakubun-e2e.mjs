@@ -6,6 +6,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
+// 先生画面は区分タブで1区分ずつ見せる。隠れた区分の要素を操作する前に、そのタブを開く
+const tab = (p, name) => p.click(`.sect-tabs .stab:text-is("${name}")`);
+
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SHOTS = path.join(ROOT, 'tests', 'shots');
 fs.mkdirSync(SHOTS, { recursive: true });
@@ -98,6 +101,7 @@ check(!(await page.locator('#gk-friends').count()), '読み合いが閉じてい
 const tp = await ctx.newPage(); await tp.setViewportSize({ width: 1366, height: 768 }); // 同じ端末（localStorage を共有）
 tp.on('pageerror', (e) => errors.push(String(e)));
 await tp.goto(page.url().split('?')[0] + '?teacher=1');
+await tp.waitForSelector('.sect-tabs'); await tab(tp, '説明文を書く');
 await tp.waitForSelector('#gk-open');
 await tp.locator('#gk-open').click();
 await tp.waitForSelector('.gk-kid[data-id]');

@@ -6,6 +6,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
+// 先生画面は区分タブで1区分ずつ見せる。隠れた区分の要素を操作する前に、そのタブを開く
+const tab = (p, name) => p.click(`.sect-tabs .stab:text-is("${name}")`);
+
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SHOTS = path.join(ROOT, 'tests', 'shots');
 fs.mkdirSync(SHOTS, { recursive: true });
@@ -113,6 +116,7 @@ check(errors.length === 0, 'コンソールエラーなし ' + errors.join(' / '
 
 // 先生画面: せつめい文の集計
 await page.goto(URL0.replace('?demo', '?teacher=1'));
+await page.waitForSelector('.sect-tabs'); await tab(page, '説明文の分解');
 await page.waitForSelector('#sm-texts');
 check((await page.locator('#sm-texts tr').count()) > 5, '先生画面に 文章ごとの まちがい集計');
 await browser.close();

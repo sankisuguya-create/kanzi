@@ -7,6 +7,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
+// 先生画面は区分タブで1区分ずつ見せる。隠れた区分の要素を操作する前に、そのタブを開く
+const tab = (p, name) => p.click(`.sect-tabs .stab:text-is("${name}")`);
+
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SHOTS = path.join(ROOT, 'tests', 'shots');
 fs.mkdirSync(SHOTS, { recursive: true });
@@ -31,7 +34,7 @@ const shot = (p, name) => p.screenshot({ path: path.join(SHOTS, name + '.png') }
 await t.goto(URL0 + '?teacher=1');
 await t.evaluate(() => { localStorage.clear(); localStorage.setItem('kanzi.settings', JSON.stringify({ grades: { '3-1': [1, 2, 3] }, tests: { '3-1': { label: '9月', chars: '悪安' } } })); });
 await t.goto(URL0 + '?teacher=1');
-await t.waitForSelector('#d-gates');
+await t.waitForSelector('.sect-tabs');
 check((await t.textContent('#d-gates-now')) === 'ぜんぶ オン', '先生画面: はじめは ぜんぶ オン');
 
 // ボタンの箱と、中の文字（チップを除く）の箱
@@ -110,9 +113,9 @@ check(await k.locator('#go-write[disabled]').count() === 0, '児童: 開いた�
 check(await k.evaluate(() => JSON.stringify(KanziState.gates)) === '["s.rnd"]', '児童: いまのオフは ランダムだけ');
 
 // ---- 先生画面: 見出しに いまの値、ぜんぶ オンにもどす
-await t.click('#tb-back'); await t.waitForSelector('#d-gates');
+await t.click('#tb-back'); await t.waitForSelector('.sect-tabs');
 check((await t.textContent('#d-gates-now')) === 'オフ: 出す字: ランダム', '先生画面: 見出しに いまオフのボタン');
-await t.click('#d-gates summary'); await shot(t, 'gates-5-teacher');
+await tab(t, '設定'); await t.click('#d-gates summary'); await shot(t, 'gates-5-teacher');
 await t.click('#gate-reset'); await t.waitForFunction(() => document.getElementById('d-gates-now').textContent === 'ぜんぶ オン');
 check(await t.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem('kanzi.settings')).gates['3-1'])) === '[]', '先生画面: ぜんぶ オンにもどす');
 
