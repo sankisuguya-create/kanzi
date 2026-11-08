@@ -716,11 +716,13 @@ body.sm-screen .bar { flex: none; margin-bottom: 4px; }
 .rmsg.good, .res.good, .bk-hint.good, .sm-ask.good { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ---- ui-layout の規則による改良（寸法を役割で揃える） */
-/* メニュー: 全ボタンを同じ大きさの2列グリッドに。.two の入れ子はやめた */
+/* メニュー: 2列グリッド。主の段（読む・書く）は1行目を高くして大きくする。標準の段はすべて同じ大きさ */
 .menu .actions { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 14px; }
+.menu .actions [data-tier=main] { font-size: 34px; }
+body.menu-screen .actions [data-tier=main] { font-size: clamp(26px, 5.4vh, 36px); }
 .menu .actions .big { min-height: 96px; height: 100%; padding: 4px 12px; }
 @media (min-aspect-ratio: 1/1) and (min-width: 761px) and (min-height: 480px) {
-  body.menu-screen .actions { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: minmax(0, 1fr); gap: clamp(8px, 1.6vh, 16px); }
+  body.menu-screen .actions { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1.7fr); grid-auto-rows: minmax(0, 1fr); gap: clamp(8px, 1.6vh, 16px); }
   body.menu-screen .actions .big { height: 100%; }
   body.menu-screen .tabs .tab { min-height: 56px; }
   body.menu-screen .forest-tools button { min-height: 56px; }
