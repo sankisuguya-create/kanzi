@@ -102,10 +102,34 @@
     }
     return o;
   }
+  // 段落の順番を入れかえる（line は改行で数えた番号。2行目＝題名・名前の後から）。dir: -1＝前へ（右へ）、+1＝後ろへ（左へ）
+  // 返す: { text, map: { もとの行: 新しい行 } }（先生のコメントの付け先を合わせるため）。動かせない時は null
+  function moveParagraph(text, line, dir) {
+    var ls = String(text || '').split('\n'), to = line + dir;
+    if (line < 2 || to < 2 || line >= ls.length || to >= ls.length) return null;
+    var t = ls[line]; ls[line] = ls[to]; ls[to] = t;
+    var map = {}; map[line] = to; map[to] = line;
+    return { text: ls.join('\n'), map: map };
+  }
+  // コメントの付け先を map で移す（map にない行はそのまま）
+  function remapComments(comments, map) {
+    var out = {};
+    Object.keys(comments || {}).forEach(function (k) { var n = map && (k in map) ? map[k] : Number(k); out[n] = comments[k]; });
+    return out;
+  }
+  // 2つの map を続けて当てた結果（a のあとに b）
+  function composeMap(a, b) {
+    var res = {}, at = {}, k;
+    a = a || {}; b = b || {};
+    for (k in a) { var c = Number(a[k]); at[c] = true; res[k] = (c in b) ? Number(b[c]) : c; } // 動いたことのある行
+    for (k in b) if (!(k in a) && !at[k]) res[k] = Number(b[k]);                               // まだ動いていない行（もとの位置にいる）
+    for (k in res) if (res[k] === Number(k)) delete res[k];
+    return res;
+  }
   function newId() { return 'w' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
 
   var Genko = { Z: Z, ROWS: ROWS, COLS: COLS, HANG: HANG, OPEN: OPEN, SMALL: SMALL, MAX_CHARS: MAX_CHARS,
     toZen: toZen, layout: layout, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
-    check: check, paraNo: paraNo, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
+    check: check, paraNo: paraNo, moveParagraph: moveParagraph, remapComments: remapComments, composeMap: composeMap, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
   if (typeof module !== 'undefined' && module.exports) module.exports = Genko; else root.Genko = Genko;
 })(typeof globalThis !== "undefined" ? globalThis : this);

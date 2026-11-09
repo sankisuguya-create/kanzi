@@ -560,3 +560,14 @@ test('説明文を書く: 過年度に残し、消去でメールと本文の名
   assert.equal(row[1], id, '名簿と同じ番号に置きかえる');
   assert.equal(env.book['作文'][1][1], K1, '今年度の作文はそのまま');
 });
+
+test('説明文を書く: 段落を入れかえて保存すると、先生のコメントの付け先も移る', () => {
+  const sheets = base();
+  let env = makeEnv(sheets, K1); env.api_sakuSave(sakuWork('wmove1', '題\n名\nあ\nい')); sheets.作文 = env.book['作文'];
+  const t = makeEnv(sheets, T); t.api_sakuComment('3-1', 'wmove1', 2, 'あへのコメント'); sheets.作文 = t.book['作文'];
+  env = makeEnv(sheets, K1);
+  env.api_sakuSave(JSON.stringify({ id: 'wmove1', text: '題\n名\nい\nあ', remap: { 2: 3, 3: 2, 1: 5 } }));
+  const w = JSON.parse(env.api_sakuMine()).works[0];
+  assert.equal(w.text, '題\n名\nい\nあ');
+  assert.deepEqual(Object.keys(w.comments), ['3']); assert.equal(w.comments[3].t, 'あへのコメント');
+});

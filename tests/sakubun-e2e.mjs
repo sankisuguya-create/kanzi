@@ -19,6 +19,7 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': (types[path.extname(f)] || 'text/plain') + '; charset=utf-8' });
   fs.createReadStream(f).pipe(res);
 }).listen(0);
+const openSaku = async (p) => { await p.waitForSelector('.stab'); await p.locator('.stab', { hasText: '説明文を書く' }).click(); await p.locator('#gk-open').click(); };
 const BASE = `http://127.0.0.1:${server.address().port}/`;
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || '/opt/pw-browsers/chromium' });
@@ -89,6 +90,24 @@ const small = await page.evaluate(() => { const e = [...document.querySelectorAl
 check(small, '小さい字（っ）は右上へ寄せる');
 await shot('sakubun-sample');
 await page.locator('#gk-sample').click();
+// 段落の入れかえ: はじめ（3行目）を えらんで 後ろへ → 空の段落と入れかわる。題名・名前の行は えらべない
+await page.locator('#gk-order').click();
+check(await page.locator('#gk-orderbox').isVisible() && await page.locator('#gk-next').isDisabled(), '入れかえ: 段落をえらぶまで ボタンは押せない');
+const pickPara = async (needle) => {
+  const b = await page.evaluate((needle) => { const e = [...document.querySelectorAll('.gk-ch')].find((x) => x.textContent === needle); const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, needle);
+  await page.mouse.click(b.x, b.y);
+};
+await pickPara('に'); // はじめ「…には、」
+check(await page.locator('.gk-sel').count() > 5 && !(await page.locator('#gk-next').isDisabled()) && await page.locator('#gk-prev').isDisabled(), '入れかえ: 段落を押すと その段落が囲まれ、本文の最初なので 前へ は押せない');
+await page.locator('#gk-next').click();
+text = await page.evaluate(() => document.querySelector('textarea.gk-ime').value);
+check(text.split('\n')[2] === '' && /には/.test(text.split('\n')[3]), '入れかえ: 後ろへ で となりの段落と入れかわる');
+await page.locator('#gk-prev').click();
+text = await page.evaluate(() => document.querySelector('textarea.gk-ime').value);
+check(/には/.test(text.split('\n')[2]), '入れかえ: 前へ で もどる');
+await shot('sakubun-order');
+await page.locator('#gk-orderdone').click();
+check(await page.locator('#gk-orderbox').isHidden() && await page.locator('.gk-sel').count() === 0, '入れかえ: できた で終わる');
 // 友だちに見せる → 保存 → もどる → 一覧に出る
 await page.locator('#gk-show').check();
 await page.waitForTimeout(100);
@@ -102,8 +121,7 @@ const tp = await ctx.newPage(); await tp.setViewportSize({ width: 1366, height: 
 tp.on('pageerror', (e) => errors.push(String(e)));
 await tp.goto(page.url().split('?')[0] + '?teacher=1');
 await tp.waitForSelector('.sect-tabs'); await tab(tp, '説明文を書く');
-await tp.waitForSelector('#gk-open');
-await tp.locator('#gk-open').click();
+await openSaku(tp);
 await tp.waitForSelector('.gk-kid[data-id]');
 const kidTxt = await tp.locator('.gk-kids').innerText(); check(/デモの児童/.test(kidTxt), '先生: この端末の児童の作品が一覧に出る ' + kidTxt.slice(0, 120).replace(/\n/g, ' '));
 await tp.locator('#gk-share').click();
@@ -136,6 +154,10 @@ await page.waitForSelector('.gk-ch');
 check((await page.locator('.gk-side .gk-work').count()) === 2, '児童: 友だちの文（デモ2つ）を読める');
 await shot('sakubun-friends');
 
+// 先生の おためしで書いた作品は、先生画面に「おためし」として出る（その端末だけ）
+await tp.evaluate(() => localStorage.setItem('kanzi.trial.demo.saku', JSON.stringify({ wtrial1: { id: 'wtrial1', text: '　　　ためしの文\n名\n　ほんぶん', mode: 'free', updated: Date.now() } })));
+await tp.reload(); await openSaku(tp); await tp.waitForSelector('.gk-kid.trial');
+check(/おためし/.test(await tp.locator('.gk-kid.trial').innerText()), '先生: おためしで書いた作品も 先生画面に出る（この端末だけと明記）');
 // スマホ幅: 横にはみ出さない（用紙の中だけスクロール）
 await page.setViewportSize({ width: 390, height: 844 });
 await page.waitForTimeout(200);

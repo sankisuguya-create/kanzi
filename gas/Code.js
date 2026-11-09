@@ -660,7 +660,10 @@ function api_sakuMine() {
 }
 // 児童: 作品を保存（新しい作品は行を足す）。見せる作品は1人1つ（利用者の指定）なので、見せるにしたら自分のほかの作品を外す
 function api_sakuSave(json) {
-  var me = sakuStudent_(), w = Genko.normWork(JSON.parse(json || '{}'));
+  var raw = JSON.parse(json || '{}'), me = sakuStudent_(), w = Genko.normWork(raw);
+  // 段落の順番を入れかえた時は、先生のコメントの付け先も同じように移す（{ もとの行: 新しい行 }。コメントの列はロックの中で読み直して書く）
+  var remap = null;
+  if (raw.remap && typeof raw.remap === 'object') { remap = {}; for (var rk in raw.remap) { var a = Number(rk), b = Number(raw.remap[rk]); if (a >= 2 && a < 400 && b >= 2 && b < 400) remap[a] = b; } }
   if (!/^w[0-9a-z]{4,30}$/.test(w.id)) throw new Error('作品の番号が正しくありません');
   var lock = LockService.getScriptLock(); // 先生のコメントの書き込みと同じ行を扱うので、学級をまたいだスクリプトロックで順番にする
   lock.waitLock(20000);
@@ -674,6 +677,7 @@ function api_sakuSave(json) {
     if (cur) sh.getRange(cur.row, SAKU_COL_.klass, 1, 4).setValues([[me.klass, w.text, w.mode, w.show]]);
     else sh.appendRow([w.id, me.email, me.klass, w.text, w.mode, w.show, '{}', now]);
     if (cur) sh.getRange(cur.row, SAKU_COL_.updated).setValue(now);
+    if (cur && remap && Object.keys(cur.comments).length) { cur.comments = Genko.remapComments(cur.comments, remap); sh.getRange(cur.row, SAKU_COL_.comments).setValue(JSON.stringify(cur.comments)); }
     if (w.show) mine.forEach(function (x) { if (x.id !== w.id && x.show) sh.getRange(x.row, SAKU_COL_.show).setValue(false); });
     w.updated = now.getTime(); if (cur) w.comments = cur.comments;
     return JSON.stringify(sakuOut_(w));
