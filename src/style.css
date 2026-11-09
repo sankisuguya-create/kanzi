@@ -798,3 +798,9 @@ textarea.gk-ime { position: absolute; opacity: 0; width: 2px; height: 2px; paddi
 .gk-tname { font-size: 20px; margin: 0 0 8px; }
 .gk-cedit textarea { display: block; width: 100%; font-size: 18px; margin-top: 4px; }
 #gk-tc { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.gk-sel { position: absolute; background: rgba(15, 94, 168, .16); box-shadow: inset 0 0 0 2px var(--cat-1); pointer-events: none; }
+.gk-orderbox { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 3px solid var(--cat-1); border-radius: 12px; background: var(--card); }
+.gk-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gk-hint { margin: 0; font-size: 17px; font-weight: 700; }
+.gk-kid.trial { border-style: dashed; }
+.gk-orderbox[hidden] { display: none; }

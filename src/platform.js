@@ -271,7 +271,8 @@
         if (o.show) { var loc = sakuLocal(); Object.keys(loc).forEach(function (k) { if (k !== o.id) loc[k].show = false; }); store.set(sakuKey(), loc); } }
       return Promise.resolve(o);
     }
-    return gas('api_sakuSave', JSON.stringify(o)).then(function (r) {
+    var payload = JSON.parse(JSON.stringify(o)); if (w.remap && Object.keys(w.remap).length) payload.remap = w.remap;
+    return gas('api_sakuSave', JSON.stringify(payload)).then(function (r) {
       var back = Genko.normWork(JSON.parse(r)), cur = sakuLocal()[back.id];
       if (cur && cur.text === o.text && cur.show === o.show && cur.mode === o.mode) { back.dirty = false; sakuPut(back, false); }
       if (back.show) { var loc = sakuLocal(); Object.keys(loc).forEach(function (k) { if (k !== back.id) loc[k].show = false; }); store.set(sakuKey(), loc); }
@@ -308,7 +309,19 @@
     });
     return Promise.resolve({ share: !!(s.sakuShare || {})[klass], students: students });
   }
-  function sakuComment(klass, id, line, text) {
+  // 先生の「児童画面を ためす」で書いた作品（その端末だけ。サーバーには送らない）を、先生画面にも出す
+  function sakuTrialWorks(email) {
+    var all = store.get('kanzi.trial.' + email + '.saku') || {};
+    return Object.keys(all).filter(function (k) { return !all[k].del; }).map(function (k) { return Genko.normWork(all[k]); }).sort(function (a, b) { return b.updated - a.updated; });
+  }
+  function sakuComment(klass, id, line, text, trialEmail) {
+    if (trialEmail) { // おためしの作品: この端末の控えに書く
+      var tk = 'kanzi.trial.' + trialEmail + '.saku', ta = store.get(tk) || {}, tc = ta[id] ? ta[id].comments || {} : {};
+      text = String(text || '').trim().slice(0, 200);
+      if (text) tc[line] = { t: text, read: false, at: Date.now() }; else delete tc[line];
+      if (ta[id]) { ta[id].comments = tc; store.set(tk, ta); }
+      return Promise.resolve(tc);
+    }
     if (isGas) return gas('api_sakuComment', klass, id, line, text).then(JSON.parse);
     text = String(text || '').trim().slice(0, 200);
     var d = sakuDemoAll(), c;
@@ -325,5 +338,5 @@
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
     teacherView: teacherView, setTests: setTests, setWriteLevel: setWriteLevel, setGates: setGates, gates: gates, bunkai: bunkai, setBunkai: setBunkai, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder,
     archiveYears: archiveYears, archiveView: archiveView, archiveSave: archiveSave, archiveAnonymize: archiveAnonymize, store: store,
-    sakuMine: sakuMine, sakuDraft: sakuDraft, sakuSave: sakuSave, sakuDelete: sakuDelete, sakuRead: sakuRead, sakuFriends: sakuFriends, sakuTeacher: sakuTeacher, sakuComment: sakuComment, sakuShare: sakuShare };
+    sakuMine: sakuMine, sakuDraft: sakuDraft, sakuSave: sakuSave, sakuDelete: sakuDelete, sakuRead: sakuRead, sakuFriends: sakuFriends, sakuTeacher: sakuTeacher, sakuComment: sakuComment, sakuShare: sakuShare, sakuTrialWorks: sakuTrialWorks };
 })(this);

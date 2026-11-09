@@ -66,3 +66,19 @@ test('全角にそろえる・作品の形をそろえる', () => {
   assert.equal(w.text.length, G.MAX_CHARS); assert.equal(w.show, true); assert.equal(w.mode, 'tpl');
   assert.deepEqual(Object.keys(w.comments), ['2']); assert.equal(w.comments[2].t, 'よい');
 });
+test('段落の入れかえ: となりの段落と入れかえ、題名・名前の行は動かさない', () => {
+  const t = ['題', '名', 'あ', 'い', 'う'].join('\n');
+  const r = G.moveParagraph(t, 3, -1);
+  assert.equal(r.text, ['題', '名', 'い', 'あ', 'う'].join('\n'));
+  assert.deepEqual(r.map, { 2: 3, 3: 2 });
+  assert.equal(G.moveParagraph(t, 2, -1), null, '本文の最初より前へは動かない');
+  assert.equal(G.moveParagraph(t, 4, 1), null, '最後より後ろへは動かない');
+  assert.equal(G.moveParagraph(t, 1, 1), null, '名前の行は動かさない');
+});
+test('段落の入れかえ: コメントの付け先も一緒に移る（続けて入れかえても合う）', () => {
+  let m = G.composeMap({}, { 2: 3, 3: 2 }); // あ・い を入れかえ
+  m = G.composeMap(m, { 3: 4, 4: 3 });     // 続けて あ（いま3）・う を入れかえ → い・う・あ
+  assert.deepEqual(m, { 2: 4, 3: 2, 4: 3 });
+  assert.deepEqual(G.remapComments({ 2: 'あへ', 4: 'うへ' }, m), { 4: 'あへ', 3: 'うへ' });
+  assert.deepEqual(G.composeMap({ 2: 3, 3: 2 }, { 2: 3, 3: 2 }), {}, 'もとにもどせば移し方は空');
+});
