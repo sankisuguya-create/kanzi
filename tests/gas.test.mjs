@@ -571,3 +571,22 @@ test('説明文を書く: 段落を入れかえて保存すると、先生のコ
   assert.equal(w.text, '題\n名\nい\nあ');
   assert.deepEqual(Object.keys(w.comments), ['3']); assert.equal(w.comments[3].t, 'あへのコメント');
 });
+test('説明文を書く: 学級の列がスプレッドシートで日付（3-1 → 3月1日）に変わっても、先生画面と友だちの文に出る', () => {
+  const sheets = base();
+  let env = makeEnv(sheets, K1); env.api_sakuSave(sakuWork('wdate1', 'あおいの文', { show: true }));
+  // 本番のスプレッドシートは "3-1" という文字を日付と読みかえる（appendRow・setValues のどちらでも）。ここで同じ状態を作る
+  env.book['作文'][1][2] = new Date(2026, 2, 1);
+  sheets.作文 = env.book['作文'];
+  const v = JSON.parse(makeEnv(sheets, T).api_sakuTeacher('3-1'));
+  assert.equal(v.students.find((k) => k.name === 'あおい').works.length, 1, '先生画面に出る');
+  const t = makeEnv(sheets, T); t.api_sakuShare('3-1', true); sheets.設定 = t.book['設定']; sheets.__cache = {};
+  assert.deepEqual(JSON.parse(makeEnv(sheets, K2).api_sakuFriends()).works.map((w) => w.text), ['あおいの文'], '友だちの文に出る');
+  makeEnv(sheets, T).api_sakuComment('3-1', 'wdate1', 2, 'コメント');
+});
+test('説明文を書く: 学級は文字として書く（日付に読みかえられないよう先頭に \' を付ける）', () => {
+  const sheets = base(); const env = makeEnv(sheets, K1);
+  env.api_sakuSave(sakuWork('wtext1', 'a'));
+  assert.equal(env.book['作文'][1][2], "'3-1");
+  env.api_sakuSave(sakuWork('wtext1', 'b'));
+  assert.equal(env.book['作文'][1][2], "'3-1");
+});

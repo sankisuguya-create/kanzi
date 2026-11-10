@@ -637,12 +637,21 @@ function sakuRows_() {
       if (!r[0] || String(r[4]) === 'del') return;
       var cm = {}; try { cm = JSON.parse(r[6] || '{}') || {}; } catch (e) {}
       var w = Genko.normWork({ id: r[0], text: r[3], mode: r[4], show: r[5] === true || String(r[5]) === '1' || String(r[5]).toUpperCase() === 'TRUE', comments: cm, updated: r[7] instanceof Date ? r[7].getTime() : r[7] });
-      w.row = i + 2; w.email = String(r[1]).toLowerCase(); w.klass = String(r[2]);
+      w.row = i + 2; w.email = String(r[1]).toLowerCase();
+      // 学級はいまの名簿から決める（名簿にいなければ列の値）。列の値は、スプレッドシートが "3-1" を日付（3月1日）に読みかえていることがあるので戻す
+      w.klass = classOf_(w.email) || sakuKlassCell_(r[2]);
       out.push(w);
     });
     return out;
   });
 }
+// 学級の列の値を "学年-組" に戻す（日付に読みかえられた値・先頭の ' を直す）
+function sakuKlassCell_(v) {
+  if (v instanceof Date) return (v.getMonth() + 1) + '-' + v.getDate();
+  return String(v).replace(/^'/, '');
+}
+// 学級を書く時は先頭に ' を付けて文字として入れる（付けないと "3-1" が日付になり、先生画面・友だちの文から作品が消えた: 2026-11）
+function sakuKlassText_(klass) { return "'" + klass; }
 function sakuOut_(w) { var o = Genko.normWork(w); return o; } // 行番号・メールを外して返す
 function sakuShare_(klass) { return String(setting_('sakuShare:' + klass)) === '1'; }
 function sakuStudent_() {
@@ -674,8 +683,8 @@ function api_sakuSave(json) {
     if (cur && cur.email !== me.email) throw new Error('ほかの人の作品は 書きかえられません');
     if (!cur && mine.length >= 30) throw new Error('作品は 30こまでです');
     var now = new Date();
-    if (cur) sh.getRange(cur.row, SAKU_COL_.klass, 1, 4).setValues([[me.klass, w.text, w.mode, w.show]]);
-    else sh.appendRow([w.id, me.email, me.klass, w.text, w.mode, w.show, '{}', now]);
+    if (cur) sh.getRange(cur.row, SAKU_COL_.klass, 1, 4).setValues([[sakuKlassText_(me.klass), w.text, w.mode, w.show]]);
+    else sh.appendRow([w.id, me.email, sakuKlassText_(me.klass), w.text, w.mode, w.show, '{}', now]);
     if (cur) sh.getRange(cur.row, SAKU_COL_.updated).setValue(now);
     if (cur && remap && Object.keys(cur.comments).length) { cur.comments = Genko.remapComments(cur.comments, remap); sh.getRange(cur.row, SAKU_COL_.comments).setValue(JSON.stringify(cur.comments)); }
     if (w.show) mine.forEach(function (x) { if (x.id !== w.id && x.show) sh.getRange(x.row, SAKU_COL_.show).setValue(false); });
