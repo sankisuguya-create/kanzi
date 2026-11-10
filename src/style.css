@@ -804,3 +804,14 @@ textarea.gk-ime { position: absolute; opacity: 0; width: 2px; height: 2px; paddi
 .gk-hint { margin: 0; font-size: 17px; font-weight: 700; }
 .gk-kid.trial { border-style: dashed; }
 .gk-orderbox[hidden] { display: none; }
+.gk-fix { position: absolute; box-shadow: inset 0 0 0 2px var(--ink-alert); background: rgba(192, 51, 10, .08); pointer-events: none; }
+.gk-fixto { position: absolute; writing-mode: vertical-rl; color: var(--ink-alert); font-weight: 700; line-height: 1; pointer-events: none; z-index: 2; background: rgba(255, 255, 255, .85); }
+.gk-pick { position: absolute; background: rgba(15, 94, 168, .2); box-shadow: inset 0 0 0 2px var(--cat-1); pointer-events: none; }
+.gk-wtabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.gk-wtabs:empty { display: none; }
+.gk-wtab { display: flex; align-items: baseline; gap: 6px; min-height: 48px; padding: 6px 12px; border: 2px solid var(--line); background: var(--card); border-radius: 10px; font-size: 16px; }
+.gk-wtab b { font-size: 22px; }
+.gk-wtab[aria-selected="true"] { border-color: var(--cat-1); border-width: 3px; background: var(--fill-a); }
+.gk-wtab .meta { font-size: 13px; color: var(--ink-sub); }
+.gk-flist .gk-two { display: inline-flex; gap: 6px; margin-left: 6px; }
+.gk-cedit input { display: block; width: 100%; font-size: 20px; min-height: 48px; margin-top: 4px; }

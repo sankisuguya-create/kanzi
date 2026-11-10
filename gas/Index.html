@@ -808,8 +808,19 @@ textarea.gk-ime { position: absolute; opacity: 0; width: 2px; height: 2px; paddi
 .gk-hint { margin: 0; font-size: 17px; font-weight: 700; }
 .gk-kid.trial { border-style: dashed; }
 .gk-orderbox[hidden] { display: none; }
+.gk-fix { position: absolute; box-shadow: inset 0 0 0 2px var(--ink-alert); background: rgba(192, 51, 10, .08); pointer-events: none; }
+.gk-fixto { position: absolute; writing-mode: vertical-rl; color: var(--ink-alert); font-weight: 700; line-height: 1; pointer-events: none; z-index: 2; background: rgba(255, 255, 255, .85); }
+.gk-pick { position: absolute; background: rgba(15, 94, 168, .2); box-shadow: inset 0 0 0 2px var(--cat-1); pointer-events: none; }
+.gk-wtabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.gk-wtabs:empty { display: none; }
+.gk-wtab { display: flex; align-items: baseline; gap: 6px; min-height: 48px; padding: 6px 12px; border: 2px solid var(--line); background: var(--card); border-radius: 10px; font-size: 16px; }
+.gk-wtab b { font-size: 22px; }
+.gk-wtab[aria-selected="true"] { border-color: var(--cat-1); border-width: 3px; background: var(--fill-a); }
+.gk-wtab .meta { font-size: 13px; color: var(--ink-sub); }
+.gk-flist .gk-two { display: inline-flex; gap: 6px; margin-left: 6px; }
+.gk-cedit input { display: block; width: 100%; font-size: 20px; min-height: 48px; margin-top: 4px; }
 </style>
-<meta name="kanzi-ver" content="bb5ef48">
+<meta name="kanzi-ver" content="36e0551">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -1406,6 +1417,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
       var t = typeof c === 'string' ? c : c.t;
       if (t) o.comments[line] = { t: String(t).slice(0, 200), read: !!(c && c.read), at: Number(c && c.at) || 0 };
     }
+    o.fixes = normFixes(w.fixes);
     return o;
   }
   // 段落の順番を入れかえる（line は改行で数えた番号。2行目＝題名・名前の後から）。dir: -1＝前へ（右へ）、+1＝後ろへ（左へ）
@@ -1432,11 +1444,44 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     for (k in res) if (res[k] === Number(k)) delete res[k];
     return res;
   }
+  // 先生の修正案（§28 の2回目。W2）: { id, line, start, from, to, at }
+  //   line＝改行で数えた段落の番号、start＝その段落の中の何字目（0から）、from＝もとの字、to＝なおした字（空なら消す）。
+  //   児童が書きかえても あてはまる所を探せるよう、位置と もとの字の両方を持つ
+  function normFixes(list) {
+    var out = [];
+    (Array.isArray(list) ? list : []).forEach(function (f) {
+      if (!f || out.length >= 100) return;
+      var line = Number(f.line), start = Number(f.start), from = String(f.from || '').slice(0, 100), to = toZen(String(f.to == null ? '' : f.to)).replace(/\n/g, '').slice(0, 100);
+      if (!(line >= 0 && line < 400) || !(start >= 0 && start < 4000) || !from || from === to) return;
+      out.push({ id: String(f.id || '').slice(0, 20) || ('f' + out.length), line: line, start: start, from: from, to: to, at: Number(f.at) || 0 });
+    });
+    return out;
+  }
+  // 修正案があてはまる所: { at（本文の中の字の番号）, len }。もとの字が見つからなければ null（児童が書きかえた）
+  function fixLocate(text, f) {
+    var ls = String(text || '').split('\n');
+    if (f.line >= ls.length) return null;
+    var l = ls[f.line], base = 0, k;
+    for (k = 0; k < f.line; k++) base += ls[k].length + 1;
+    if (l.substr(f.start, f.from.length) === f.from) return { at: base + f.start, len: f.from.length };
+    var best = -1, bd = 1e9, i = l.indexOf(f.from);
+    while (i >= 0) { if (Math.abs(i - f.start) < bd) { bd = Math.abs(i - f.start); best = i; } i = l.indexOf(f.from, i + 1); }
+    return best >= 0 ? { at: base + best, len: f.from.length } : null;
+  }
+  // 修正案を当てた本文（あてはまらなければ null）
+  function applyFix(text, f) {
+    var p = fixLocate(text, f);
+    return p ? String(text).slice(0, p.at) + f.to + String(text).slice(p.at + p.len) : null;
+  }
+  // 段落の入れかえに合わせて、修正案の段落の番号も移す
+  function remapFixes(fixes, map) {
+    return (fixes || []).map(function (f) { var o = {}; for (var k in f) o[k] = f[k]; if (map && (f.line in map)) o.line = Number(map[f.line]); return o; });
+  }
   function newId() { return 'w' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
 
   var Genko = { Z: Z, ROWS: ROWS, COLS: COLS, HANG: HANG, OPEN: OPEN, SMALL: SMALL, MAX_CHARS: MAX_CHARS,
     toZen: toZen, layout: layout, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
-    check: check, paraNo: paraNo, moveParagraph: moveParagraph, remapComments: remapComments, composeMap: composeMap, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
+    check: check, paraNo: paraNo, moveParagraph: moveParagraph, remapComments: remapComments, normFixes: normFixes, fixLocate: fixLocate, applyFix: applyFix, remapFixes: remapFixes, composeMap: composeMap, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
   if (typeof module !== 'undefined' && module.exports) module.exports = Genko; else root.Genko = Genko;
 })(typeof globalThis !== "undefined" ? globalThis : this);
 </script>
@@ -1695,8 +1740,9 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     var p = (isGas && !trial) ? gas('api_sakuMine').then(JSON.parse) : Promise.resolve({ share: !!(demoSettings().sakuShare || {})['3-1'], works: Object.keys(local).map(function (k) { return local[k]; }).filter(function (w) { return !w.del; }) });
     return p.then(function (r) {
       var by = {};
+      if (r.deleted && r.deleted.length) { var lc = sakuLocal(); r.deleted.forEach(function (id) { delete lc[id]; delete local[id]; }); store.set(sakuKey(), lc); }
       (r.works || []).forEach(function (w) { by[w.id] = Genko.normWork(w); });
-      Object.keys(local).forEach(function (k) { var l = local[k]; if (l.dirty && !l.del && (!by[k] || l.updated >= by[k].updated)) { var o = Genko.normWork(l); o.dirty = true; if (by[k]) o.comments = by[k].comments; by[k] = o; } });
+      Object.keys(local).forEach(function (k) { var l = local[k]; if (l.dirty && !l.del && (!by[k] || l.updated >= by[k].updated)) { var o = Genko.normWork(l); o.dirty = true; if (by[k]) { o.comments = by[k].comments; o.fixes = by[k].fixes; } by[k] = o; } });
       var works = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.updated - a.updated; });
       return { share: !!r.share, works: works };
     }, function () { // 通信できない時は端末の控えだけで書ける
@@ -1709,14 +1755,18 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   function sakuSave(w) {
     var o = sakuPut(w, true);
     if (!isGas || trial) {
+      if (w.fixDone && w.fixDone.length) o.fixes = o.fixes.filter(function (f) { return w.fixDone.indexOf(f.id) < 0; });
       o.dirty = false; sakuPut(o, false);
       if (!trial) { var mine = sakuDemoAll(); if (o.show) Object.keys(mine).forEach(function (k) { if (k !== o.id && mine[k].show && !/^peer/.test(k)) { mine[k].show = false; } }); store.set('kanzi.saku.demoClass', mine); sakuDemoPut(o);
         if (o.show) { var loc = sakuLocal(); Object.keys(loc).forEach(function (k) { if (k !== o.id) loc[k].show = false; }); store.set(sakuKey(), loc); } }
       return Promise.resolve(o);
     }
     var payload = JSON.parse(JSON.stringify(o)); if (w.remap && Object.keys(w.remap).length) payload.remap = w.remap;
+    if (w.fixDone && w.fixDone.length) payload.fixDone = w.fixDone;
     return gas('api_sakuSave', JSON.stringify(payload)).then(function (r) {
-      var back = Genko.normWork(JSON.parse(r)), cur = sakuLocal()[back.id];
+      var raw = JSON.parse(r);
+      if (raw.deleted) { var lc = sakuLocal(); delete lc[raw.id]; store.set(sakuKey(), lc); return { id: raw.id, deleted: true }; }
+      var back = Genko.normWork(raw), cur = sakuLocal()[back.id];
       if (cur && cur.text === o.text && cur.show === o.show && cur.mode === o.mode) { back.dirty = false; sakuPut(back, false); }
       if (back.show) { var loc = sakuLocal(); Object.keys(loc).forEach(function (k) { if (k !== back.id) loc[k].show = false; }); store.set(sakuKey(), loc); }
       return back;
@@ -1747,7 +1797,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     var s = demoSettings(), mine = sakuDemoAll(), kids = demoStudents().slice(0, 8);
     var works = Object.keys(mine).map(function (k) { return mine[k]; });
     var students = kids.map(function (k, i) {
-      var list = i === 0 ? works : i < 3 ? [Genko.normWork({ id: 'peer' + (i - 1), text: SAKU_PEERS[i - 1], show: true, updated: Date.now() - i * 600000, comments: (s.sakuPeerC || {})['peer' + (i - 1)] || {} })] : [];
+      var list = i === 0 ? works : i < 3 && (s.sakuPeerDel || []).indexOf('peer' + (i - 1)) < 0 ? [Genko.normWork({ id: 'peer' + (i - 1), text: SAKU_PEERS[i - 1], show: true, updated: Date.now() - i * 600000, comments: (s.sakuPeerC || {})['peer' + (i - 1)] || {}, fixes: (s.sakuPeerF || {})['peer' + (i - 1)] || [] })] : [];
       return { no: k.no, name: i === 0 ? 'デモの児童（この端末）' : k.name, works: list };
     });
     return Promise.resolve({ share: !!(s.sakuShare || {})[klass], students: students });
@@ -1773,6 +1823,38 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     var s = demoSettings(); s.sakuPeerC = s.sakuPeerC || {}; c = s.sakuPeerC[id] = s.sakuPeerC[id] || {};
     if (text) c[line] = { t: text, read: false, at: Date.now() }; else delete c[line]; saveDemo(s); return Promise.resolve(c);
   }
+  // 先生の修正案（§28 の2回目）: 足す・取り消す。デモ・おためしは この端末の控えに書く
+  function sakuFixLocal(key, id, fn) {
+    var all = store.get(key) || {}; if (!all[id]) return null;
+    var w = Genko.normWork(all[id]); w.fixes = fn(w.fixes); all[id].fixes = w.fixes; store.set(key, all); return w.fixes;
+  }
+  function sakuFix(klass, id, fix, trialEmail) {
+    if (isGas && !trialEmail) return gas('api_sakuFix', klass, id, JSON.stringify(fix)).then(JSON.parse);
+    var f = Genko.normFixes([fix])[0]; if (!f) return Promise.reject(new Error('なおす字が正しくありません'));
+    f.id = 'f' + Date.now().toString(36); f.at = Date.now();
+    var add = function (l) { return l.concat([f]); };
+    if (trialEmail) return Promise.resolve(sakuFixLocal('kanzi.trial.' + trialEmail + '.saku', id, add) || []);
+    var r = sakuFixLocal('kanzi.saku.demoClass', id, add); sakuFixLocal('kanzi.saku.demo', id, add);
+    if (r) return Promise.resolve(r);
+    var s = demoSettings(); s.sakuPeerF = s.sakuPeerF || {}; s.sakuPeerF[id] = (s.sakuPeerF[id] || []).concat([f]); saveDemo(s); return Promise.resolve(s.sakuPeerF[id]);
+  }
+  function sakuFixDel(klass, id, fixId, trialEmail) {
+    if (isGas && !trialEmail) return gas('api_sakuFixDel', klass, id, fixId).then(JSON.parse);
+    var del = function (l) { return l.filter(function (f) { return f.id !== fixId; }); };
+    if (trialEmail) return Promise.resolve(sakuFixLocal('kanzi.trial.' + trialEmail + '.saku', id, del) || []);
+    var r = sakuFixLocal('kanzi.saku.demoClass', id, del); sakuFixLocal('kanzi.saku.demo', id, del);
+    if (r) return Promise.resolve(r);
+    var s = demoSettings(); s.sakuPeerF = s.sakuPeerF || {}; s.sakuPeerF[id] = del(s.sakuPeerF[id] || []); saveDemo(s); return Promise.resolve(s.sakuPeerF[id]);
+  }
+  // 先生: 作品を消す（デモ・おためしは この端末の控えから消す）
+  function sakuTeacherDelete(klass, id, trialEmail) {
+    if (trialEmail) { var tk = 'kanzi.trial.' + trialEmail + '.saku', ta = store.get(tk) || {}; delete ta[id]; store.set(tk, ta); return Promise.resolve(true); }
+    if (isGas) return gas('api_sakuTeacherDelete', klass, id);
+    var d = sakuDemoAll(); delete d[id]; store.set('kanzi.saku.demoClass', d);
+    var l = store.get('kanzi.saku.demo') || {}; delete l[id]; store.set('kanzi.saku.demo', l);
+    var s = demoSettings(); s.sakuPeerDel = (s.sakuPeerDel || []).concat([id]); saveDemo(s);
+    return Promise.resolve(true);
+  }
   function sakuShare(klass, on) {
     if (isGas) return gas('api_sakuShare', klass, !!on);
     var s = demoSettings(); s.sakuShare = s.sakuShare || {}; s.sakuShare[klass] = !!on; saveDemo(s); return Promise.resolve(!!on);
@@ -1781,7 +1863,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
     teacherView: teacherView, setTests: setTests, setWriteLevel: setWriteLevel, setGates: setGates, gates: gates, bunkai: bunkai, setBunkai: setBunkai, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder,
     archiveYears: archiveYears, archiveView: archiveView, archiveSave: archiveSave, archiveAnonymize: archiveAnonymize, store: store,
-    sakuMine: sakuMine, sakuDraft: sakuDraft, sakuSave: sakuSave, sakuDelete: sakuDelete, sakuRead: sakuRead, sakuFriends: sakuFriends, sakuTeacher: sakuTeacher, sakuComment: sakuComment, sakuShare: sakuShare, sakuTrialWorks: sakuTrialWorks };
+    sakuMine: sakuMine, sakuDraft: sakuDraft, sakuSave: sakuSave, sakuDelete: sakuDelete, sakuRead: sakuRead, sakuFriends: sakuFriends, sakuTeacher: sakuTeacher, sakuComment: sakuComment, sakuShare: sakuShare, sakuTrialWorks: sakuTrialWorks, sakuFix: sakuFix, sakuFixDel: sakuFixDel, sakuTeacherDelete: sakuTeacherDelete };
 })(this);
 </script>
 <script>
@@ -6617,6 +6699,15 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       L.cells.forEach(function (c) { if (c.i >= s0 && c.i < s1) { box('gk-sel', c.col, c.row); any = true; } });
       if (!any && L.pos[s0]) box('gk-sel', L.pos[s0].col, 0, C * Genko.ROWS);
     }
+    // 修正案: もとの字を赤い わくで囲み、なおした字を その行の左に小さく赤で（空なら「けす」）
+    if (opt.fixes) opt.fixes.forEach(function (f) {
+      var first = null;
+      L.cells.forEach(function (c) { if (c.i >= f.at && c.i < f.at + f.len) { box('gk-fix', c.col, c.row); if (!first) first = c; } });
+      if (!first) return;
+      var n = document.createElement('div'); n.className = 'gk-fixto'; n.textContent = f.to || 'けす';
+      n.style.cssText = 'left:' + (G.x(first.col) - Math.round(C * 0.42)) + 'px;top:' + G.y(first.row) + 'px;font-size:' + Math.round(C * 0.42) + 'px'; frag.appendChild(n);
+    });
+    if (opt.pick) L.cells.forEach(function (c) { if (c.i >= opt.pick.a && c.i <= opt.pick.b) box('gk-pick', c.col, c.row); });
     if (opt.flags) opt.flags.forEach(function (f, fi) {
       if (f.line < 0) return;
       var at = L.pos[starts[f.line]]; if (!at) return;
@@ -6646,6 +6737,14 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     L.pos.forEach(function (p, i) { if (!p) return; var d = Math.abs(G.x(p.col) + GK.cell / 2 - x) * 3 + Math.abs(G.y(p.row) + (p.after ? GK.cell : 0) - y); if (d < bd) { bd = d; best = i; } });
     return best;
   }
+  // 押した所の字の番号（マスの中なら その字、外なら一番近い字。字がなければ -1）
+  function gkCellAt(el, src, ev) {
+    var r = el.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top, L = Genko.layout(src), G = gkGeom(Genko.pages(L.cols)), best = -1, bd = 1e9;
+    L.cells.forEach(function (c) { var cx = G.x(c.col) + GK.cell / 2, cy = G.y(c.row) + GK.cell / 2, d = Math.abs(cx - x) * 3 + Math.abs(cy - y); if (d < bd) { bd = d; best = c.i; } });
+    return bd < GK.cell * 4 ? best : -1;
+  }
+  // 作品の修正案を、いまの本文で あてはまる所に（あてはまらないものは出さない）
+  function gkFixView(w) { return (w.fixes || []).map(function (f) { var p = Genko.fixLocate(w.text, f); return p ? { at: p.at, len: p.len, to: f.to, id: f.id } : null; }).filter(Boolean); }
   function gkNearest(L, col, row, dflt) { var best = dflt, bd = 1e9; L.pos.forEach(function (p, i) { if (!p) return; var d = Math.abs(p.col - col) * 100 + Math.abs(p.row + (p.after ? 1 : 0) - row); if (d < bd) { bd = d; best = i; } }); return best; }
   var GK_RULES = '<details class="gk-rules"><summary>' + '原稿用紙の きまり' + '</summary><ul>' +
     '<li>1行は20マス。右の行から書いて、左へすすむ。</li><li>1行目に題名（上を3マスあける）。2行目に名前（下につめて、いちばん下は1マスあける。名字と名前のあいだも1マス）。本文は3行目から。</li>' +
@@ -6671,7 +6770,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
         (r.works.length ? '<h2>' + K('[書|か]いた[文|ぶん]') + '</h2><div class="gk-works">' + r.works.map(function (w) {
           var u = unread(w);
           return '<button class="gk-work" data-id="' + esc(w.id) + '"><b>' + esc(Genko.title(w.text)) + '</b><span class="meta">' + Genko.count(w.text) + K('[字|じ]・') + esc(dateShort(w.updated)) + '</span>' +
-            (w.show ? '<span class="gk-badge">' + K('👀 [友|とも]だちに [見|み]せる') + '</span>' : '') + (u ? '<span class="gk-badge c">💬 ' + K('[先|せん][生|せい]から ') + u + '</span>' : '') + '</button>';
+            (w.show ? '<span class="gk-badge">' + K('👀 [友|とも]だちに [見|み]せる') + '</span>' : '') + (u ? '<span class="gk-badge c">💬 ' + K('[先|せん][生|せい]から ') + u + '</span>' : '') + (w.fixes.length ? '<span class="gk-badge c">✏️ ' + K('[先|せん][生|せい]の なおし ') + w.fixes.length + '</span>' : '') + '</button>';
         }).join('') + '</div>' : '');
       on('#gk-tpl', function () { sakubunEdit(Genko.normWork({ id: Genko.newId(), text: Genko.template(myName()), mode: 'tpl', updated: Date.now() }), true); });
       on('#gk-free', function () { sakubunEdit(Genko.normWork({ id: Genko.newId(), text: Genko.blank(myName()), mode: 'free', updated: Date.now() }), true); });
@@ -6687,7 +6786,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     clearScreen();
     document.body.classList.add('gk-screen'); cleanup.push(function () { document.body.classList.remove('gk-screen'); });
     var w = Genko.normWork(work), flags = null, comp = null, focused = false, timer = null, dirty = !!fresh, sample = false;
-    var order = false, selLine = null; w.remap = {}; // 段落の入れかえ: order＝入れかえ中、selLine＝えらんだ段落（改行で数えた番号）、w.remap＝まだ送っていないコメントの付け先の移し方
+    var order = false, selLine = null; w.remap = {}; w.fixDone = []; // fixDone＝児童が「なおす」「そのまま」で済ませた修正案（次の保存で先生の列から外す） // 段落の入れかえ: order＝入れかえ中、selLine＝えらんだ段落（改行で数えた番号）、w.remap＝まだ送っていないコメントの付け先の移し方
     app.innerHTML = '<div class="gk-app"><aside class="gk-side">' +
       '<button class="back" id="back">もどる</button>' +
       '<button class="gk-btn" id="gk-sample" aria-pressed="false">' + K('📄 お[手|て][本|ほん]を [見|み]る') + '</button>' +
@@ -6698,7 +6797,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
         '<button class="gk-btn" id="gk-orderdone">' + K('できた') + '</button></div>' +
       '<div class="gk-result" id="gk-result" aria-live="polite"></div>' +
       '<label class="gk-show"><input type="checkbox" id="gk-show"' + (w.show ? ' checked' : '') + '> ' + K('この[文|ぶん]を [友|とも]だちに [見|み]せる') + '</label>' +
-      '<div id="gk-comments"></div>' +
+      '<div id="gk-fixes"></div><div id="gk-comments"></div>' +
       '<span class="gk-saved" id="gk-saved" aria-live="polite">' + (fresh ? '' : '✓ ほぞんしました') + '</span>' + GK_RULES +
       '<details class="gk-del"><summary>' + K('この[文|ぶん]を [消|け]す') + '</summary><button class="gk-btn danger" id="gk-del">' + K('[消|け]す（もとに もどせません）') + '</button></details>' +
       '</aside><main class="gk-main"><div class="gk-scroll" id="gk-sc"><div class="gk-sheet" id="gk-sheet"></div></div></main></div>';
@@ -6708,7 +6807,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     gkSize();
     function draw() {
       if (sample) { gkRender(sheet, Genko.SAMPLE, {}); return; }
-      gkRender(sheet, ta.value, { caret: focused && !order ? ta.selectionStart : null, comp: comp, flags: flags, holes: w.mode === 'tpl', marks: commentMarks(), selLine: order ? selLine : null });
+      gkRender(sheet, ta.value, { caret: focused && !order ? ta.selectionStart : null, comp: comp, flags: flags, holes: w.mode === 'tpl', marks: commentMarks(), selLine: order ? selLine : null, fixes: gkFixView({ text: ta.value, fixes: w.fixes }) });
     }
     function commentMarks() {
       return Object.keys(w.comments).map(function (k) { return { line: +k, label: '💬', cls: w.comments[k].read ? 'read' : '', title: w.comments[k].t, onClick: function () { var e = document.getElementById('gk-c-' + k); if (e) e.focus(); } }; });
@@ -6723,6 +6822,19 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       app.querySelectorAll('.gk-read').forEach(function (b) { b.addEventListener('click', function () {
         var k = b.dataset.k; w.comments[k].read = true; Platform.sakuRead(w.id, Number(k)); paintComments(); draw(); }); });
     }
+    function paintFixes() {
+      $('#gk-fixes').innerHTML = w.fixes.length ? '<h3>' + K('[先|せん][生|せい]の なおし') + '</h3><ul class="gk-clist gk-flist">' + w.fixes.map(function (f) {
+        var ok = Genko.fixLocate(ta.value, f);
+        return '<li><span class="meta">' + (ok ? Genko.paraNo(ta.value, f.line) + K('[番|ばん][目|め]の [段|だん][落|らく]') : K('[文|ぶん]が かわったので あてはまらないよ')) + '</span>「' + esc(f.from) + '」→「' + (f.to ? esc(f.to) + '」' : '」（けす）') +
+          '<span class="gk-two">' + (ok ? '<button class="gk-read" data-fix="' + esc(f.id) + '">' + K('なおす') + '</button>' : '') + '<button class="gk-read" data-keep="' + esc(f.id) + '">' + K('そのまま') + '</button></span></li>';
+      }).join('') + '</ul>' : '';
+      app.querySelectorAll('[data-fix],[data-keep]').forEach(function (b) { b.addEventListener('click', function () {
+        var id = b.dataset.fix || b.dataset.keep, f = w.fixes.filter(function (x) { return x.id === id; })[0]; if (!f) return;
+        if (b.dataset.fix) { var t = Genko.applyFix(ta.value, f); if (t != null) ta.value = t; }
+        w.fixes = w.fixes.filter(function (x) { return x.id !== id; }); w.fixDone.push(id);
+        changed(); paintFixes(); draw();
+      }); });
+    }
     function status(t) { var e = $('#gk-saved'); if (e) e.textContent = t; }
     function changed() {
       w.text = ta.value; Platform.sakuDraft(w); dirty = true; flags = null; $('#gk-result').innerHTML = ''; status('… ほぞん中');
@@ -6733,9 +6845,13 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       if (!dirty) return Promise.resolve();
       dirty = false; w.text = ta.value;
       var rm = w.remap; w.remap = {}; // 送る分のコメントの移し方。送っている間に入れかえた分は次に送る
-      var out = Genko.normWork(w); out.remap = rm;
-      return Platform.sakuSave(out).then(function (back) { if (back && back.comments && !Object.keys(w.remap).length) w.comments = back.comments; status('✓ ほぞんしました'); paintComments(); draw(); },
-        function () { dirty = true; w.remap = Genko.composeMap(rm, w.remap); status(K('× つうしんできません。この たんまつに のこしています')); });
+      var out = Genko.normWork(w); out.remap = rm; var fd = w.fixDone; w.fixDone = []; out.fixDone = fd;
+      return Platform.sakuSave(out).then(function (back) {
+        if (back && back.deleted) { clearTimeout(timer); dirty = false; status(K('この[文|ぶん]は [消|け]されています')); setTimeout(function () { if ($('#gk-saved')) sakubunHome(); }, 1500); return; }
+        if (back && back.comments && !Object.keys(w.remap).length) w.comments = back.comments;
+        if (back && back.fixes && !Object.keys(w.remap).length) w.fixes = back.fixes.filter(function (f) { return w.fixDone.indexOf(f.id) < 0; });
+        status('✓ ほぞんしました'); paintComments(); paintFixes(); draw(); },
+        function () { dirty = true; w.remap = Genko.composeMap(rm, w.remap); w.fixDone = fd.concat(w.fixDone); status(K('× つうしんできません。この たんまつに のこしています')); });
     }
     cleanup.push(function () { if (timer || dirty) send(); });
     function vis() { if (document.visibilityState === 'hidden') send(); }
@@ -6796,8 +6912,8 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       if (selLine == null) return;
       var r = Genko.moveParagraph(ta.value, selLine, dir);
       if (!r) return;
-      ta.value = r.text; w.comments = Genko.remapComments(w.comments, r.map); w.remap = Genko.composeMap(w.remap, r.map);
-      selLine += dir; changed(); paintComments(); paintOrder(); draw();
+      ta.value = r.text; w.comments = Genko.remapComments(w.comments, r.map); w.fixes = Genko.remapFixes(w.fixes, r.map); w.remap = Genko.composeMap(w.remap, r.map);
+      selLine += dir; changed(); paintComments(); paintFixes(); paintOrder(); draw();
     }
     on('#gk-order', function () { order = true; selLine = null; flags = null; ta.blur(); if (sample) $('#gk-sample').click(); paintOrder(); draw(); });
     on('#gk-orderdone', function () { order = false; selLine = null; paintOrder(); draw(); });
@@ -6807,7 +6923,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     on('#gk-del', function () { clearTimeout(timer); dirty = false; Platform.sakuDelete(w.id).then(sakubunHome, sakubunHome); });
     function resize() { gkSize(); draw(); }
     window.addEventListener('resize', resize); cleanup.push(function () { window.removeEventListener('resize', resize); });
-    paintComments(); draw();
+    paintComments(); paintFixes(); draw();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if (sheet.isConnected) draw(); });
     if (fresh) { Platform.sakuDraft(w); send(); }
   }
@@ -6829,16 +6945,21 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     draw();
   }
 
-  // 先生: 学級の作品の一覧・1人の原稿用紙・段落ごとのコメント・読み合いのオン／オフ
+  // 先生: 学級の作文を児童ごとにまとめて見る（上の 1・2・3 で その児童の作品を切りかえる。文字数の多い順）。
+  // 段落ごとのコメントと、字を えらんで出す修正案（児童が「なおす」で採用する: W2）。読み合いのオン／オフ
   function sakubunTeacher(klass) {
     clearScreen();
     document.body.classList.add('gk-screen'); cleanup.push(function () { document.body.classList.remove('gk-screen'); });
     app.innerHTML = '<div class="gk-app"><aside class="gk-side"><button class="back" id="back">先生画面に もどる</button><h2>説明文を書く（' + esc(klassLabel(klass)) + '）</h2><div id="gk-tside"><p>よみこみ中…</p></div></aside>' +
-      '<main class="gk-main"><h2 id="gk-tname" class="gk-tname"></h2><div class="gk-scroll"><div class="gk-sheet" id="gk-sheet"></div></div><div id="gk-tc"></div></main></div>';
+      '<main class="gk-main"><h2 id="gk-tname" class="gk-tname"></h2><nav class="gk-wtabs" id="gk-wtabs" role="tablist" aria-label="この児童の作品"></nav>' +
+      '<div class="gk-scroll"><div class="gk-sheet" id="gk-sheet"></div></div><div id="gk-tc"></div></main></div>';
     on('#back', function () { teacher(klass, null, true); });
-    var data = null, sel = null, editLine = null, alive = true; cleanup.push(function () { alive = false; });
-    function works() { var out = []; (data.students || []).forEach(function (k) { (k.works || []).forEach(function (w) { out.push({ k: k, w: w }); }); }); return out; }
-    function current() { return works().filter(function (x) { return x.w.id === sel; })[0]; }
+    var data = null, kidKey = null, wid = null, editLine = null, pick = null, alive = true; cleanup.push(function () { alive = false; });
+    function keyOf(k) { return k.trial ? 'trial' : String(k.no) + ':' + k.name; }
+    function sorted(k) { return (k.works || []).slice().sort(function (a, b) { return Genko.count(b.text) - Genko.count(a.text) || b.updated - a.updated; }); }
+    function curKid() { return (data.students || []).filter(function (k) { return keyOf(k) === kidKey; })[0]; }
+    function curWork() { var k = curKid(); return k ? sorted(k).filter(function (w) { return w.id === wid; })[0] : null; }
+    function selectKid(k) { kidKey = keyOf(k); var l = sorted(k); wid = l[0] ? l[0].id : null; editLine = null; pick = null; }
     function side() {
       var kids = data.students || [];
       $('#gk-tside').innerHTML =
@@ -6846,46 +6967,94 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
         '<p class="hint">ひらいている間、この学級の児童に「友だちの文」が出ます（各児童が「見せる」にした1作品の本文だけ。コメント・字数は見せません）。児童の画面には、メニューから入り直した時に とどきます。</p>' +
         '<p class="hint">' + kids.filter(function (k) { return k.works.length && !k.trial; }).length + '人 / ' + kids.filter(function (k) { return !k.trial; }).length + '人が書いています</p>' +
         '<div class="gk-kids">' + kids.slice().sort(function (a, b) { return (b.trial ? 1 : 0) - (a.trial ? 1 : 0) || (a.works.length ? 1 : 0) - (b.works.length ? 1 : 0); }).map(function (k) {
-          if (!k.works.length) return '<div class="gk-kid none"><b>' + esc((k.no ? k.no + ' ' : '') + k.name) + '</b><span class="meta">まだ書いていない</span></div>';
-          return k.works.map(function (w) {
-            var fl = Genko.check(w.text).length;
-            return '<button class="gk-kid' + (k.trial ? ' trial' : '') + '" data-id="' + esc(w.id) + '" aria-pressed="' + (w.id === sel) + '"><b>' + esc((k.no ? k.no + ' ' : '') + k.name) + '</b><span class="meta">' + esc(Genko.title(w.text)) + '・' + Genko.count(w.text) + '字・' + Genko.paragraphs(w.text) + '段落・' + esc(dateShort(w.updated)) + '</span>' +
-              (fl ? '<span class="gk-warn">▲ 見なおしの指摘 ' + fl + '件</span>' : '') + (w.show ? '<span class="meta">👀 見せる作品</span>' : '') + '</button>';
-          }).join('');
+          var nm = esc((k.no ? k.no + ' ' : '') + k.name);
+          if (!k.works.length) return '<div class="gk-kid none"><b>' + nm + '</b><span class="meta">まだ書いていない</span></div>';
+          var top = sorted(k)[0], fl = Genko.check(top.text).length, nf = k.works.reduce(function (n, w) { return n + w.fixes.length; }, 0);
+          return '<button class="gk-kid' + (k.trial ? ' trial' : '') + '" data-k="' + esc(keyOf(k)) + '" aria-pressed="' + (keyOf(k) === kidKey) + '"><b>' + nm + '</b>' +
+            '<span class="meta">' + k.works.length + '作品・いちばん長い作品 ' + Genko.count(top.text) + '字・' + esc(dateShort(Math.max.apply(null, k.works.map(function (w) { return w.updated; })))) + '</span>' +
+            (fl ? '<span class="gk-warn">▲ 見なおしの指摘 ' + fl + '件（いちばん長い作品）</span>' : '') + (nf ? '<span class="meta">✏️ 修正案 ' + nf + '件（児童がまだ見ていない）</span>' : '') + '</button>';
         }).join('') + '</div>';
       on('#gk-share', function () { var v = !data.share; Platform.sakuShare(klass, v).then(function (r) { data.share = r; side(); }); });
-      app.querySelectorAll('.gk-kid[data-id]').forEach(function (b) { b.addEventListener('click', function () { sel = b.dataset.id; editLine = null; side(); main(); }); });
+      app.querySelectorAll('.gk-kid[data-k]').forEach(function (b) { b.addEventListener('click', function () { selectKid(kids.filter(function (k) { return keyOf(k) === b.dataset.k; })[0]); side(); main(); }); });
+    }
+    function tabs(k) {
+      var l = sorted(k);
+      $('#gk-wtabs').innerHTML = l.map(function (w, i) {
+        return '<button role="tab" class="gk-wtab" data-id="' + esc(w.id) + '" aria-selected="' + (w.id === wid) + '"><b>' + (i + 1) + '</b><span>' + esc(Genko.title(w.text)) + '</span><span class="meta">' + Genko.count(w.text) + '字' + (w.show ? '・👀見せる' : '') + '</span></button>';
+      }).join('');
+      app.querySelectorAll('.gk-wtab').forEach(function (b) { b.addEventListener('click', function () { wid = b.dataset.id; editLine = null; pick = null; main(); }); });
     }
     function main() {
-      var x = current(), sh = $('#gk-sheet');
-      if (!x) { $('#gk-tname').textContent = '左の一覧から 児童を えらんでください'; sh.innerHTML = ''; sh.style.width = sh.style.height = '0'; $('#gk-tc').innerHTML = ''; return; }
-      var w = x.w, lines = w.text.split('\n');
-      $('#gk-tname').textContent = (x.k.no ? x.k.no + ' ' : '') + x.k.name + '「' + Genko.title(w.text) + '」';
-      gkSize(140);
+      var k = curKid(), w = curWork(), sh = $('#gk-sheet');
+      if (!k || !w) { $('#gk-tname').textContent = '左の一覧から 児童を えらんでください'; $('#gk-wtabs').innerHTML = ''; sh.innerHTML = ''; sh.style.width = sh.style.height = '0'; $('#gk-tc').innerHTML = ''; return; }
+      $('#gk-tname').textContent = (k.no ? k.no + ' ' : '') + k.name;
+      tabs(k);
+      var lines = w.text.split('\n');
+      gkSize(200);
       var marks = []; for (var i = 2; i < lines.length; i++) if (lines[i].replace(/[　 ]/g, '')) (function (i) {
-        var c = w.comments[i]; marks.push({ line: i, label: c ? '💬' : '＋', cls: c ? 'has' : '', title: c ? c.t : 'コメントを書く', onClick: function () { editLine = i; main(); } });
+        var c = w.comments[i]; marks.push({ line: i, label: c ? '💬' : '＋', cls: c ? 'has' : '', title: c ? c.t : 'コメントを書く', onClick: function () { editLine = i; pick = null; main(); } });
       })(i);
-      gkRender(sh, w.text, { flags: Genko.check(w.text), marks: marks });
+      gkRender(sh, w.text, { flags: Genko.check(w.text), marks: marks, fixes: gkFixView(w), pick: pick });
+      var trialEmail = k.trial ? S.info.email : '';
       var ks = Object.keys(w.comments).sort(function (a, b) { return a - b; });
-      $('#gk-tc').innerHTML = (editLine != null ? '<div class="gk-cedit"><label>' + Genko.paraNo(w.text, editLine) + '番目の段落へのコメント<textarea id="gk-ctext" maxlength="200" rows="2">' + esc(w.comments[editLine] ? w.comments[editLine].t : '') + '</textarea></label>' +
-          '<p><button class="gk-btn primary" id="gk-csave">コメントを保存</button> <button class="gk-btn" id="gk-ccancel">やめる</button>' + (w.comments[editLine] ? ' <button class="gk-btn danger" id="gk-cdel">このコメントを消す</button>' : '') + ' <span id="gk-cmsg" aria-live="polite"></span></p></div>' : '<p class="hint">段落の上の「＋」を押すと、その段落にコメントを書けます（児童の画面に 💬 で出ます）。</p>') +
-        (ks.length ? '<ol class="gk-clist">' + ks.map(function (k) { var c = w.comments[k]; return '<li><span class="meta">' + Genko.paraNo(w.text, Number(k)) + '番目の段落' + (c.read ? '・児童が よんだ' : '・まだ よんでいない') + '</span>' + esc(c.t) + '</li>'; }).join('') + '</ol>' : '');
-      if (editLine != null) {
+      var picked = pick ? w.text.slice(pick.a, pick.b + 1) : '';
+      $('#gk-tc').innerHTML =
+        (pick ? '<div class="gk-cedit"><p class="gk-hint">えらんだ字「' + esc(picked) + '」<span class="meta">（つづけて おすと、同じ段落の中で はんいを のばせます）</span></p>' +
+            '<label>なおした字（空にすると「けす」）<input id="gk-fixto" maxlength="100" value="' + esc(picked) + '"></label>' +
+            '<p><button class="gk-btn primary" id="gk-fixsave">修正案を出す</button> <button class="gk-btn" id="gk-fixcancel">やめる</button> <span id="gk-fmsg" aria-live="polite"></span></p></div>'
+          : editLine != null ? '<div class="gk-cedit"><label>' + Genko.paraNo(w.text, editLine) + '番目の段落へのコメント<textarea id="gk-ctext" maxlength="200" rows="2">' + esc(w.comments[editLine] ? w.comments[editLine].t : '') + '</textarea></label>' +
+            '<p><button class="gk-btn primary" id="gk-csave">コメントを保存</button> <button class="gk-btn" id="gk-ccancel">やめる</button>' + (w.comments[editLine] ? ' <button class="gk-btn danger" id="gk-cdel">このコメントを消す</button>' : '') + ' <span id="gk-cmsg" aria-live="polite"></span></p></div>'
+          : '<p class="hint">本文の字を おすと、その字の修正案を出せます（もう一度 おすと はんいを のばせる。児童の画面に赤で出て、児童が「なおす」を押すと本文に入ります）。段落の上の「＋」で、その段落にコメントを書けます。</p>') +
+        (w.fixes.length ? '<h3>修正案（児童がまだ見ていない）</h3><ol class="gk-clist gk-flist">' + w.fixes.map(function (f) {
+          var ok = Genko.fixLocate(w.text, f);
+          return '<li><span class="meta">' + Genko.paraNo(w.text, f.line) + '番目の段落' + (ok ? '' : '・児童が書きかえたので あてはまらない') + '</span>「' + esc(f.from) + '」→「' + (f.to ? esc(f.to) + '」' : '」（けす）') +
+            ' <button class="gk-read" data-f="' + esc(f.id) + '">取り消す</button></li>';
+        }).join('') + '</ol>' : '') +
+        (ks.length ? '<h3>コメント</h3><ol class="gk-clist">' + ks.map(function (kk) { var c = w.comments[kk]; return '<li><span class="meta">' + Genko.paraNo(w.text, Number(kk)) + '番目の段落' + (c.read ? '・児童が よんだ' : '・まだ よんでいない') + '</span>' + esc(c.t) + '</li>'; }).join('') + '</ol>' : '') +
+        '<details class="gk-del"><summary>この作品を消す</summary><p class="hint">本文・コメント・修正案を消します。もとに戻せません（児童の画面からも消えます）。</p><button class="gk-btn danger" id="gk-tdel">「' + esc(Genko.title(w.text)) + '」を消す</button> <span id="gk-dmsg" aria-live="polite"></span></details>';
+      on('#gk-tdel', function () {
+        $('#gk-dmsg').textContent = '消しています…';
+        Platform.sakuTeacherDelete(klass, w.id, trialEmail).then(function () {
+          k.works = k.works.filter(function (x) { return x.id !== w.id; });
+          var l = sorted(k); wid = l[0] ? l[0].id : null; pick = null; editLine = null; side(); main();
+        }, function (e) { $('#gk-dmsg').textContent = '× ' + (e && e.message || '消せませんでした'); });
+      });
+      app.querySelectorAll('.gk-flist .gk-read').forEach(function (b) { b.addEventListener('click', function () {
+        Platform.sakuFixDel(klass, w.id, b.dataset.f, trialEmail).then(function (fx) { w.fixes = Genko.normFixes(fx); side(); main(); }); }); });
+      if (pick) {
+        var inp = $('#gk-fixto'); inp.focus(); inp.select();
+        on('#gk-fixsave', function () {
+          var ls = w.text.split('\n'), base = 0; for (var j = 0; j < pick.line; j++) base += ls[j].length + 1;
+          $('#gk-fmsg').textContent = '保存中…';
+          Platform.sakuFix(klass, w.id, { line: pick.line, start: pick.a - base, from: picked, to: inp.value }, trialEmail).then(function (fx) { w.fixes = Genko.normFixes(fx); pick = null; side(); main(); },
+            function (e) { $('#gk-fmsg').textContent = '× ' + (e && e.message || '保存できませんでした'); });
+        });
+        on('#gk-fixcancel', function () { pick = null; main(); });
+      } else if (editLine != null) {
         var tx = $('#gk-ctext'); tx.focus();
-        function put(text) { $('#gk-cmsg').textContent = '保存中…'; Platform.sakuComment(klass, w.id, editLine, text, x.k.trial ? S.info.email : '').then(function (c) { w.comments = c; editLine = null; main(); }, function (e) { $('#gk-cmsg').textContent = '× 保存できませんでした'; }); }
+        var put = function (text) { $('#gk-cmsg').textContent = '保存中…'; Platform.sakuComment(klass, w.id, editLine, text, trialEmail).then(function (c) { w.comments = c; editLine = null; main(); }, function () { $('#gk-cmsg').textContent = '× 保存できませんでした'; }); };
         on('#gk-csave', function () { put(tx.value); });
         on('#gk-cdel', function () { put(''); });
         on('#gk-ccancel', function () { editLine = null; main(); });
       }
     }
+    // 字を おす: 1回目でその字、同じ段落の字を続けて おすと はんいをのばす（ほかの段落なら えらびなおし）
+    $('#gk-sheet').addEventListener('pointerup', function (ev) {
+      var w = curWork(); if (!w || (ev.target.closest && ev.target.closest('button'))) return;
+      var i = gkCellAt($('#gk-sheet'), w.text, ev); if (i < 0) return;
+      var line = w.text.slice(0, i).split('\n').length - 1; if (line < 2) return; // 題名・名前は修正案の対象にしない
+      if (pick && pick.line === line) { pick.a = Math.min(pick.a, i); pick.b = Math.max(pick.b, i); } else pick = { line: line, a: i, b: i };
+      editLine = null; main();
+    });
     function load() {
       Platform.sakuTeacher(klass).then(function (d) {
         if (!alive) return;
         data = d;
+        (data.students || []).forEach(function (k) { k.works = (k.works || []).map(Genko.normWork); });
         // 「児童画面を ためす」で書いた作品は、この端末だけに残る（サーバーへは送らない）。見分けがつくように別の行で出す
         var tw = Platform.sakuTrialWorks(S.info.email);
         if (tw.length) data.students.unshift({ no: '', name: 'おためし（この端末だけ・児童には届きません）', works: tw, trial: true });
-        if (!sel) { var f = works()[0]; sel = f ? f.w.id : null; }
+        if (!kidKey) { var f = data.students.filter(function (k) { return k.works.length; })[0]; if (f) selectKid(f); }
         side(); main();
       }, function (e) {
         if (!alive) return;

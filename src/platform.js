@@ -252,8 +252,9 @@
     var p = (isGas && !trial) ? gas('api_sakuMine').then(JSON.parse) : Promise.resolve({ share: !!(demoSettings().sakuShare || {})['3-1'], works: Object.keys(local).map(function (k) { return local[k]; }).filter(function (w) { return !w.del; }) });
     return p.then(function (r) {
       var by = {};
+      if (r.deleted && r.deleted.length) { var lc = sakuLocal(); r.deleted.forEach(function (id) { delete lc[id]; delete local[id]; }); store.set(sakuKey(), lc); }
       (r.works || []).forEach(function (w) { by[w.id] = Genko.normWork(w); });
-      Object.keys(local).forEach(function (k) { var l = local[k]; if (l.dirty && !l.del && (!by[k] || l.updated >= by[k].updated)) { var o = Genko.normWork(l); o.dirty = true; if (by[k]) o.comments = by[k].comments; by[k] = o; } });
+      Object.keys(local).forEach(function (k) { var l = local[k]; if (l.dirty && !l.del && (!by[k] || l.updated >= by[k].updated)) { var o = Genko.normWork(l); o.dirty = true; if (by[k]) { o.comments = by[k].comments; o.fixes = by[k].fixes; } by[k] = o; } });
       var works = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.updated - a.updated; });
       return { share: !!r.share, works: works };
     }, function () { // 通信できない時は端末の控えだけで書ける
@@ -266,14 +267,18 @@
   function sakuSave(w) {
     var o = sakuPut(w, true);
     if (!isGas || trial) {
+      if (w.fixDone && w.fixDone.length) o.fixes = o.fixes.filter(function (f) { return w.fixDone.indexOf(f.id) < 0; });
       o.dirty = false; sakuPut(o, false);
       if (!trial) { var mine = sakuDemoAll(); if (o.show) Object.keys(mine).forEach(function (k) { if (k !== o.id && mine[k].show && !/^peer/.test(k)) { mine[k].show = false; } }); store.set('kanzi.saku.demoClass', mine); sakuDemoPut(o);
         if (o.show) { var loc = sakuLocal(); Object.keys(loc).forEach(function (k) { if (k !== o.id) loc[k].show = false; }); store.set(sakuKey(), loc); } }
       return Promise.resolve(o);
     }
     var payload = JSON.parse(JSON.stringify(o)); if (w.remap && Object.keys(w.remap).length) payload.remap = w.remap;
+    if (w.fixDone && w.fixDone.length) payload.fixDone = w.fixDone;
     return gas('api_sakuSave', JSON.stringify(payload)).then(function (r) {
-      var back = Genko.normWork(JSON.parse(r)), cur = sakuLocal()[back.id];
+      var raw = JSON.parse(r);
+      if (raw.deleted) { var lc = sakuLocal(); delete lc[raw.id]; store.set(sakuKey(), lc); return { id: raw.id, deleted: true }; }
+      var back = Genko.normWork(raw), cur = sakuLocal()[back.id];
       if (cur && cur.text === o.text && cur.show === o.show && cur.mode === o.mode) { back.dirty = false; sakuPut(back, false); }
       if (back.show) { var loc = sakuLocal(); Object.keys(loc).forEach(function (k) { if (k !== back.id) loc[k].show = false; }); store.set(sakuKey(), loc); }
       return back;
@@ -304,7 +309,7 @@
     var s = demoSettings(), mine = sakuDemoAll(), kids = demoStudents().slice(0, 8);
     var works = Object.keys(mine).map(function (k) { return mine[k]; });
     var students = kids.map(function (k, i) {
-      var list = i === 0 ? works : i < 3 ? [Genko.normWork({ id: 'peer' + (i - 1), text: SAKU_PEERS[i - 1], show: true, updated: Date.now() - i * 600000, comments: (s.sakuPeerC || {})['peer' + (i - 1)] || {} })] : [];
+      var list = i === 0 ? works : i < 3 && (s.sakuPeerDel || []).indexOf('peer' + (i - 1)) < 0 ? [Genko.normWork({ id: 'peer' + (i - 1), text: SAKU_PEERS[i - 1], show: true, updated: Date.now() - i * 600000, comments: (s.sakuPeerC || {})['peer' + (i - 1)] || {}, fixes: (s.sakuPeerF || {})['peer' + (i - 1)] || [] })] : [];
       return { no: k.no, name: i === 0 ? 'デモの児童（この端末）' : k.name, works: list };
     });
     return Promise.resolve({ share: !!(s.sakuShare || {})[klass], students: students });
@@ -330,6 +335,38 @@
     var s = demoSettings(); s.sakuPeerC = s.sakuPeerC || {}; c = s.sakuPeerC[id] = s.sakuPeerC[id] || {};
     if (text) c[line] = { t: text, read: false, at: Date.now() }; else delete c[line]; saveDemo(s); return Promise.resolve(c);
   }
+  // 先生の修正案（§28 の2回目）: 足す・取り消す。デモ・おためしは この端末の控えに書く
+  function sakuFixLocal(key, id, fn) {
+    var all = store.get(key) || {}; if (!all[id]) return null;
+    var w = Genko.normWork(all[id]); w.fixes = fn(w.fixes); all[id].fixes = w.fixes; store.set(key, all); return w.fixes;
+  }
+  function sakuFix(klass, id, fix, trialEmail) {
+    if (isGas && !trialEmail) return gas('api_sakuFix', klass, id, JSON.stringify(fix)).then(JSON.parse);
+    var f = Genko.normFixes([fix])[0]; if (!f) return Promise.reject(new Error('なおす字が正しくありません'));
+    f.id = 'f' + Date.now().toString(36); f.at = Date.now();
+    var add = function (l) { return l.concat([f]); };
+    if (trialEmail) return Promise.resolve(sakuFixLocal('kanzi.trial.' + trialEmail + '.saku', id, add) || []);
+    var r = sakuFixLocal('kanzi.saku.demoClass', id, add); sakuFixLocal('kanzi.saku.demo', id, add);
+    if (r) return Promise.resolve(r);
+    var s = demoSettings(); s.sakuPeerF = s.sakuPeerF || {}; s.sakuPeerF[id] = (s.sakuPeerF[id] || []).concat([f]); saveDemo(s); return Promise.resolve(s.sakuPeerF[id]);
+  }
+  function sakuFixDel(klass, id, fixId, trialEmail) {
+    if (isGas && !trialEmail) return gas('api_sakuFixDel', klass, id, fixId).then(JSON.parse);
+    var del = function (l) { return l.filter(function (f) { return f.id !== fixId; }); };
+    if (trialEmail) return Promise.resolve(sakuFixLocal('kanzi.trial.' + trialEmail + '.saku', id, del) || []);
+    var r = sakuFixLocal('kanzi.saku.demoClass', id, del); sakuFixLocal('kanzi.saku.demo', id, del);
+    if (r) return Promise.resolve(r);
+    var s = demoSettings(); s.sakuPeerF = s.sakuPeerF || {}; s.sakuPeerF[id] = del(s.sakuPeerF[id] || []); saveDemo(s); return Promise.resolve(s.sakuPeerF[id]);
+  }
+  // 先生: 作品を消す（デモ・おためしは この端末の控えから消す）
+  function sakuTeacherDelete(klass, id, trialEmail) {
+    if (trialEmail) { var tk = 'kanzi.trial.' + trialEmail + '.saku', ta = store.get(tk) || {}; delete ta[id]; store.set(tk, ta); return Promise.resolve(true); }
+    if (isGas) return gas('api_sakuTeacherDelete', klass, id);
+    var d = sakuDemoAll(); delete d[id]; store.set('kanzi.saku.demoClass', d);
+    var l = store.get('kanzi.saku.demo') || {}; delete l[id]; store.set('kanzi.saku.demo', l);
+    var s = demoSettings(); s.sakuPeerDel = (s.sakuPeerDel || []).concat([id]); saveDemo(s);
+    return Promise.resolve(true);
+  }
   function sakuShare(klass, on) {
     if (isGas) return gas('api_sakuShare', klass, !!on);
     var s = demoSettings(); s.sakuShare = s.sakuShare || {}; s.sakuShare[klass] = !!on; saveDemo(s); return Promise.resolve(!!on);
@@ -338,5 +375,5 @@
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
     teacherView: teacherView, setTests: setTests, setWriteLevel: setWriteLevel, setGates: setGates, gates: gates, bunkai: bunkai, setBunkai: setBunkai, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder,
     archiveYears: archiveYears, archiveView: archiveView, archiveSave: archiveSave, archiveAnonymize: archiveAnonymize, store: store,
-    sakuMine: sakuMine, sakuDraft: sakuDraft, sakuSave: sakuSave, sakuDelete: sakuDelete, sakuRead: sakuRead, sakuFriends: sakuFriends, sakuTeacher: sakuTeacher, sakuComment: sakuComment, sakuShare: sakuShare, sakuTrialWorks: sakuTrialWorks };
+    sakuMine: sakuMine, sakuDraft: sakuDraft, sakuSave: sakuSave, sakuDelete: sakuDelete, sakuRead: sakuRead, sakuFriends: sakuFriends, sakuTeacher: sakuTeacher, sakuComment: sakuComment, sakuShare: sakuShare, sakuTrialWorks: sakuTrialWorks, sakuFix: sakuFix, sakuFixDel: sakuFixDel, sakuTeacherDelete: sakuTeacherDelete };
 })(this);
