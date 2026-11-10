@@ -177,6 +177,22 @@ await page.waitForSelector('.gk-ch');
 check((await page.locator('.gk-side .gk-work').count()) === 2, '児童: 友だちの文（デモ2つ）を読める');
 await shot('sakubun-friends');
 
+// 消す: 先生が作品を消すと 先生画面と児童の画面の両方から消える
+await tp.reload(); await openSaku(tp); await tp.locator('.gk-kid[data-k]', { hasText: 'デモの児童' }).click();
+await tp.locator('#gk-tc .gk-del summary').click();
+await tp.locator('#gk-tdel').click();
+await tp.waitForFunction(() => !/すがたをかえる/.test(document.querySelector('#gk-wtabs').textContent));
+check(/まだ書いていない/.test(await tp.locator('.gk-kid', { hasText: 'デモの児童' }).innerText()), '先生: 作品を消せる（その児童は まだ書いていない に）');
+await page.goto(BASE + '?demo'); await page.waitForSelector('#go-other'); await page.locator('#go-other').click();
+await page.locator('.chooser .big[data-id="sakubun"]').click(); await page.waitForSelector('#gk-tpl');
+check(await page.locator('.gk-work').count() === 0, '児童: 先生が消した作品は 一覧から消える');
+// 児童が消す
+await page.locator('#gk-free').click(); await page.waitForSelector('.gk-ch');
+await page.locator('.gk-side .back').click(); await page.waitForSelector('.gk-work');
+await page.locator('.gk-work').click(); await page.waitForSelector('.gk-del');
+await page.locator('.gk-side .gk-del summary').click(); await page.locator('#gk-del').click();
+await page.waitForSelector('#gk-tpl');
+check(await page.locator('.gk-work').count() === 0, '児童: 自分の作品を消せる');
 // 先生の おためしで書いた作品は、先生画面に「おためし」として出る（その端末だけ）
 await tp.evaluate(() => localStorage.setItem('kanzi.trial.demo.saku', JSON.stringify({ wtrial1: { id: 'wtrial1', text: '　　　ためしの文\n名\n　ほんぶん', mode: 'free', updated: Date.now() } })));
 await tp.reload(); await openSaku(tp); await tp.waitForSelector('.gk-kid.trial');

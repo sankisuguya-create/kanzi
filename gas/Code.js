@@ -636,12 +636,14 @@ function sakuSheet_() {
     return sh;
   });
 }
-function sakuRows_() {
+// 消した作品（型 del）も含めた全行。消した行は { id, email, row, del: true } だけ（本文などは消してある）
+function sakuAll_() {
   return memo_('saku', function () {
     var sh = sakuSheet_(), n = sh.getLastRow() - 1, out = [];
     if (n < 1) return out;
     sh.getRange(2, 1, n, SAKU_HEAD_.length).getValues().forEach(function (r, i) {
-      if (!r[0] || String(r[4]) === 'del') return;
+      if (!r[0]) return;
+      if (String(r[4]) === 'del') { out.push({ id: String(r[0]), email: String(r[1]).toLowerCase(), row: i + 2, del: true }); return; }
       var cm = {}, fx = []; try { cm = JSON.parse(r[6] || '{}') || {}; } catch (e) {} try { fx = JSON.parse(r[8] || '[]') || []; } catch (e) {}
       var w = Genko.normWork({ id: r[0], text: r[3], mode: r[4], show: r[5] === true || String(r[5]) === '1' || String(r[5]).toUpperCase() === 'TRUE', comments: cm, fixes: fx, updated: r[7] instanceof Date ? r[7].getTime() : r[7] });
       w.row = i + 2; w.email = String(r[1]).toLowerCase();
@@ -652,6 +654,9 @@ function sakuRows_() {
     return out;
   });
 }
+function sakuRows_() { return sakuAll_().filter(function (w) { return !w.del; }); }
+// 作品を消す: 行は残し（行番号がずれると同時に書いている人の行を取り違えるため）、型を del にして 本文・コメント・なおし を空にする
+function sakuErase_(row) { sakuSheet_().getRange(row, SAKU_COL_.text, 1, 6).setValues([['', 'del', false, '', new Date(), '']]); }
 // 学級の列の値を "学年-組" に戻す（日付に読みかえられた値・先頭の ' を直す）
 function sakuKlassCell_(v) {
   if (v instanceof Date) return (v.getMonth() + 1) + '-' + v.getDate();
@@ -672,7 +677,9 @@ function sakuStudent_() {
 // 児童: 自分の作品の一覧と、読み合いが開いているか
 function api_sakuMine() {
   var me = sakuStudent_();
-  return JSON.stringify({ share: sakuShare_(me.klass), works: sakuRows_().filter(function (w) { return w.email === me.email; }).map(sakuOut_) });
+  var all = sakuAll_().filter(function (w) { return w.email === me.email; });
+  // deleted: 消した作品の番号（端末に残っている控えを捨てさせる。先生が消した作品が 控えから送り直されて戻らないように）
+  return JSON.stringify({ share: sakuShare_(me.klass), works: all.filter(function (w) { return !w.del; }).map(sakuOut_), deleted: all.filter(function (w) { return w.del; }).map(function (w) { return w.id; }) });
 }
 // 児童: 作品を保存（新しい作品は行を足す）。見せる作品は1人1つ（利用者の指定）なので、見せるにしたら自分のほかの作品を外す
 function api_sakuSave(json) {
@@ -686,6 +693,8 @@ function api_sakuSave(json) {
   try {
     delete MEMO_.saku;
     var sh = sakuSheet_(), rows = sakuRows_(), mine = rows.filter(function (x) { return x.email === me.email; });
+    var gone = sakuAll_().filter(function (x) { return x.del && x.id === w.id; })[0];
+    if (gone) { if (gone.email !== me.email) throw new Error('ほかの人の作品は 書きかえられません'); return JSON.stringify({ id: w.id, deleted: true }); } // 消した作品は戻さない
     var cur = rows.filter(function (x) { return x.id === w.id; })[0];
     if (cur && cur.email !== me.email) throw new Error('ほかの人の作品は 書きかえられません');
     if (!cur && mine.length >= 30) throw new Error('作品は 30こまでです');
@@ -712,7 +721,7 @@ function api_sakuDelete(id) {
   try {
     delete MEMO_.saku;
     var cur = sakuRows_().filter(function (x) { return x.id === String(id) && x.email === me.email; })[0];
-    if (cur) sakuSheet_().getRange(cur.row, SAKU_COL_.mode).setValue('del');
+    if (cur) sakuErase_(cur.row);
     return true;
   } finally { lock.releaseLock(); }
 }
@@ -797,5 +806,17 @@ function api_sakuFixDel(klass, id, fixId) {
     cur.fixes = cur.fixes.filter(function (f) { return f.id !== String(fixId); });
     sakuSheet_().getRange(cur.row, SAKU_COL_.fixes).setValue(JSON.stringify(cur.fixes));
     return JSON.stringify(cur.fixes);
+  } finally { lock.releaseLock(); }
+}
+// 先生: 担当学級の作品を消す（本文・コメント・なおし も消す。もとに戻せない）
+function api_sakuTeacherDelete(klass, id) {
+  requireClass_(klass);
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    delete MEMO_.saku;
+    var cur = sakuRows_().filter(function (x) { return x.id === String(id) && x.klass === klass; })[0];
+    if (!cur) throw new Error('作品が見つかりません');
+    sakuErase_(cur.row);
+    return true;
   } finally { lock.releaseLock(); }
 }

@@ -623,3 +623,30 @@ test('説明文を書く: 前の版のシート（なおしの列がない）に
   assert.equal(t.book['作文'][0][8], 'なおし');
   assert.equal(JSON.parse(t.book['作文'][1][8]).length, 1);
 });
+
+test('説明文を書く: 消すと 本文・コメント・修正案も消え、端末の控えから送り直しても戻らない', () => {
+  const sheets = base();
+  let env = makeEnv(sheets, K1); env.api_sakuSave(sakuWork('wera01', '題\n名\n　ひみつの文')); sheets.作文 = env.book['作文'];
+  const t = makeEnv(sheets, T); t.api_sakuComment('3-1', 'wera01', 2, 'コメント'); sheets.作文 = t.book['作文'];
+  env = makeEnv(sheets, K1); env.api_sakuDelete('wera01');
+  const row = env.book['作文'][1];
+  assert.equal(row[4], 'del'); assert.equal(row[3], '', '本文を消す'); assert.equal(row[6], '', 'コメントを消す');
+  assert.equal(JSON.stringify(env.book['作文']).includes('ひみつ'), false);
+  const r = JSON.parse(env.api_sakuSave(sakuWork('wera01', '題\n名\n　ひみつの文'))); // 別の端末の控えから
+  assert.equal(r.deleted, true);
+  assert.equal(JSON.parse(env.api_sakuMine()).works.length, 0);
+  assert.deepEqual(JSON.parse(env.api_sakuMine()).deleted, ['wera01'], '消した番号を返す（端末の控えを捨てさせる）');
+  sheets.作文 = env.book['作文'];
+  assert.throws(() => makeEnv(sheets, K2).api_sakuSave(sakuWork('wera01', 'のっとり')), /ほかの人/);
+});
+test('説明文を書く: 先生は担当学級の作品を消せる（ほかの学級は消せない）', () => {
+  const sheets = base();
+  let env = makeEnv(sheets, K1); env.api_sakuSave(sakuWork('wtdel1', '題\n名\n　本文')); sheets.作文 = env.book['作文'];
+  assert.throws(() => makeEnv(sheets, T).api_sakuTeacherDelete('3-2', 'wtdel1'), /担当/);
+  const t = makeEnv(sheets, T); t.api_sakuTeacherDelete('3-1', 'wtdel1');
+  assert.equal(t.book['作文'][1][3], '');
+  sheets.作文 = t.book['作文'];
+  assert.equal(JSON.parse(makeEnv(sheets, T).api_sakuTeacher('3-1')).students.find((k) => k.name === 'あおい').works.length, 0);
+  assert.equal(JSON.parse(makeEnv(sheets, K1).api_sakuMine()).works.length, 0);
+  assert.throws(() => makeEnv(sheets, T).api_sakuTeacherDelete('3-1', 'wtdel1'), /見つかりません/);
+});

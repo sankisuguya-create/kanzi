@@ -1178,6 +1178,7 @@
       var rm = w.remap; w.remap = {}; // 送る分のコメントの移し方。送っている間に入れかえた分は次に送る
       var out = Genko.normWork(w); out.remap = rm; var fd = w.fixDone; w.fixDone = []; out.fixDone = fd;
       return Platform.sakuSave(out).then(function (back) {
+        if (back && back.deleted) { clearTimeout(timer); dirty = false; status(K('この[文|ぶん]は [消|け]されています')); setTimeout(function () { if ($('#gk-saved')) sakubunHome(); }, 1500); return; }
         if (back && back.comments && !Object.keys(w.remap).length) w.comments = back.comments;
         if (back && back.fixes && !Object.keys(w.remap).length) w.fixes = back.fixes.filter(function (f) { return w.fixDone.indexOf(f.id) < 0; });
         status('✓ ほぞんしました'); paintComments(); paintFixes(); draw(); },
@@ -1340,7 +1341,15 @@
           return '<li><span class="meta">' + Genko.paraNo(w.text, f.line) + '番目の段落' + (ok ? '' : '・児童が書きかえたので あてはまらない') + '</span>「' + esc(f.from) + '」→「' + (f.to ? esc(f.to) + '」' : '」（けす）') +
             ' <button class="gk-read" data-f="' + esc(f.id) + '">取り消す</button></li>';
         }).join('') + '</ol>' : '') +
-        (ks.length ? '<h3>コメント</h3><ol class="gk-clist">' + ks.map(function (kk) { var c = w.comments[kk]; return '<li><span class="meta">' + Genko.paraNo(w.text, Number(kk)) + '番目の段落' + (c.read ? '・児童が よんだ' : '・まだ よんでいない') + '</span>' + esc(c.t) + '</li>'; }).join('') + '</ol>' : '');
+        (ks.length ? '<h3>コメント</h3><ol class="gk-clist">' + ks.map(function (kk) { var c = w.comments[kk]; return '<li><span class="meta">' + Genko.paraNo(w.text, Number(kk)) + '番目の段落' + (c.read ? '・児童が よんだ' : '・まだ よんでいない') + '</span>' + esc(c.t) + '</li>'; }).join('') + '</ol>' : '') +
+        '<details class="gk-del"><summary>この作品を消す</summary><p class="hint">本文・コメント・修正案を消します。もとに戻せません（児童の画面からも消えます）。</p><button class="gk-btn danger" id="gk-tdel">「' + esc(Genko.title(w.text)) + '」を消す</button> <span id="gk-dmsg" aria-live="polite"></span></details>';
+      on('#gk-tdel', function () {
+        $('#gk-dmsg').textContent = '消しています…';
+        Platform.sakuTeacherDelete(klass, w.id, trialEmail).then(function () {
+          k.works = k.works.filter(function (x) { return x.id !== w.id; });
+          var l = sorted(k); wid = l[0] ? l[0].id : null; pick = null; editLine = null; side(); main();
+        }, function (e) { $('#gk-dmsg').textContent = '× ' + (e && e.message || '消せませんでした'); });
+      });
       app.querySelectorAll('.gk-flist .gk-read').forEach(function (b) { b.addEventListener('click', function () {
         Platform.sakuFixDel(klass, w.id, b.dataset.f, trialEmail).then(function (fx) { w.fixes = Genko.normFixes(fx); side(); main(); }); }); });
       if (pick) {
