@@ -626,17 +626,24 @@ function api_bunkai() {
 // 児童が書く列（学級・本文・型・見せる・更新）と 先生が書く列（コメント）を分け、保存は自分の列だけを書く
 // （同じ行を児童と先生が同時に書いても、相手の列を古い値で上書きしない: 要件 W5）。行は消さない（型を del にする）。
 // 児童が読めるのは自分の作品と、先生が「読み合う」を開いている間の 同じ学級の「見せる」作品の本文だけ（§1 の例外・§28）。
-var SAKU_HEAD_ = ['作品', 'メール', '学級', '本文', '型', '見せる', 'コメント', '更新'];
-var SAKU_COL_ = { id: 1, email: 2, klass: 3, text: 4, mode: 5, show: 6, comments: 7, updated: 8 };
-function sakuSheet_() { return sheet_('作文', SAKU_HEAD_); }
+var SAKU_HEAD_ = ['作品', 'メール', '学級', '本文', '型', '見せる', 'コメント', '更新', 'なおし'];
+var SAKU_COL_ = { id: 1, email: 2, klass: 3, text: 4, mode: 5, show: 6, comments: 7, updated: 8, fixes: 9 };
+// なおし（先生の修正案）の列は後から足した。前の版で作ったシートには見出しを足す
+function sakuSheet_() {
+  var sh = sheet_('作文', SAKU_HEAD_);
+  return memo_('sakuHead', function () {
+    if (sh.getLastColumn() < SAKU_HEAD_.length) sh.getRange(1, SAKU_COL_.fixes).setValue('なおし');
+    return sh;
+  });
+}
 function sakuRows_() {
   return memo_('saku', function () {
     var sh = sakuSheet_(), n = sh.getLastRow() - 1, out = [];
     if (n < 1) return out;
     sh.getRange(2, 1, n, SAKU_HEAD_.length).getValues().forEach(function (r, i) {
       if (!r[0] || String(r[4]) === 'del') return;
-      var cm = {}; try { cm = JSON.parse(r[6] || '{}') || {}; } catch (e) {}
-      var w = Genko.normWork({ id: r[0], text: r[3], mode: r[4], show: r[5] === true || String(r[5]) === '1' || String(r[5]).toUpperCase() === 'TRUE', comments: cm, updated: r[7] instanceof Date ? r[7].getTime() : r[7] });
+      var cm = {}, fx = []; try { cm = JSON.parse(r[6] || '{}') || {}; } catch (e) {} try { fx = JSON.parse(r[8] || '[]') || []; } catch (e) {}
+      var w = Genko.normWork({ id: r[0], text: r[3], mode: r[4], show: r[5] === true || String(r[5]) === '1' || String(r[5]).toUpperCase() === 'TRUE', comments: cm, fixes: fx, updated: r[7] instanceof Date ? r[7].getTime() : r[7] });
       w.row = i + 2; w.email = String(r[1]).toLowerCase();
       // 学級はいまの名簿から決める（名簿にいなければ列の値）。列の値は、スプレッドシートが "3-1" を日付（3月1日）に読みかえていることがあるので戻す
       w.klass = classOf_(w.email) || sakuKlassCell_(r[2]);
@@ -684,11 +691,17 @@ function api_sakuSave(json) {
     if (!cur && mine.length >= 30) throw new Error('作品は 30こまでです');
     var now = new Date();
     if (cur) sh.getRange(cur.row, SAKU_COL_.klass, 1, 4).setValues([[sakuKlassText_(me.klass), w.text, w.mode, w.show]]);
-    else sh.appendRow([w.id, me.email, sakuKlassText_(me.klass), w.text, w.mode, w.show, '{}', now]);
+    else sh.appendRow([w.id, me.email, sakuKlassText_(me.klass), w.text, w.mode, w.show, '{}', now, '[]']);
     if (cur) sh.getRange(cur.row, SAKU_COL_.updated).setValue(now);
     if (cur && remap && Object.keys(cur.comments).length) { cur.comments = Genko.remapComments(cur.comments, remap); sh.getRange(cur.row, SAKU_COL_.comments).setValue(JSON.stringify(cur.comments)); }
+    // 先生の修正案: 段落の入れかえに合わせて移し、児童が「なおす」「そのまま」で済ませたもの（fixDone）を外す（なおしの列だけを書く）
+    if (cur && cur.fixes.length && (remap || (Array.isArray(raw.fixDone) && raw.fixDone.length))) {
+      var done = (raw.fixDone || []).map(String);
+      cur.fixes = Genko.remapFixes(cur.fixes, remap).filter(function (f) { return done.indexOf(f.id) < 0; });
+      sh.getRange(cur.row, SAKU_COL_.fixes).setValue(JSON.stringify(cur.fixes));
+    }
     if (w.show) mine.forEach(function (x) { if (x.id !== w.id && x.show) sh.getRange(x.row, SAKU_COL_.show).setValue(false); });
-    w.updated = now.getTime(); if (cur) w.comments = cur.comments;
+    w.updated = now.getTime(); w.fixes = cur ? cur.fixes : []; if (cur) w.comments = cur.comments;
     return JSON.stringify(sakuOut_(w));
   } finally { lock.releaseLock(); }
 }
@@ -754,4 +767,35 @@ function api_sakuShare(klass, on) {
   requireClass_(klass);
   setSetting_('sakuShare:' + klass, on ? '1' : '');
   return !!on;
+}
+// 先生: 修正案を足す（{ line, start, from, to }）。もとの字が いまの本文に無ければ足さない
+function api_sakuFix(klass, id, json) {
+  requireClass_(klass);
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    delete MEMO_.saku;
+    var cur = sakuRows_().filter(function (x) { return x.id === String(id) && x.klass === klass; })[0];
+    if (!cur) throw new Error('作品が見つかりません');
+    var f = Genko.normFixes([JSON.parse(json || '{}')])[0];
+    if (!f) throw new Error('なおす字が正しくありません');
+    if (!Genko.fixLocate(cur.text, f)) throw new Error('児童が文を書きかえたので、もう一度 えらんでください');
+    if (cur.fixes.length >= 100) throw new Error('修正案は 100こまでです');
+    f.id = 'f' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); f.at = Date.now();
+    cur.fixes.push(f);
+    sakuSheet_().getRange(cur.row, SAKU_COL_.fixes).setValue(JSON.stringify(cur.fixes));
+    return JSON.stringify(cur.fixes);
+  } finally { lock.releaseLock(); }
+}
+// 先生: 修正案を取り消す
+function api_sakuFixDel(klass, id, fixId) {
+  requireClass_(klass);
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    delete MEMO_.saku;
+    var cur = sakuRows_().filter(function (x) { return x.id === String(id) && x.klass === klass; })[0];
+    if (!cur) throw new Error('作品が見つかりません');
+    cur.fixes = cur.fixes.filter(function (f) { return f.id !== String(fixId); });
+    sakuSheet_().getRange(cur.row, SAKU_COL_.fixes).setValue(JSON.stringify(cur.fixes));
+    return JSON.stringify(cur.fixes);
+  } finally { lock.releaseLock(); }
 }

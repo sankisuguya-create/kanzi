@@ -101,6 +101,7 @@
       var t = typeof c === 'string' ? c : c.t;
       if (t) o.comments[line] = { t: String(t).slice(0, 200), read: !!(c && c.read), at: Number(c && c.at) || 0 };
     }
+    o.fixes = normFixes(w.fixes);
     return o;
   }
   // 段落の順番を入れかえる（line は改行で数えた番号。2行目＝題名・名前の後から）。dir: -1＝前へ（右へ）、+1＝後ろへ（左へ）
@@ -127,10 +128,43 @@
     for (k in res) if (res[k] === Number(k)) delete res[k];
     return res;
   }
+  // 先生の修正案（§28 の2回目。W2）: { id, line, start, from, to, at }
+  //   line＝改行で数えた段落の番号、start＝その段落の中の何字目（0から）、from＝もとの字、to＝なおした字（空なら消す）。
+  //   児童が書きかえても あてはまる所を探せるよう、位置と もとの字の両方を持つ
+  function normFixes(list) {
+    var out = [];
+    (Array.isArray(list) ? list : []).forEach(function (f) {
+      if (!f || out.length >= 100) return;
+      var line = Number(f.line), start = Number(f.start), from = String(f.from || '').slice(0, 100), to = toZen(String(f.to == null ? '' : f.to)).replace(/\n/g, '').slice(0, 100);
+      if (!(line >= 0 && line < 400) || !(start >= 0 && start < 4000) || !from || from === to) return;
+      out.push({ id: String(f.id || '').slice(0, 20) || ('f' + out.length), line: line, start: start, from: from, to: to, at: Number(f.at) || 0 });
+    });
+    return out;
+  }
+  // 修正案があてはまる所: { at（本文の中の字の番号）, len }。もとの字が見つからなければ null（児童が書きかえた）
+  function fixLocate(text, f) {
+    var ls = String(text || '').split('\n');
+    if (f.line >= ls.length) return null;
+    var l = ls[f.line], base = 0, k;
+    for (k = 0; k < f.line; k++) base += ls[k].length + 1;
+    if (l.substr(f.start, f.from.length) === f.from) return { at: base + f.start, len: f.from.length };
+    var best = -1, bd = 1e9, i = l.indexOf(f.from);
+    while (i >= 0) { if (Math.abs(i - f.start) < bd) { bd = Math.abs(i - f.start); best = i; } i = l.indexOf(f.from, i + 1); }
+    return best >= 0 ? { at: base + best, len: f.from.length } : null;
+  }
+  // 修正案を当てた本文（あてはまらなければ null）
+  function applyFix(text, f) {
+    var p = fixLocate(text, f);
+    return p ? String(text).slice(0, p.at) + f.to + String(text).slice(p.at + p.len) : null;
+  }
+  // 段落の入れかえに合わせて、修正案の段落の番号も移す
+  function remapFixes(fixes, map) {
+    return (fixes || []).map(function (f) { var o = {}; for (var k in f) o[k] = f[k]; if (map && (f.line in map)) o.line = Number(map[f.line]); return o; });
+  }
   function newId() { return 'w' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
 
   var Genko = { Z: Z, ROWS: ROWS, COLS: COLS, HANG: HANG, OPEN: OPEN, SMALL: SMALL, MAX_CHARS: MAX_CHARS,
     toZen: toZen, layout: layout, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
-    check: check, paraNo: paraNo, moveParagraph: moveParagraph, remapComments: remapComments, composeMap: composeMap, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
+    check: check, paraNo: paraNo, moveParagraph: moveParagraph, remapComments: remapComments, normFixes: normFixes, fixLocate: fixLocate, applyFix: applyFix, remapFixes: remapFixes, composeMap: composeMap, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
   if (typeof module !== 'undefined' && module.exports) module.exports = Genko; else root.Genko = Genko;
 })(typeof globalThis !== "undefined" ? globalThis : this);

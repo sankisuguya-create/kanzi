@@ -590,3 +590,36 @@ test('説明文を書く: 学級は文字として書く（日付に読みかえ
   env.api_sakuSave(sakuWork('wtext1', 'b'));
   assert.equal(env.book['作文'][1][2], "'3-1");
 });
+
+test('説明文を書く: 先生の修正案を足す・取り消す。児童が済ませたら外れ、段落の入れかえで移る', () => {
+  const sheets = base();
+  let env = makeEnv(sheets, K1); env.api_sakuSave(sakuWork('wfix01', '題\n名\n　米をたべる\n　もち')); sheets.作文 = env.book['作文'];
+  const t = makeEnv(sheets, T);
+  let fx = JSON.parse(t.api_sakuFix('3-1', 'wfix01', JSON.stringify({ line: 2, start: 3, from: 'たべる', to: '食べる' })));
+  assert.equal(fx.length, 1);
+  assert.throws(() => t.api_sakuFix('3-1', 'wfix01', JSON.stringify({ line: 2, start: 0, from: 'ない字', to: 'x' })), /書きかえた/);
+  assert.throws(() => makeEnv(sheets, T).api_sakuFix('3-2', 'wfix01', '{}'), /担当/);
+  fx = JSON.parse(t.api_sakuFix('3-1', 'wfix01', JSON.stringify({ line: 3, start: 1, from: 'もち', to: '餅' })));
+  fx = JSON.parse(t.api_sakuFixDel('3-1', 'wfix01', fx[1].id));
+  assert.equal(fx.length, 1);
+  sheets.作文 = t.book['作文'];
+  env = makeEnv(sheets, K1);
+  let w = JSON.parse(env.api_sakuMine()).works[0];
+  assert.equal(w.fixes[0].to, '食べる', '児童に届く');
+  // 児童が段落を入れかえて保存 → 修正案の段落も移る（児童の保存は修正案の列を消さない）
+  env.api_sakuSave(JSON.stringify({ id: 'wfix01', text: '題\n名\n　もち\n　米をたべる', remap: { 2: 3, 3: 2 } }));
+  w = JSON.parse(env.api_sakuMine()).works[0];
+  assert.equal(w.fixes[0].line, 3);
+  // なおす: 本文に当てて、済ませた修正案を外す
+  env.api_sakuSave(JSON.stringify({ id: 'wfix01', text: '題\n名\n　もち\n　米を食べる', fixDone: [w.fixes[0].id] }));
+  w = JSON.parse(env.api_sakuMine()).works[0];
+  assert.equal(w.fixes.length, 0); assert.equal(w.text, '題\n名\n　もち\n　米を食べる');
+});
+test('説明文を書く: 前の版のシート（なおしの列がない）にも見出しを足して使える', () => {
+  const sheets = base();
+  sheets.作文 = [['作品', 'メール', '学級', '本文', '型', '見せる', 'コメント', '更新'], ['wold01', K1, "'3-1", '題\n名\n　米', 'tpl', false, '{}', 1]];
+  const t = makeEnv(sheets, T);
+  t.api_sakuFix('3-1', 'wold01', JSON.stringify({ line: 2, start: 1, from: '米', to: 'こめ' }));
+  assert.equal(t.book['作文'][0][8], 'なおし');
+  assert.equal(JSON.parse(t.book['作文'][1][8]).length, 1);
+});
