@@ -620,3 +620,58 @@ test('学習BASE: 枠だけを返し、プログラムは jsDelivr から版で�
   win.Platform.init();
   assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), ['api_init', []]);
 });
+
+// ---- 段階2b：名簿と担当を学習BASE に切り替える（所有者だけ・照らし合わせて食い違いが0件の時だけ）
+function withBase(ctx, roster, { owner = true, props } = {}) {
+  ctx.Base = {
+    roster: () => roster,
+    classKey: (g, c) => Number(g) + '-' + String(c).replace(/組$/, ''),
+    me: () => ({ role: /@edu\./.test(ctx.Session.getActiveUser().getEmail()) ? 'teacher' : 'child' }),
+    canSeeClass: (mail) => /@edu\.nishi\.or\.jp$/.test(mail)
+  };
+  const store = props || { KANZI_SS_ID: 'KANZI' };
+  ctx.PropertiesService = { getScriptProperties: () => ({ getProperty: (k) => (k in store ? store[k] : null), setProperty: (k, v) => { store[k] = v; }, deleteProperty: (k) => { delete store[k]; } }) };
+  ctx.Session.getEffectiveUser = () => ({ getEmail: () => (owner ? ctx.Session.getActiveUser().getEmail() : 'owner@edu.nishi.or.jp') });
+  ctx.store = store;
+  return ctx;
+}
+const BASE_ROSTER = [
+  { mail: K1, grade: 3, cls: '1', no: 1, name: 'あおい' }, { mail: K2, grade: 3, cls: '1組', no: 2, name: 'はると' }, { mail: K3, grade: 3, cls: '2', no: 1, name: 'ゆい' },
+  { mail: '', lid: 'Lx', grade: 3, cls: '1', no: 30, name: '転入' }];
+test('名簿の切り替え：照らし合わせ（漢字の森だけにいる児童・学級が違う児童・学級の無い設定）。0件なら切り替えられ、児童・先生は学習BASE の名簿と担当で動く', () => {
+  const sheets = base(); sheets.設定.push(['grades:3-1', '3'], ['grades:4-9', '4']);
+  const ctx = withBase(makeBaseEnv(sheets, T), BASE_ROSTER);
+  let c = ctx.api_lbRosterCheck();
+  assert.equal(c.using, 'sheet'); assert.equal(c.ok, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.orphanSettings)), ['grades:4-9']);
+  assert.equal(c.kanziOnly.length, 0); assert.equal(c.classMoved.length, 0, '「1組」は 1 と同じ学級');
+  assert.throws(() => ctx.api_lbRosterUse(true), /食い違い/);
+  assert.equal(ctx.store.KANZI_ROSTER, undefined, '食い違いがあれば切り替えない');
+  sheets.設定.pop();
+  const ctx2 = withBase(makeBaseEnv(sheets, T), BASE_ROSTER);
+  c = ctx2.api_lbRosterUse(true);
+  assert.equal(c.using, 'base'); assert.equal(ctx2.store.KANZI_ROSTER, 'base');
+  // 先生：担当のシートに無い 3-2 も見られる（教師ドメインは全学級。作文も同じ入口）
+  const tv = withBase(makeBaseEnv(sheets, T), BASE_ROSTER, { props: ctx2.store });
+  assert.deepEqual(JSON.parse(JSON.stringify(tv.lbApi_('api_init', []).classes)), ['3-1', '3-2']);
+  assert.ok(tv.lbApi_('api_teacherView', ['3-2']));
+  // 児童：学習BASE の名簿の学級で開く。メールの無い転入生は扱わない
+  const kv = withBase(makeBaseEnv(sheets, K3), BASE_ROSTER, { props: ctx2.store });
+  assert.equal(kv.lbApi_('api_init', []).klass, '3-2');
+  // 年度の保存：名簿YYYY は学習BASE の名簿から
+  tv.api_archiveSave(2026);
+  const kept = tv.book.名簿2026;
+  assert.equal(kept.length, 1 + 3); assert.ok(kept.some((r) => r[0] === K3 && r[2] === '2'));
+  // 元に戻せる
+  const back = withBase(makeBaseEnv(sheets, T), BASE_ROSTER, { props: ctx2.store });
+  assert.equal(back.api_lbRosterUse(false).using, 'sheet');
+});
+test('名簿の切り替え：所有者だけ。単体の GAS では使えない', () => {
+  const ctx = withBase(makeBaseEnv(base(), T), BASE_ROSTER, { owner: false });
+  assert.throws(() => ctx.api_lbRosterCheck(), /所有者/);
+  assert.throws(() => ctx.api_lbRosterUse(true), /所有者/);
+  assert.throws(() => makeEnv(base(), T).api_lbRosterCheck(), /所有者/);
+  const kanziOnly = withBase(makeBaseEnv(base(), T), BASE_ROSTER.slice(1));
+  const c = kanziOnly.api_lbRosterCheck();
+  assert.equal(c.kanziOnly.length, 1); assert.equal(c.kanziOnly[0].klass, '3-1');
+});
