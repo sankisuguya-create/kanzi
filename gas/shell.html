@@ -145,7 +145,7 @@ summary:focus-visible, select:focus-visible, input:focus-visible, textarea:focus
 
 /* ---- 先生用 */
 .top.t { flex-wrap: wrap; }
-.try { margin-left: auto; min-height: 52px; padding: 0 18px; font-size: 18px; background: var(--card); border: 2px solid var(--cat-1); color: var(--ink-link); border-radius: 12px; }
+.try { margin-left: auto; flex: none; white-space: nowrap; min-height: 52px; padding: 0 18px; font-size: 18px; background: var(--card); border: 2px solid var(--cat-1); color: var(--ink-link); border-radius: 12px; }
 #trial-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 16px; background: var(--fill-b); border-bottom: 2px solid var(--cat-3); font-size: 16px; }
 /* GAS版ずれの警告: どの画面でも一番上に重ねて出す（内容を押さないよう fixed） */
 .ver-warn { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 10px 14px; background: #FFE0B2; border-bottom: 3px solid var(--warn, #E65100); text-align: center; font-size: 20px; font-weight: 700; }
@@ -802,6 +802,23 @@ textarea.gk-ime { position: absolute; opacity: 0; width: 2px; height: 2px; paddi
 .gk-tname { font-size: 20px; margin: 0 0 8px; }
 .gk-cedit textarea { display: block; width: 100%; font-size: 18px; margin-top: 4px; }
 #gk-tc { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.gk-sel { position: absolute; background: rgba(15, 94, 168, .16); box-shadow: inset 0 0 0 2px var(--cat-1); pointer-events: none; }
+.gk-orderbox { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 3px solid var(--cat-1); border-radius: 12px; background: var(--card); }
+.gk-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gk-hint { margin: 0; font-size: 17px; font-weight: 700; }
+.gk-kid.trial { border-style: dashed; }
+.gk-orderbox[hidden] { display: none; }
+.gk-fix { position: absolute; box-shadow: inset 0 0 0 2px var(--ink-alert); background: rgba(192, 51, 10, .08); pointer-events: none; }
+.gk-fixto { position: absolute; writing-mode: vertical-rl; color: var(--ink-alert); font-weight: 700; line-height: 1; pointer-events: none; z-index: 2; background: rgba(255, 255, 255, .85); }
+.gk-pick { position: absolute; background: rgba(15, 94, 168, .2); box-shadow: inset 0 0 0 2px var(--cat-1); pointer-events: none; }
+.gk-wtabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.gk-wtabs:empty { display: none; }
+.gk-wtab { display: flex; align-items: baseline; gap: 6px; min-height: 48px; padding: 6px 12px; border: 2px solid var(--line); background: var(--card); border-radius: 10px; font-size: 16px; }
+.gk-wtab b { font-size: 22px; }
+.gk-wtab[aria-selected="true"] { border-color: var(--cat-1); border-width: 3px; background: var(--fill-a); }
+.gk-wtab .meta { font-size: 13px; color: var(--ink-sub); }
+.gk-flist .gk-two { display: inline-flex; gap: 6px; margin-left: 6px; }
+.gk-cedit input { display: block; width: 100%; font-size: 20px; min-height: 48px; margin-top: 4px; }
 </style>
 <meta name="kanzi-ver" content="__KANZI_VER__">
 </head>

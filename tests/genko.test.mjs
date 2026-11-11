@@ -66,3 +66,29 @@ test('全角にそろえる・作品の形をそろえる', () => {
   assert.equal(w.text.length, G.MAX_CHARS); assert.equal(w.show, true); assert.equal(w.mode, 'tpl');
   assert.deepEqual(Object.keys(w.comments), ['2']); assert.equal(w.comments[2].t, 'よい');
 });
+test('段落の入れかえ: となりの段落と入れかえ、題名・名前の行は動かさない', () => {
+  const t = ['題', '名', 'あ', 'い', 'う'].join('\n');
+  const r = G.moveParagraph(t, 3, -1);
+  assert.equal(r.text, ['題', '名', 'い', 'あ', 'う'].join('\n'));
+  assert.deepEqual(r.map, { 2: 3, 3: 2 });
+  assert.equal(G.moveParagraph(t, 2, -1), null, '本文の最初より前へは動かない');
+  assert.equal(G.moveParagraph(t, 4, 1), null, '最後より後ろへは動かない');
+  assert.equal(G.moveParagraph(t, 1, 1), null, '名前の行は動かさない');
+});
+test('段落の入れかえ: コメントの付け先も一緒に移る（続けて入れかえても合う）', () => {
+  let m = G.composeMap({}, { 2: 3, 3: 2 }); // あ・い を入れかえ
+  m = G.composeMap(m, { 3: 4, 4: 3 });     // 続けて あ（いま3）・う を入れかえ → い・う・あ
+  assert.deepEqual(m, { 2: 4, 3: 2, 4: 3 });
+  assert.deepEqual(G.remapComments({ 2: 'あへ', 4: 'うへ' }, m), { 4: 'あへ', 3: 'うへ' });
+  assert.deepEqual(G.composeMap({ 2: 3, 3: 2 }, { 2: 3, 3: 2 }), {}, 'もとにもどせば移し方は空');
+});
+test('修正案: もとの字の所に当てる・書きかえられたら近い所を探す・無ければ当てない', () => {
+  const t = ['題', '名', Z + '米をたべる。米をたべる。', Z + 'もち'].join('\n');
+  const f = { id: 'f1', line: 2, start: 9, from: 'たべる', to: '食べる' }; // 2つめの「たべる」
+  assert.equal(G.applyFix(t, f), ['題', '名', Z + '米をたべる。米を食べる。', Z + 'もち'].join('\n'), '位置どおり');
+  const moved = t.replace(Z + '米を', Z + 'お米を'); // 児童が前に字を足した
+  assert.equal(G.fixLocate(moved, f).at, moved.indexOf('たべる', moved.indexOf('。')), '近い方の同じ字に当てる');
+  assert.equal(G.applyFix(t.replace(/たべる/g, 'のむ'), f), null, 'もとの字が無ければ当てない');
+  assert.deepEqual(G.remapFixes([f], { 2: 3, 3: 2 })[0].line, 3, '段落の入れかえに合わせて移す');
+  assert.equal(G.normFixes([{ line: 2, start: 0, from: 'あ', to: 'あ' }, { line: 2, start: 0, from: '', to: 'x' }]).length, 0, '変わらない・もとの字が無い修正案は落とす');
+});

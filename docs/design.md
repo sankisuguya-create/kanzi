@@ -399,7 +399,7 @@ Progress {
 
 ## 28. 説明文を書く（2026-11、利用者の指定による追加）
 
-→ 仕様: [features/setsumei-writing.md](features/setsumei-writing.md)（1回目まで実装。先生の修正案は2回目）／ 要件: [requirements/setsumei-writing.md](requirements/setsumei-writing.md)
+→ 仕様: [features/setsumei-writing.md](features/setsumei-writing.md)（先生の修正案まで実装）／ 要件: [requirements/setsumei-writing.md](requirements/setsumei-writing.md)
 
 ## 29. 画面の寸法と先生画面の区分タブ（2026-11、利用者の指定）
 
