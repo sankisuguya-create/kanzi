@@ -12,6 +12,8 @@ let VER;
 try { VER = execSync('git rev-parse --short HEAD', { cwd: ROOT, encoding: 'utf8' }).trim(); }
 catch { VER = String(Math.floor(Date.now() / 1000)); }
 let html = read('index.html');
+// 学習BASE の中で返す枠（gas/shell.html）：CSS だけを埋め込み、プログラムは <script src="src/…"> のまま残す（gas/Code.js の lbPage_ が jsDelivr の URL に直す）
+let shell = html;
 // 同梱フォントの @font-face は GAS では参照できないので外し、同じ Noto Sans JP を Google Fonts から受け皿として読む
 const FONT_LINK = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=block">';
 html = html.replace(/<link rel="stylesheet" href="([^"]+)">/g, (_, f) => {
@@ -19,6 +21,9 @@ html = html.replace(/<link rel="stylesheet" href="([^"]+)">/g, (_, f) => {
   if (css.includes('fonts/mori-jp')) throw new Error('同梱フォントの指定が残っている');
   return `${FONT_LINK}\n<style>\n${css}</style>`;
 });
+shell = html.replace('</head>', '<meta name="kanzi-ver" content="__KANZI_VER__">\n</head>').replace('<script src="src/data.js">', '<!--LB_SHIM-->\n<script src="src/data.js">');
+if (!shell.includes('<!--LB_SHIM-->')) throw new Error('枠に呼び出しの差し替えの場所を入れられない');
+fs.writeFileSync(path.join(ROOT, 'gas', 'shell.html'), shell);
 html = html.replace(/<script src="([^"]+)"><\/script>/g, (_, f) => {
   const js = read(f);
   if (js.includes('</script')) throw new Error(`${f} に </script が含まれる`);

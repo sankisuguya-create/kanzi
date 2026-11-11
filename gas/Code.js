@@ -11,9 +11,48 @@ var TEACHER_RE = /@edu\.nishi\.or\.jp$/;
 var GRADE_LEN = { 1: 80, 2: 160, 3: 200, 4: 202, 5: 193, 6: 191 };
 
 function doGet() {
+  if (inBase_()) return lbPage_();
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('漢字の森')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+// ---- 学習BASE の中で動く時（learning-base の tools/bundle.cjs が、このファイルを関数に包んで LB_APP_COMMIT などを渡す）。
+// 単体の GAS（このスプレッドシートに付けたもの）では今まで通り。約束は learning-base の docs/add-app.md
+function inBase_() { return typeof LB_APP_COMMIT !== 'undefined'; }
+// データのスプレッドシート：単体では付いているもの。学習BASE の中では、スクリプトのプロパティ KANZI_SS_ID（今の漢字の森のスプレッドシートの ID）
+var SS_ = null;
+function ss_() {
+  if (SS_) return SS_;
+  if (!inBase_()) return (SS_ = SpreadsheetApp.getActiveSpreadsheet());
+  var id = String(PropertiesService.getScriptProperties().getProperty('KANZI_SS_ID') || '').trim();
+  if (!id) throw new Error('漢字の森のデータの場所が決まっていません（スクリプトのプロパティ KANZI_SS_ID に、漢字の森のスプレッドシートの ID を入れてください）');
+  return (SS_ = SpreadsheetApp.openById(id));
+}
+function lbReady_() { try { return !!String(PropertiesService.getScriptProperties().getProperty('KANZI_SS_ID') || '').trim(); } catch (e) { return false; } }
+// 一時保存：学習BASE の中では全アプリで1つの置き場を使うので、名前の頭に kanzi: を付ける
+function cache_() {
+  var c = CacheService.getScriptCache();
+  if (!inBase_()) return c;
+  return { get: function (k) { return c.get('kanzi:' + k); }, put: function (k, v, t) { return c.put('kanzi:' + k, v, t); }, remove: function (k) { return c.remove('kanzi:' + k); } };
+}
+// 画面：枠（gas/shell.html。tools/build-gas.mjs が作る）だけを返し、プログラム（src/*.js。約130万字）は jsDelivr から版（コミット）で固定して読む。
+// 2回目からはブラウザに保存した分を使う。画面からの呼び出しは、学習BASE の lbCall('app:kanzi', 名前, 引数) を通す
+function lbPage_() {
+  var base = 'https://cdn.jsdelivr.net/gh/' + LB_APP_REPO + '@' + LB_APP_COMMIT + '/';
+  var shim = '<script>window.LB_GAS=function(fn,args){return new Promise(function(ok,ng){google.script.run.withSuccessHandler(ok).withFailureHandler(ng).lbCall("app:kanzi",fn,args);});};' +
+    'function kanziLoadFail(){var a=document.getElementById("app");if(a&&!window.kanziFailed){window.kanziFailed=1;a.innerHTML="<p>いま ひらけません。すこし まってから、ひらきなおしてね。</p>";}}<\/script>';
+  var html = String(LB_FILES['kanzi/shell'])
+    .replace('__KANZI_VER__', String(Sched.VER || '').replace(/[^\w.\-]/g, ''))
+    .replace('<!--LB_SHIM-->', shim)
+    .replace(/<script src="(src\/[\w.\-\/]+)"><\/script>/g, function (m, f) { return '<script src="' + base + f + '" onerror="kanziLoadFail()"><\/script>'; });
+  return HtmlService.createHtmlOutput(html).setTitle('漢字の森').addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+// 画面から呼べる関数（ここに無いものは呼べない）。api_ を足したらここにも足す（tests/gas.test.mjs が照らし合わせる）
+function lbApi_(name, args) {
+  var API = { api_archiveAnonymize: api_archiveAnonymize, api_archiveSave: api_archiveSave, api_archiveView: api_archiveView, api_archiveYears: api_archiveYears, api_bunkai: api_bunkai, api_gates: api_gates, api_init: api_init, api_sakuComment: api_sakuComment, api_sakuDelete: api_sakuDelete, api_sakuFriends: api_sakuFriends, api_sakuMine: api_sakuMine, api_sakuRead: api_sakuRead, api_sakuSave: api_sakuSave, api_sakuShare: api_sakuShare, api_sakuTeacher: api_sakuTeacher, api_save: api_save, api_setBunkai: api_setBunkai, api_setGates: api_setGates, api_setGrades: api_setGrades, api_setOrder: api_setOrder, api_setPointer: api_setPointer, api_setTests: api_setTests, api_setWriteLevel: api_setWriteLevel, api_teacherView: api_teacherView };
+  if (!Object.prototype.hasOwnProperty.call(API, String(name))) throw new Error('呼べない関数です: ' + name);
+  return API[name].apply(null, Array.isArray(args) ? args : []);
 }
 
 // 初回だけエディタから実行する: シートと見出しを作る
@@ -33,7 +72,7 @@ function memo_(k, f) { return k in MEMO_ ? MEMO_[k] : (MEMO_[k] = f()); }
 
 function sheet_(name, header) {
   return memo_('sheet:' + name, function () {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = ss_();
     var sh = ss.getSheetByName(name);
     if (!sh) {
       sh = ss.insertSheet(name);
@@ -372,7 +411,7 @@ function api_setOrder(grade, s) {
 
 // ---- 過年度データ（年度末に いまの「名簿」「進捗」を写して残す。児童名は集計に出さない）
 // 過年度のシート名は「名簿2025」「進捗2025」（名前＋4桁の年度）
-function sheetByName_(name) { return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name); }
+function sheetByName_(name) { return ss_().getSheetByName(name); }
 function archYear_(year) {
   year = String(year || '');
   if (!/^\d{4}$/.test(year)) throw new Error('年度は4桁の数字で入れてください（例: 2025）');
@@ -381,7 +420,7 @@ function archYear_(year) {
 // 残した年度ごとのシートの有無: { '2025': { roster: true, progress: true } }
 function archSheets_() {
   var out = {};
-  SpreadsheetApp.getActiveSpreadsheet().getSheets().forEach(function (s) {
+  ss_().getSheets().forEach(function (s) {
     var m = /^(名簿|進捗)(\d{4})$/.exec(s.getName());
     if (m) (out[m[2]] = out[m[2]] || {})[m[1] === '名簿' ? 'roster' : 'progress'] = true;
   });
@@ -438,7 +477,7 @@ function api_archiveYears() {
 function api_archiveSave(year) {
   requireAssigned_();
   year = archYear_(year);
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = ss_();
   if (ss.getSheetByName('名簿' + year) || ss.getSheetByName('進捗' + year)) throw new Error(year + '年度は すでに残してあります');
   ['名簿', '進捗', '作文'].forEach(function (name) {
     var sh = ss.getSheetByName(name);
@@ -513,7 +552,7 @@ function api_archiveAnonymize(year, confirmWord) {
   }
 }
 function anonymize_(year, me) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = ss_();
   var rs = sheetByName_('名簿' + year), ps = sheetByName_('進捗' + year);
   if (!rs && !ps && !sheetByName_('作文' + year)) throw new Error(year + '年度のデータは ありません');
   var mapName = '照合' + year, ms = sheetByName_(mapName) || ss.insertSheet(mapName);
@@ -588,14 +627,14 @@ function api_setGates(klass, list) {
   list = Sched.normGates(list);
   setSetting_('gates:' + klass, list.join(','), function () {
     // キャッシュの上書きもシート更新と同じ順番で（ロックの外に置くと、同時保存でキャッシュだけ逆順に残る）
-    CacheService.getScriptCache().put('gates:' + klass, list.join(','), GATE_CACHE_SEC_);
+    cache_().put('gates:' + klass, list.join(','), GATE_CACHE_SEC_);
   });
   return list;
 }
 function api_gates() {
   var me = begin_();
   if (me.role !== 'student') throw new Error('児童のアカウントではありません');
-  var cache = CacheService.getScriptCache(), kk = 'klass:' + me.email, klass = cache.get(kk);
+  var cache = cache_(), kk = 'klass:' + me.email, klass = cache.get(kk);
   if (klass === null) { klass = classOf_(me.email); if (!klass) return []; cache.put(kk, klass, GATE_CACHE_SEC_); }
   var v = cache.get('gates:' + klass);
   if (v === null) { v = gates_(klass).join(','); cache.put('gates:' + klass, v, GATE_CACHE_SEC_); }
@@ -608,14 +647,14 @@ function api_setBunkai(klass, json) {
   requireClass_(klass);
   var v = Sched.normBunkai(JSON.parse(json || 'null'));
   setSetting_('bunkai:' + klass, v ? JSON.stringify(v) : '', function () {
-    CacheService.getScriptCache().put('bunkai:' + klass, v ? JSON.stringify(v) : '', GATE_CACHE_SEC_);
+    cache_().put('bunkai:' + klass, v ? JSON.stringify(v) : '', GATE_CACHE_SEC_);
   });
   return v;
 }
 function api_bunkai() {
   var me = begin_();
   if (me.role !== 'student') throw new Error('児童のアカウントではありません');
-  var cache = CacheService.getScriptCache(), kk = 'klass:' + me.email, klass = cache.get(kk);
+  var cache = cache_(), kk = 'klass:' + me.email, klass = cache.get(kk);
   if (klass === null) { klass = classOf_(me.email); if (!klass) return []; cache.put(kk, klass, GATE_CACHE_SEC_); }
   var v = cache.get('bunkai:' + klass);
   if (v === null) { v = JSON.stringify(bunkai_(klass)); cache.put('bunkai:' + klass, v, GATE_CACHE_SEC_); }

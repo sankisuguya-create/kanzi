@@ -6,6 +6,7 @@
 
   function gas(fn) {
     var args = Array.prototype.slice.call(arguments, 1);
+    if (root.LB_GAS) return root.LB_GAS(fn, args); // 学習BASE の中: 呼び出しは学習BASE の窓口を通す（gas/Code.js の lbApi_）
     return new Promise(function (resolve, reject) {
       var r = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
       r[fn].apply(r, args);

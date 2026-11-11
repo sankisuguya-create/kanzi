@@ -560,3 +560,63 @@ test('説明文を書く: 過年度に残し、消去でメールと本文の名
   assert.equal(row[1], id, '名簿と同じ番号に置きかえる');
   assert.equal(env.book['作文'][1][1], K1, '今年度の作文はそのまま');
 });
+
+// ---- 学習BASE の中で動く時（learning-base が Code.js を関数に包み、LB_APP_COMMIT などを渡す）
+function makeBaseEnv(sheets, email, props = { KANZI_SS_ID: 'KANZI' }) {
+  const ctx = makeEnv(sheets, email);
+  const book = ctx.SpreadsheetApp.getActiveSpreadsheet();
+  ctx.opened = [];
+  ctx.SpreadsheetApp = { getActiveSpreadsheet: () => { throw new Error('学習BASE には付属のスプレッドシートが無い'); }, openById: (id) => { ctx.opened.push(id); return book; } };
+  ctx.PropertiesService = { getScriptProperties: () => ({ getProperty: (k) => (k in props ? props[k] : null) }) };
+  ctx.HtmlService = { createHtmlOutput: (h) => ({ html: h, setTitle() { return this; }, addMetaTag() { return this; } }) };
+  ctx.LB_FILES = { 'kanzi/shell': fs.readFileSync(new URL('../gas/shell.html', import.meta.url), 'utf8') };
+  vm.runInContext("var LB_APP_COMMIT = '0123456789abcdef0123456789abcdef01234567', LB_APP_REPO = 'sankisuguya-create/kanzi'; Sched.VER = 'abc1234';", ctx);
+  return ctx;
+}
+test('学習BASE: データは KANZI_SS_ID のスプレッドシート。一時保存の名前に kanzi: を付ける。単体の時は今まで通り', () => {
+  const sheets = base();
+  const ctx = makeBaseEnv(sheets, K1);
+  const info = ctx.lbApi_('api_init', []);
+  assert.equal(info.role, 'student'); assert.equal(info.klass, '3-1'); assert.equal(info.ver, 'abc1234');
+  assert.deepEqual(ctx.opened, ['KANZI'], '1回の実行で1回だけ開く');
+  ctx.lbApi_('api_gates', []);
+  assert.ok(Object.keys(sheets.__cache).length > 0 && Object.keys(sheets.__cache).every((k) => k.startsWith('kanzi:')), JSON.stringify(Object.keys(sheets.__cache)));
+  assert.equal(ctx.lbReady_(), true);
+  const none = makeBaseEnv(base(), K1, {});
+  assert.equal(none.lbReady_(), false);
+  assert.throws(() => none.lbApi_('api_init', []), /KANZI_SS_ID/);
+  const alone = makeEnv(base(), K1);
+  assert.equal(alone.inBase_(), false);
+  assert.equal(alone.api_init().klass, '3-1', '単体では付いているスプレッドシート');
+});
+test('学習BASE: 画面から呼べるのは api_ の関数だけ。Code.js の api_ は全部 窓口の表にある', () => {
+  const ctx = makeBaseEnv(base(), T);
+  for (const bad of ['setup', 'doGet', 'me_', 'anonymize_', 'constructor', 'toString', '__proto__', 'ss_']) assert.throws(() => ctx.lbApi_(bad, []), /呼べない関数/, bad);
+  const src = fs.readFileSync(new URL('../gas/Code.js', import.meta.url), 'utf8');
+  const all = [...src.matchAll(/^function (api_[A-Za-z]+)\(/gm)].map((m) => m[1]);
+  const table = src.match(/var API = \{([^}]*)\}/)[1];
+  assert.ok(all.length >= 20);
+  for (const f of all) assert.ok(new RegExp('\\b' + f + ': ' + f + '\\b').test(table), '窓口の表に無い: ' + f);
+  assert.equal(ctx.lbApi_('api_init', []).role, 'teacher');
+});
+test('学習BASE: 枠だけを返し、プログラムは jsDelivr から版で固定して読む。版ずれの検知はサーバーの版と同じ。呼び出しは学習BASE の窓口へ', () => {
+  const ctx = makeBaseEnv(base(), K1);
+  const html = ctx.doGet().html;
+  const srcs = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+  const index = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const want = [...index.matchAll(/<script src="([^"]+)"/g)].map((m) => 'https://cdn.jsdelivr.net/gh/sankisuguya-create/kanzi@0123456789abcdef0123456789abcdef01234567/' + m[1]);
+  assert.deepEqual(srcs, want, 'index.html と同じ順で、全部が版つきの jsDelivr');
+  assert.ok(!/@main|@latest/.test(html));
+  assert.match(html, /<meta name="kanzi-ver" content="abc1234">/);
+  assert.ok(html.indexOf('window.LB_GAS=') > 0 && html.indexOf('window.LB_GAS=') < html.indexOf('src/data.js'), '差し替えはプログラムより前');
+  assert.match(html, /lbCall\("app:kanzi",fn,args\)/);
+  assert.ok(html.length < 100000, '枠は小さい（' + html.length + '字）');
+  assert.ok(!html.includes('fonts/mori-jp'), '同梱フォントは参照しない');
+  // 画面の側：LB_GAS があればそれを通す
+  const calls = [];
+  const win = { LB_GAS: (fn, args) => { calls.push([fn, args]); return Promise.resolve({ role: 'unknown' }); }, google: { script: { run: {} } }, localStorage: { getItem: () => null, setItem() {} }, document: {}, navigator: {} };
+  win.window = win; vm.createContext(win);
+  for (const f of ['scheduler.js', 'genko.js', 'platform.js']) vm.runInContext(fs.readFileSync(new URL('../src/' + f, import.meta.url), 'utf8'), win);
+  win.Platform.init();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), ['api_init', []]);
+});
