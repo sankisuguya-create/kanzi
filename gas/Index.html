@@ -820,7 +820,7 @@ textarea.gk-ime { position: absolute; opacity: 0; width: 2px; height: 2px; paddi
 .gk-flist .gk-two { display: inline-flex; gap: 6px; margin-left: 6px; }
 .gk-cedit input { display: block; width: 100%; font-size: 20px; min-height: 48px; margin-top: 4px; }
 </style>
-<meta name="kanzi-ver" content="36e0551">
+<meta name="kanzi-ver" content="fc0d3b9">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -1494,6 +1494,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
 
   function gas(fn) {
     var args = Array.prototype.slice.call(arguments, 1);
+    if (root.LB_GAS) return root.LB_GAS(fn, args); // 学習BASE の中: 呼び出しは学習BASE の窓口を通す（gas/Code.js の lbApi_）
     return new Promise(function (resolve, reject) {
       var r = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
       r[fn].apply(r, args);

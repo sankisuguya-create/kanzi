@@ -28,6 +28,9 @@
 
 ## 学校で使う（Google Apps Script）
 
+**学習BASE の中で動かす時**（learning-base が取り込む。更新はマージで反映）：学習BASE の GAS のスクリプトのプロパティ `KANZI_SS_ID` に、このスプレッドシートの ID を入れる。
+画面は枠（`gas/shell.html`）だけを GAS が返し、プログラム（`src/*.js`）は jsDelivr から版で固定して読む。画面からの呼び出しは `gas/Code.js` の `lbApi_` の表にある `api_` だけ。下の手順は、単体の GAS として動かす時のもの。
+
 1. 新しいスプレッドシートを作り、「拡張機能 → Apps Script」を開く。
 2. `gas/` の5ファイル（`Code.js`・`Scheduler.js`・`Genko.js`・`Index.html`・`appsscript.json`）を同じ名前で貼る（clasp を使う場合は `gas/` を push）。
 3. エディタで関数 `setup` を1回実行する（シート「名簿」「教師」「進捗」「設定」ができる）。

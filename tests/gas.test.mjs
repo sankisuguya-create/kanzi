@@ -561,6 +561,121 @@ test('説明文を書く: 過年度に残し、消去でメールと本文の名
   assert.equal(env.book['作文'][1][1], K1, '今年度の作文はそのまま');
 });
 
+// ---- 学習BASE の中で動く時（learning-base が Code.js を関数に包み、LB_APP_COMMIT などを渡す）
+function makeBaseEnv(sheets, email, props = { KANZI_SS_ID: 'KANZI' }) {
+  const ctx = makeEnv(sheets, email);
+  const book = ctx.SpreadsheetApp.getActiveSpreadsheet();
+  ctx.opened = [];
+  ctx.SpreadsheetApp = { getActiveSpreadsheet: () => { throw new Error('学習BASE には付属のスプレッドシートが無い'); }, openById: (id) => { ctx.opened.push(id); return book; } };
+  ctx.PropertiesService = { getScriptProperties: () => ({ getProperty: (k) => (k in props ? props[k] : null) }) };
+  ctx.HtmlService = { createHtmlOutput: (h) => ({ html: h, setTitle() { return this; }, addMetaTag() { return this; } }) };
+  ctx.LB_FILES = { 'kanzi/shell': fs.readFileSync(new URL('../gas/shell.html', import.meta.url), 'utf8') };
+  vm.runInContext("var LB_APP_COMMIT = '0123456789abcdef0123456789abcdef01234567', LB_APP_REPO = 'sankisuguya-create/kanzi'; Sched.VER = 'abc1234';", ctx);
+  return ctx;
+}
+test('学習BASE: データは KANZI_SS_ID のスプレッドシート。一時保存の名前に kanzi: を付ける。単体の時は今まで通り', () => {
+  const sheets = base();
+  const ctx = makeBaseEnv(sheets, K1);
+  const info = ctx.lbApi_('api_init', []);
+  assert.equal(info.role, 'student'); assert.equal(info.klass, '3-1'); assert.equal(info.ver, 'abc1234');
+  assert.deepEqual(ctx.opened, ['KANZI'], '1回の実行で1回だけ開く');
+  ctx.lbApi_('api_gates', []);
+  assert.ok(Object.keys(sheets.__cache).length > 0 && Object.keys(sheets.__cache).every((k) => k.startsWith('kanzi:')), JSON.stringify(Object.keys(sheets.__cache)));
+  assert.equal(ctx.lbReady_(), true);
+  const none = makeBaseEnv(base(), K1, {});
+  assert.equal(none.lbReady_(), false);
+  assert.throws(() => none.lbApi_('api_init', []), /KANZI_SS_ID/);
+  const alone = makeEnv(base(), K1);
+  assert.equal(alone.inBase_(), false);
+  assert.equal(alone.api_init().klass, '3-1', '単体では付いているスプレッドシート');
+});
+test('学習BASE: 画面から呼べるのは api_ の関数だけ。Code.js の api_ は全部 窓口の表にある', () => {
+  const ctx = makeBaseEnv(base(), T);
+  for (const bad of ['setup', 'doGet', 'me_', 'anonymize_', 'constructor', 'toString', '__proto__', 'ss_']) assert.throws(() => ctx.lbApi_(bad, []), /呼べない関数/, bad);
+  const src = fs.readFileSync(new URL('../gas/Code.js', import.meta.url), 'utf8');
+  const all = [...src.matchAll(/^function (api_[A-Za-z]+)\(/gm)].map((m) => m[1]);
+  const table = src.match(/var API = \{([^}]*)\}/)[1];
+  assert.ok(all.length >= 20);
+  for (const f of all) assert.ok(new RegExp('\\b' + f + ': ' + f + '\\b').test(table), '窓口の表に無い: ' + f);
+  assert.equal(ctx.lbApi_('api_init', []).role, 'teacher');
+});
+test('学習BASE: 枠だけを返し、プログラムは jsDelivr から版で固定して読む。版ずれの検知はサーバーの版と同じ。呼び出しは学習BASE の窓口へ', () => {
+  const ctx = makeBaseEnv(base(), K1);
+  const html = ctx.doGet().html;
+  const srcs = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+  const index = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const want = [...index.matchAll(/<script src="([^"]+)"/g)].map((m) => 'https://cdn.jsdelivr.net/gh/sankisuguya-create/kanzi@0123456789abcdef0123456789abcdef01234567/' + m[1]);
+  assert.deepEqual(srcs, want, 'index.html と同じ順で、全部が版つきの jsDelivr');
+  assert.ok(!/@main|@latest/.test(html));
+  assert.match(html, /<meta name="kanzi-ver" content="abc1234">/);
+  assert.ok(html.indexOf('window.LB_GAS=') > 0 && html.indexOf('window.LB_GAS=') < html.indexOf('src/data.js'), '差し替えはプログラムより前');
+  assert.match(html, /lbCall\("app:kanzi",fn,args\)/);
+  assert.ok(html.length < 100000, '枠は小さい（' + html.length + '字）');
+  assert.ok(!html.includes('fonts/mori-jp'), '同梱フォントは参照しない');
+  // 画面の側：LB_GAS があればそれを通す
+  const calls = [];
+  const win = { LB_GAS: (fn, args) => { calls.push([fn, args]); return Promise.resolve({ role: 'unknown' }); }, google: { script: { run: {} } }, localStorage: { getItem: () => null, setItem() {} }, document: {}, navigator: {} };
+  win.window = win; vm.createContext(win);
+  for (const f of ['scheduler.js', 'genko.js', 'platform.js']) vm.runInContext(fs.readFileSync(new URL('../src/' + f, import.meta.url), 'utf8'), win);
+  win.Platform.init();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), ['api_init', []]);
+});
+
+// ---- 段階2b：名簿と担当を学習BASE に切り替える（所有者だけ・照らし合わせて食い違いが0件の時だけ）
+function withBase(ctx, roster, { owner = true, props } = {}) {
+  ctx.Base = {
+    roster: () => roster,
+    classKey: (g, c) => Number(g) + '-' + String(c).replace(/組$/, ''),
+    me: () => ({ role: /@edu\./.test(ctx.Session.getActiveUser().getEmail()) ? 'teacher' : 'child' }),
+    canSeeClass: (mail) => /@edu\.nishi\.or\.jp$/.test(mail)
+  };
+  const store = props || { KANZI_SS_ID: 'KANZI' };
+  ctx.PropertiesService = { getScriptProperties: () => ({ getProperty: (k) => (k in store ? store[k] : null), setProperty: (k, v) => { store[k] = v; }, deleteProperty: (k) => { delete store[k]; } }) };
+  ctx.Session.getEffectiveUser = () => ({ getEmail: () => (owner ? ctx.Session.getActiveUser().getEmail() : 'owner@edu.nishi.or.jp') });
+  ctx.store = store;
+  return ctx;
+}
+const BASE_ROSTER = [
+  { mail: K1, grade: 3, cls: '1', no: 1, name: 'あおい' }, { mail: K2, grade: 3, cls: '1組', no: 2, name: 'はると' }, { mail: K3, grade: 3, cls: '2', no: 1, name: 'ゆい' },
+  { mail: '', lid: 'Lx', grade: 3, cls: '1', no: 30, name: '転入' }];
+test('名簿の切り替え：照らし合わせ（漢字の森だけにいる児童・学級が違う児童・学級の無い設定）。0件なら切り替えられ、児童・先生は学習BASE の名簿と担当で動く', () => {
+  const sheets = base(); sheets.設定.push(['grades:3-1', '3'], ['grades:4-9', '4']);
+  const ctx = withBase(makeBaseEnv(sheets, T), BASE_ROSTER);
+  let c = ctx.api_lbRosterCheck();
+  assert.equal(c.using, 'sheet'); assert.equal(c.ok, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.orphanSettings)), ['grades:4-9']);
+  assert.equal(c.kanziOnly.length, 0); assert.equal(c.classMoved.length, 0, '「1組」は 1 と同じ学級');
+  assert.throws(() => ctx.api_lbRosterUse(true), /食い違い/);
+  assert.equal(ctx.store.KANZI_ROSTER, undefined, '食い違いがあれば切り替えない');
+  sheets.設定.pop();
+  const ctx2 = withBase(makeBaseEnv(sheets, T), BASE_ROSTER);
+  c = ctx2.api_lbRosterUse(true);
+  assert.equal(c.using, 'base'); assert.equal(ctx2.store.KANZI_ROSTER, 'base');
+  // 先生：担当のシートに無い 3-2 も見られる（教師ドメインは全学級。作文も同じ入口）
+  const tv = withBase(makeBaseEnv(sheets, T), BASE_ROSTER, { props: ctx2.store });
+  assert.deepEqual(JSON.parse(JSON.stringify(tv.lbApi_('api_init', []).classes)), ['3-1', '3-2']);
+  assert.ok(tv.lbApi_('api_teacherView', ['3-2']));
+  // 児童：学習BASE の名簿の学級で開く。メールの無い転入生は扱わない
+  const kv = withBase(makeBaseEnv(sheets, K3), BASE_ROSTER, { props: ctx2.store });
+  assert.equal(kv.lbApi_('api_init', []).klass, '3-2');
+  // 年度の保存：名簿YYYY は学習BASE の名簿から
+  tv.api_archiveSave(2026);
+  const kept = tv.book.名簿2026;
+  assert.equal(kept.length, 1 + 3); assert.ok(kept.some((r) => r[0] === K3 && r[2] === '2'));
+  // 元に戻せる
+  const back = withBase(makeBaseEnv(sheets, T), BASE_ROSTER, { props: ctx2.store });
+  assert.equal(back.api_lbRosterUse(false).using, 'sheet');
+});
+test('名簿の切り替え：所有者だけ。単体の GAS では使えない', () => {
+  const ctx = withBase(makeBaseEnv(base(), T), BASE_ROSTER, { owner: false });
+  assert.throws(() => ctx.api_lbRosterCheck(), /所有者/);
+  assert.throws(() => ctx.api_lbRosterUse(true), /所有者/);
+  assert.throws(() => makeEnv(base(), T).api_lbRosterCheck(), /所有者/);
+  const kanziOnly = withBase(makeBaseEnv(base(), T), BASE_ROSTER.slice(1));
+  const c = kanziOnly.api_lbRosterCheck();
+  assert.equal(c.kanziOnly.length, 1); assert.equal(c.kanziOnly[0].klass, '3-1');
+});
+
 test('説明文を書く: 段落を入れかえて保存すると、先生のコメントの付け先も移る', () => {
   const sheets = base();
   let env = makeEnv(sheets, K1); env.api_sakuSave(sakuWork('wmove1', '題\n名\nあ\nい')); sheets.作文 = env.book['作文'];
