@@ -1276,6 +1276,39 @@
     draw();
   }
 
+
+  // ---- 印刷（B4 横・400字詰めの原稿用紙。利用者の指定）。1枚＝20行×20マス。字は画面と同じ組み方（Genko.layout）
+  // 寸法は mm。B4 横＝364×257。マスは11mm角（紙に収まり、字が大きく読める大きさ）。原稿用紙1枚分ずつ紙を分ける
+  var PR = { W: 364, H: 257, C: 11 };
+  function gkPrintPages(text) {
+    var L = Genko.layout(text), nP = Genko.pages(L.cols), C = PR.C, gw = Genko.COLS * C, gh = Genko.ROWS * C;
+    var x0 = (PR.W - gw) / 2, y0 = (PR.H - gh) / 2, out = '';
+    for (var p = 0; p < nP; p++) {
+      var g = '<svg class="gk-pgrid" width="' + PR.W + 'mm" height="' + PR.H + 'mm" viewBox="0 0 ' + PR.W + ' ' + PR.H + '"><rect x="' + x0 + '" y="' + y0 + '" width="' + gw + '" height="' + gh + '" fill="none" stroke-width="0.5"/>';
+      for (var k = 1; k < Genko.COLS; k++) g += '<line x1="' + (x0 + k * C) + '" y1="' + y0 + '" x2="' + (x0 + k * C) + '" y2="' + (y0 + gh) + '" stroke-width="0.25"/>';
+      for (var r = 1; r < Genko.ROWS; r++) g += '<line x1="' + x0 + '" y1="' + (y0 + r * C) + '" x2="' + (x0 + gw) + '" y2="' + (y0 + r * C) + '" stroke-width="0.12"/>';
+      g += '</svg>';
+      var chs = L.cells.filter(function (c) { return Math.floor(c.col / Genko.COLS) === p; }).map(function (c) {
+        var x = x0 + gw - (c.col % Genko.COLS + 1) * C, y = y0 + c.row * C;
+        return '<div class="gk-pch' + (c.small ? ' small' : '') + (c.hang ? ' hang' : '') + '" style="left:' + x + 'mm;top:' + y + 'mm">' + esc(c.c) + '</div>';
+      }).join('');
+      out += '<section class="gk-pp">' + g + chs + (nP > 1 ? '<div class="gk-pno">' + (p + 1) + ' / ' + nP + '</div>' : '') + '</section>';
+    }
+    return out;
+  }
+  // works: 印刷する本文の配列。紙は作品ごとに分ける。印刷が終わったら（または取りやめたら）消す
+  function gkPrint(texts) {
+    var old = document.getElementById('gk-print'); if (old) old.remove();
+    var box = document.createElement('div'); box.id = 'gk-print'; box.lang = 'ja';
+    box.innerHTML = texts.map(gkPrintPages).join('');
+    document.body.appendChild(box); document.body.classList.add('gk-printing');
+    var done = function () { document.body.classList.remove('gk-printing'); box.remove(); window.removeEventListener('afterprint', done); };
+    window.addEventListener('afterprint', done);
+    var go = function () { try { window.print(); } catch (e) { done(); alert('印刷を ひらけませんでした: ' + (e && e.message || e)); } };
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(go); else go();
+    return box;
+  }
+
   // 先生: 学級の作文を児童ごとにまとめて見る（上の 1・2・3 で その児童の作品を切りかえる。文字数の多い順）。
   // 段落ごとのコメントと、字を えらんで出す修正案（児童が「なおす」で採用する: W2）。読み合いのオン／オフ
   function sakubunTeacher(klass) {
@@ -1297,6 +1330,8 @@
         '<p class="gk-share"><b>読み合う</b> <button class="gk-btn" id="gk-share" aria-pressed="' + data.share + '">' + (data.share ? '✓ ひらいている' : '✕ とじている') + '</button></p>' +
         '<p class="hint">ひらいている間、この学級の児童に「友だちの文」が出ます（各児童が「見せる」にした1作品の本文だけ。コメント・字数は見せません）。児童の画面には、メニューから入り直した時に とどきます。</p>' +
         '<p class="hint">' + kids.filter(function (k) { return k.works.length && !k.trial; }).length + '人 / ' + kids.filter(function (k) { return !k.trial; }).length + '人が書いています</p>' +
+        '<p><button class="gk-btn" id="gk-printall"' + (kids.some(function (k) { return k.works.length && !k.trial; }) ? '' : ' disabled') + '>🖨 全員分を印刷（B4）</button></p>' +
+        '<p class="hint">書いた児童の「1」（いちばん長い作品）を、番号順に 1人ずつ別の紙に印刷します。印刷の画面で 用紙サイズが B4 になっているかを確かめてください。</p>' +
         '<div class="gk-kids">' + kids.slice().sort(function (a, b) { return (b.trial ? 1 : 0) - (a.trial ? 1 : 0) || (a.works.length ? 1 : 0) - (b.works.length ? 1 : 0); }).map(function (k) {
           var nm = esc((k.no ? k.no + ' ' : '') + k.name);
           if (!k.works.length) return '<div class="gk-kid none"><b>' + nm + '</b><span class="meta">まだ書いていない</span></div>';
@@ -1305,6 +1340,9 @@
             '<span class="meta">' + k.works.length + '作品・いちばん長い作品 ' + Genko.count(top.text) + '字・' + esc(dateShort(Math.max.apply(null, k.works.map(function (w) { return w.updated; })))) + '</span>' +
             (fl ? '<span class="gk-warn">▲ 見なおしの指摘 ' + fl + '件（いちばん長い作品）</span>' : '') + (nf ? '<span class="meta">✏️ 修正案 ' + nf + '件（児童がまだ見ていない）</span>' : '') + '</button>';
         }).join('') + '</div>';
+      on('#gk-printall', function () {
+        gkPrint(kids.filter(function (k) { return k.works.length && !k.trial; }).sort(function (a, b) { return (Number(a.no) || 999) - (Number(b.no) || 999); }).map(function (k) { return sorted(k)[0].text; }));
+      });
       on('#gk-share', function () { var v = !data.share; Platform.sakuShare(klass, v).then(function (r) { data.share = r; side(); }); });
       app.querySelectorAll('.gk-kid[data-k]').forEach(function (b) { b.addEventListener('click', function () { selectKid(kids.filter(function (k) { return keyOf(k) === b.dataset.k; })[0]); side(); main(); }); });
     }
@@ -1312,7 +1350,8 @@
       var l = sorted(k);
       $('#gk-wtabs').innerHTML = l.map(function (w, i) {
         return '<button role="tab" class="gk-wtab" data-id="' + esc(w.id) + '" aria-selected="' + (w.id === wid) + '"><b>' + (i + 1) + '</b><span>' + esc(Genko.title(w.text)) + '</span><span class="meta">' + Genko.count(w.text) + '字' + (w.show ? '・👀見せる' : '') + '</span></button>';
-      }).join('');
+      }).join('') + '<button class="gk-btn gk-printone" id="gk-printone">🖨 この作品を印刷（B4）</button>';
+      on('#gk-printone', function () { var w = curWork(); if (w) gkPrint([w.text]); });
       app.querySelectorAll('.gk-wtab').forEach(function (b) { b.addEventListener('click', function () { wid = b.dataset.id; editLine = null; pick = null; main(); }); });
     }
     function main() {

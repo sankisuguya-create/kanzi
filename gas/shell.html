@@ -819,6 +819,22 @@ textarea.gk-ime { position: absolute; opacity: 0; width: 2px; height: 2px; paddi
 .gk-wtab .meta { font-size: 13px; color: var(--ink-sub); }
 .gk-flist .gk-two { display: inline-flex; gap: 6px; margin-left: 6px; }
 .gk-cedit input { display: block; width: 100%; font-size: 20px; min-height: 48px; margin-top: 4px; }
+/* ---- 説明文を書く: 印刷（B4 横・400字詰め）。画面には出さず、印刷の時だけ この部分だけを出す */
+#gk-print { display: none; }
+.gk-printone { margin-left: auto; min-height: 48px; font-size: 16px; }
+@page { size: 364mm 257mm; margin: 0; } /* JIS B4 横。キーワードの B4 は ISO B4（250×353mm）になり、学校の B4（JIS）と大きさが違う */
+@media print {
+  body.gk-printing > *:not(#gk-print) { display: none !important; }
+  body.gk-printing { background: #fff; }
+  body.gk-printing #gk-print { display: block; }
+  .gk-pp { position: relative; width: 364mm; height: 257mm; overflow: hidden; break-after: page; page-break-after: always; }
+  .gk-pp:last-child { break-after: auto; page-break-after: auto; }
+  .gk-pgrid { position: absolute; inset: 0; stroke: #B87A5A; }
+  .gk-pch { position: absolute; width: 11mm; height: 11mm; display: flex; align-items: center; justify-content: center; writing-mode: vertical-rl; font-family: var(--font-kanji); font-size: 8mm; line-height: 1; color: #000; }
+  .gk-pch.small { writing-mode: horizontal-tb; transform: translate(22%, -24%); }
+  .gk-pch.hang { writing-mode: horizontal-tb; transform: translate(34%, 8%) scale(.8); }
+  .gk-pno { position: absolute; right: 12mm; bottom: 8mm; font-size: 4mm; color: #555; }
+}
 </style>
 <meta name="kanzi-ver" content="__KANZI_VER__">
 </head>
