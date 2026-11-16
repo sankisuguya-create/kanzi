@@ -177,6 +177,27 @@ await page.waitForSelector('.gk-ch');
 check((await page.locator('.gk-side .gk-work').count()) === 2, '児童: 友だちの文（デモ2つ）を読める');
 await shot('sakubun-friends');
 
+// 印刷（B4 横・400字詰め）: この作品・全員分。紙の大きさは PDF の頁の大きさで確かめる（B4 横＝1031.8×728.5pt）
+await tp.evaluate(() => { window.__printed = 0; window.print = () => { window.__printed++; }; });
+await tp.locator('#gk-printone').click();
+await tp.waitForFunction(() => window.__printed === 1);
+const one = await tp.evaluate(() => ({ pages: document.querySelectorAll('#gk-print .gk-pp').length, chs: document.querySelectorAll('#gk-print .gk-pch').length }));
+check(one.pages === 1 && one.chs > 20, '印刷: この作品を 原稿用紙1枚に ' + JSON.stringify(one));
+await tp.emulateMedia({ media: 'print' });
+const pdf = await tp.pdf({ preferCSSPageSize: true, printBackground: false });
+const boxes = [...pdf.toString('latin1').matchAll(/\/MediaBox\s*\[\s*0 0 ([\d.]+) ([\d.]+)\s*\]/g)].map((m) => [Math.round(+m[1]), Math.round(+m[2])]);
+check(boxes.length === 1 && boxes[0][0] === 1032 && boxes[0][1] === 729, '印刷: 紙は B4 横で1枚 ' + JSON.stringify(boxes));
+fs.writeFileSync(path.join(SHOTS, 'sakubun-print.pdf'), pdf);
+await tp.setViewportSize({ width: 1376, height: 972 }); // 364mm×257mm を 96dpi で
+await tp.screenshot({ path: path.join(SHOTS, 'sakubun-print.png') });
+await tp.emulateMedia({ media: 'screen' }); await tp.setViewportSize({ width: 1366, height: 768 });
+await tp.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+check(await tp.locator('#gk-print').count() === 0, '印刷: 終わったら 印刷用の部分を消す');
+await tp.locator('#gk-printall').click();
+await tp.waitForFunction(() => window.__printed === 2);
+const all = await tp.evaluate(() => document.querySelectorAll('#gk-print .gk-pp').length);
+check(all === 3, '印刷: 全員分＝書いた児童3人を 1人1枚 ' + all);
+await tp.evaluate(() => window.dispatchEvent(new Event('afterprint')));
 // 消す: 先生が作品を消すと 先生画面と児童の画面の両方から消える
 await tp.reload(); await openSaku(tp); await tp.locator('.gk-kid[data-k]', { hasText: 'デモの児童' }).click();
 await tp.locator('#gk-tc .gk-del summary').click();
