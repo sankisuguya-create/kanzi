@@ -102,6 +102,7 @@
       if (t) o.comments[line] = { t: String(t).slice(0, 200), read: !!(c && c.read), at: Number(c && c.at) || 0 };
     }
     o.fixes = normFixes(w.fixes);
+    o.stamp = Number(w.stamp) || 0; // 先生の「合格！」のはんこ（押した日時。0 なら押していない）
     return o;
   }
   // 段落の順番を入れかえる（line は改行で数えた番号。2行目＝題名・名前の後から）。dir: -1＝前へ（右へ）、+1＝後ろへ（左へ）

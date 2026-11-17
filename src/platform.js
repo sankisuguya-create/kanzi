@@ -255,7 +255,7 @@
       var by = {};
       if (r.deleted && r.deleted.length) { var lc = sakuLocal(); r.deleted.forEach(function (id) { delete lc[id]; delete local[id]; }); store.set(sakuKey(), lc); }
       (r.works || []).forEach(function (w) { by[w.id] = Genko.normWork(w); });
-      Object.keys(local).forEach(function (k) { var l = local[k]; if (l.dirty && !l.del && (!by[k] || l.updated >= by[k].updated)) { var o = Genko.normWork(l); o.dirty = true; if (by[k]) { o.comments = by[k].comments; o.fixes = by[k].fixes; } by[k] = o; } });
+      Object.keys(local).forEach(function (k) { var l = local[k]; if (l.dirty && !l.del && (!by[k] || l.updated >= by[k].updated)) { var o = Genko.normWork(l); o.dirty = true; if (by[k]) { o.comments = by[k].comments; o.fixes = by[k].fixes; o.stamp = by[k].stamp; } by[k] = o; } });
       var works = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.updated - a.updated; });
       return { share: !!r.share, works: works };
     }, function () { // 通信できない時は端末の控えだけで書ける
@@ -310,7 +310,7 @@
     var s = demoSettings(), mine = sakuDemoAll(), kids = demoStudents().slice(0, 8);
     var works = Object.keys(mine).map(function (k) { return mine[k]; });
     var students = kids.map(function (k, i) {
-      var list = i === 0 ? works : i < 3 && (s.sakuPeerDel || []).indexOf('peer' + (i - 1)) < 0 ? [Genko.normWork({ id: 'peer' + (i - 1), text: SAKU_PEERS[i - 1], show: true, updated: Date.now() - i * 600000, comments: (s.sakuPeerC || {})['peer' + (i - 1)] || {}, fixes: (s.sakuPeerF || {})['peer' + (i - 1)] || [] })] : [];
+      var list = i === 0 ? works : i < 3 && (s.sakuPeerDel || []).indexOf('peer' + (i - 1)) < 0 ? [Genko.normWork({ id: 'peer' + (i - 1), text: SAKU_PEERS[i - 1], show: true, updated: Date.now() - i * 600000, comments: (s.sakuPeerC || {})['peer' + (i - 1)] || {}, fixes: (s.sakuPeerF || {})['peer' + (i - 1)] || [], stamp: (s.sakuPeerS || {})['peer' + (i - 1)] || 0 })] : [];
       return { no: k.no, name: i === 0 ? 'デモの児童（この端末）' : k.name, works: list };
     });
     return Promise.resolve({ share: !!(s.sakuShare || {})[klass], students: students });
@@ -368,6 +368,15 @@
     var s = demoSettings(); s.sakuPeerDel = (s.sakuPeerDel || []).concat([id]); saveDemo(s);
     return Promise.resolve(true);
   }
+  // 先生: 「合格！」のはんこ（デモ・おためしは この端末の控えに書く）。戻り値は押した日時（取り消したら 0）
+  function sakuStamp(klass, id, on, trialEmail) {
+    if (isGas && !trialEmail) return gas('api_sakuStamp', klass, id, !!on);
+    var v = on ? Date.now() : 0, put = function (key) { var a = store.get(key) || {}; if (a[id]) { a[id].stamp = v; store.set(key, a); return true; } return false; };
+    if (trialEmail) { put('kanzi.trial.' + trialEmail + '.saku'); return Promise.resolve(v); }
+    if (!put('kanzi.saku.demoClass')) { var s = demoSettings(); s.sakuPeerS = s.sakuPeerS || {}; s.sakuPeerS[id] = v; saveDemo(s); }
+    put('kanzi.saku.demo');
+    return Promise.resolve(v);
+  }
   function sakuShare(klass, on) {
     if (isGas) return gas('api_sakuShare', klass, !!on);
     var s = demoSettings(); s.sakuShare = s.sakuShare || {}; s.sakuShare[klass] = !!on; saveDemo(s); return Promise.resolve(!!on);
@@ -376,5 +385,5 @@
   root.Platform = { isGas: !!isGas, startTrial: startTrial, endTrial: endTrial, resetTrial: resetTrial, init: init, save: save, flush: flush,
     teacherView: teacherView, setTests: setTests, setWriteLevel: setWriteLevel, setGates: setGates, gates: gates, bunkai: bunkai, setBunkai: setBunkai, setPointer: setPointer, setGrades: setGrades, setOrder: setOrder,
     archiveYears: archiveYears, archiveView: archiveView, archiveSave: archiveSave, archiveAnonymize: archiveAnonymize, store: store,
-    sakuMine: sakuMine, sakuDraft: sakuDraft, sakuSave: sakuSave, sakuDelete: sakuDelete, sakuRead: sakuRead, sakuFriends: sakuFriends, sakuTeacher: sakuTeacher, sakuComment: sakuComment, sakuShare: sakuShare, sakuTrialWorks: sakuTrialWorks, sakuFix: sakuFix, sakuFixDel: sakuFixDel, sakuTeacherDelete: sakuTeacherDelete };
+    sakuMine: sakuMine, sakuDraft: sakuDraft, sakuSave: sakuSave, sakuDelete: sakuDelete, sakuRead: sakuRead, sakuFriends: sakuFriends, sakuTeacher: sakuTeacher, sakuComment: sakuComment, sakuShare: sakuShare, sakuTrialWorks: sakuTrialWorks, sakuFix: sakuFix, sakuFixDel: sakuFixDel, sakuTeacherDelete: sakuTeacherDelete, sakuStamp: sakuStamp };
 })(this);

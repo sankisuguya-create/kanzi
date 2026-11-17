@@ -831,3 +831,12 @@ textarea.gk-ime { position: absolute; opacity: 0; width: 2px; height: 2px; paddi
   .gk-pch.hang { writing-mode: horizontal-tb; transform: translate(34%, 8%) scale(.8); }
   .gk-pno { position: absolute; right: 12mm; bottom: 8mm; font-size: 4mm; color: #555; }
 }
+/* ---- 説明文を書く: 先生の「合格！」のはんこ（朱の二重丸。色だけでなく「合格！」の字で伝える） */
+.gk-stamp { position: absolute; z-index: 3; display: flex; align-items: center; justify-content: center; border: 4px double #C0330A; border-radius: 50%; color: #C0330A; background: rgba(255, 255, 255, .55); transform: rotate(-14deg); pointer-events: none; font-weight: 900; letter-spacing: .02em; font-family: var(--font-kanji); }
+.gk-stamp span { white-space: nowrap; }
+.gk-gokaku { margin: 0; padding: 8px 12px; border: 3px double #C0330A; border-radius: 12px; color: #C0330A; font-weight: 900; font-size: 22px; background: var(--card); }
+.gk-gokaku .meta { display: block; font-size: 13px; font-weight: 400; color: var(--ink-sub); }
+.gk-badge.g { color: #C0330A; }
+.gk-stampbtn { margin-left: auto; min-height: 48px; font-size: 16px; }
+.gk-stampbtn + .gk-printone { margin-left: 0; }
+.gk-stampbtn[aria-pressed="true"] { border-color: #C0330A; color: #C0330A; }

@@ -765,3 +765,31 @@ test('説明文を書く: 先生は担当学級の作品を消せる（ほかの
   assert.equal(JSON.parse(makeEnv(sheets, K1).api_sakuMine()).works.length, 0);
   assert.throws(() => makeEnv(sheets, T).api_sakuTeacherDelete('3-1', 'wtdel1'), /見つかりません/);
 });
+
+test('説明文を書く: 先生が「合格！」のはんこを押す・取り消す。児童に届き、児童の保存では消えない', () => {
+  const sheets = base();
+  let env = makeEnv(sheets, K1); env.api_sakuSave(sakuWork('wstp01', '題\n名\n　本文')); sheets.作文 = env.book['作文'];
+  assert.throws(() => makeEnv(sheets, T).api_sakuStamp('3-2', 'wstp01', true), /担当/);
+  assert.throws(() => makeEnv(sheets, K1).api_sakuStamp('3-1', 'wstp01', true), /先生/);
+  const t = makeEnv(sheets, T);
+  const at = t.api_sakuStamp('3-1', 'wstp01', true);
+  assert.ok(at > 0);
+  sheets.作文 = t.book['作文'];
+  assert.ok(JSON.parse(makeEnv(sheets, T).api_sakuTeacher('3-1')).students.find((k) => k.name === 'あおい').works[0].stamp > 0, '先生画面に出る');
+  env = makeEnv(sheets, K1);
+  assert.ok(JSON.parse(env.api_sakuMine()).works[0].stamp > 0, '児童に届く');
+  const back = JSON.parse(env.api_sakuSave(JSON.stringify({ id: 'wstp01', text: '題\n名\n　本文を直した', stamp: 0 })));
+  assert.ok(back.stamp > 0, '児童の保存は はんこを消さない（送られた値は使わない）');
+  sheets.作文 = env.book['作文'];
+  const t2 = makeEnv(sheets, T); assert.equal(t2.api_sakuStamp('3-1', 'wstp01', false), 0); sheets.作文 = t2.book['作文'];
+  assert.equal(JSON.parse(makeEnv(sheets, K1).api_sakuMine()).works[0].stamp, 0, '取り消せる');
+});
+test('説明文を書く: 前の版のシートには なおし・はんこ の見出しを足し、消すと はんこも消える', () => {
+  const sheets = base();
+  sheets.作文 = [['作品', 'メール', '学級', '本文', '型', '見せる', 'コメント', '更新'], ['wold02', K1, "'3-1", '題\n名\n　米', 'tpl', false, '{}', 1]];
+  const t = makeEnv(sheets, T);
+  t.api_sakuStamp('3-1', 'wold02', true);
+  assert.deepEqual(t.book['作文'][0].slice(8), ['なおし', 'はんこ']);
+  t.api_sakuTeacherDelete('3-1', 'wold02');
+  assert.equal(t.book['作文'][1][9], '');
+});

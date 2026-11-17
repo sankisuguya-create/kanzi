@@ -85,7 +85,7 @@ function api_lbRosterUse(on) {
 
 // 画面から呼べる関数（ここに無いものは呼べない）。api_ を足したらここにも足す（tests/gas.test.mjs が照らし合わせる）
 function lbApi_(name, args) {
-  var API = { api_archiveAnonymize: api_archiveAnonymize, api_archiveSave: api_archiveSave, api_archiveView: api_archiveView, api_archiveYears: api_archiveYears, api_bunkai: api_bunkai, api_gates: api_gates, api_init: api_init, api_lbRosterCheck: api_lbRosterCheck, api_lbRosterUse: api_lbRosterUse, api_sakuComment: api_sakuComment, api_sakuDelete: api_sakuDelete, api_sakuFix: api_sakuFix, api_sakuFixDel: api_sakuFixDel, api_sakuFriends: api_sakuFriends, api_sakuMine: api_sakuMine, api_sakuRead: api_sakuRead, api_sakuSave: api_sakuSave, api_sakuShare: api_sakuShare, api_sakuTeacher: api_sakuTeacher, api_sakuTeacherDelete: api_sakuTeacherDelete, api_save: api_save, api_setBunkai: api_setBunkai, api_setGates: api_setGates, api_setGrades: api_setGrades, api_setOrder: api_setOrder, api_setPointer: api_setPointer, api_setTests: api_setTests, api_setWriteLevel: api_setWriteLevel, api_teacherView: api_teacherView };
+  var API = { api_archiveAnonymize: api_archiveAnonymize, api_archiveSave: api_archiveSave, api_archiveView: api_archiveView, api_archiveYears: api_archiveYears, api_bunkai: api_bunkai, api_gates: api_gates, api_init: api_init, api_lbRosterCheck: api_lbRosterCheck, api_lbRosterUse: api_lbRosterUse, api_sakuComment: api_sakuComment, api_sakuDelete: api_sakuDelete, api_sakuFix: api_sakuFix, api_sakuFixDel: api_sakuFixDel, api_sakuFriends: api_sakuFriends, api_sakuMine: api_sakuMine, api_sakuRead: api_sakuRead, api_sakuSave: api_sakuSave, api_sakuShare: api_sakuShare, api_sakuStamp: api_sakuStamp, api_sakuTeacher: api_sakuTeacher, api_sakuTeacherDelete: api_sakuTeacherDelete, api_save: api_save, api_setBunkai: api_setBunkai, api_setGates: api_setGates, api_setGrades: api_setGrades, api_setOrder: api_setOrder, api_setPointer: api_setPointer, api_setTests: api_setTests, api_setWriteLevel: api_setWriteLevel, api_teacherView: api_teacherView };
   if (!Object.prototype.hasOwnProperty.call(API, String(name))) throw new Error('呼べない関数です: ' + name);
   return API[name].apply(null, Array.isArray(args) ? args : []);
 }
@@ -727,13 +727,15 @@ function api_bunkai() {
 // 児童が書く列（学級・本文・型・見せる・更新）と 先生が書く列（コメント）を分け、保存は自分の列だけを書く
 // （同じ行を児童と先生が同時に書いても、相手の列を古い値で上書きしない: 要件 W5）。行は消さない（型を del にする）。
 // 児童が読めるのは自分の作品と、先生が「読み合う」を開いている間の 同じ学級の「見せる」作品の本文だけ（§1 の例外・§28）。
-var SAKU_HEAD_ = ['作品', 'メール', '学級', '本文', '型', '見せる', 'コメント', '更新', 'なおし'];
-var SAKU_COL_ = { id: 1, email: 2, klass: 3, text: 4, mode: 5, show: 6, comments: 7, updated: 8, fixes: 9 };
+var SAKU_HEAD_ = ['作品', 'メール', '学級', '本文', '型', '見せる', 'コメント', '更新', 'なおし', 'はんこ'];
+var SAKU_COL_ = { id: 1, email: 2, klass: 3, text: 4, mode: 5, show: 6, comments: 7, updated: 8, fixes: 9, stamp: 10 };
 // なおし（先生の修正案）の列は後から足した。前の版で作ったシートには見出しを足す
 function sakuSheet_() {
   var sh = sheet_('作文', SAKU_HEAD_);
   return memo_('sakuHead', function () {
-    if (sh.getLastColumn() < SAKU_HEAD_.length) sh.getRange(1, SAKU_COL_.fixes).setValue('なおし');
+    // なおし・はんこ の列は後から足した。前の版で作ったシートには、足りない見出しを足す
+    var w0 = sh.getLastColumn();
+    if (w0 < SAKU_HEAD_.length) sh.getRange(1, w0 + 1, 1, SAKU_HEAD_.length - w0).setValues([SAKU_HEAD_.slice(w0)]);
     return sh;
   });
 }
@@ -746,7 +748,7 @@ function sakuAll_() {
       if (!r[0]) return;
       if (String(r[4]) === 'del') { out.push({ id: String(r[0]), email: String(r[1]).toLowerCase(), row: i + 2, del: true }); return; }
       var cm = {}, fx = []; try { cm = JSON.parse(r[6] || '{}') || {}; } catch (e) {} try { fx = JSON.parse(r[8] || '[]') || []; } catch (e) {}
-      var w = Genko.normWork({ id: r[0], text: r[3], mode: r[4], show: r[5] === true || String(r[5]) === '1' || String(r[5]).toUpperCase() === 'TRUE', comments: cm, fixes: fx, updated: r[7] instanceof Date ? r[7].getTime() : r[7] });
+      var w = Genko.normWork({ id: r[0], text: r[3], mode: r[4], show: r[5] === true || String(r[5]) === '1' || String(r[5]).toUpperCase() === 'TRUE', comments: cm, fixes: fx, updated: r[7] instanceof Date ? r[7].getTime() : r[7], stamp: r[9] instanceof Date ? r[9].getTime() : r[9] });
       w.row = i + 2; w.email = String(r[1]).toLowerCase();
       // 学級はいまの名簿から決める（名簿にいなければ列の値）。列の値は、スプレッドシートが "3-1" を日付（3月1日）に読みかえていることがあるので戻す
       w.klass = classOf_(w.email) || sakuKlassCell_(r[2]);
@@ -757,7 +759,7 @@ function sakuAll_() {
 }
 function sakuRows_() { return sakuAll_().filter(function (w) { return !w.del; }); }
 // 作品を消す: 行は残し（行番号がずれると同時に書いている人の行を取り違えるため）、型を del にして 本文・コメント・なおし を空にする
-function sakuErase_(row) { sakuSheet_().getRange(row, SAKU_COL_.text, 1, 6).setValues([['', 'del', false, '', new Date(), '']]); }
+function sakuErase_(row) { sakuSheet_().getRange(row, SAKU_COL_.text, 1, 7).setValues([['', 'del', false, '', new Date(), '', '']]); }
 // 学級の列の値を "学年-組" に戻す（日付に読みかえられた値・先頭の ' を直す）
 function sakuKlassCell_(v) {
   if (v instanceof Date) return (v.getMonth() + 1) + '-' + v.getDate();
@@ -801,7 +803,7 @@ function api_sakuSave(json) {
     if (!cur && mine.length >= 30) throw new Error('作品は 30こまでです');
     var now = new Date();
     if (cur) sh.getRange(cur.row, SAKU_COL_.klass, 1, 4).setValues([[sakuKlassText_(me.klass), w.text, w.mode, w.show]]);
-    else sh.appendRow([w.id, me.email, sakuKlassText_(me.klass), w.text, w.mode, w.show, '{}', now, '[]']);
+    else sh.appendRow([w.id, me.email, sakuKlassText_(me.klass), w.text, w.mode, w.show, '{}', now, '[]', '']);
     if (cur) sh.getRange(cur.row, SAKU_COL_.updated).setValue(now);
     if (cur && remap && Object.keys(cur.comments).length) { cur.comments = Genko.remapComments(cur.comments, remap); sh.getRange(cur.row, SAKU_COL_.comments).setValue(JSON.stringify(cur.comments)); }
     // 先生の修正案: 段落の入れかえに合わせて移し、児童が「なおす」「そのまま」で済ませたもの（fixDone）を外す（なおしの列だけを書く）
@@ -811,7 +813,7 @@ function api_sakuSave(json) {
       sh.getRange(cur.row, SAKU_COL_.fixes).setValue(JSON.stringify(cur.fixes));
     }
     if (w.show) mine.forEach(function (x) { if (x.id !== w.id && x.show) sh.getRange(x.row, SAKU_COL_.show).setValue(false); });
-    w.updated = now.getTime(); w.fixes = cur ? cur.fixes : []; if (cur) w.comments = cur.comments;
+    w.updated = now.getTime(); w.fixes = cur ? cur.fixes : []; w.stamp = cur ? cur.stamp : 0; // はんこは先生の列（児童の保存では書かない） if (cur) w.comments = cur.comments;
     return JSON.stringify(sakuOut_(w));
   } finally { lock.releaseLock(); }
 }
@@ -919,5 +921,18 @@ function api_sakuTeacherDelete(klass, id) {
     if (!cur) throw new Error('作品が見つかりません');
     sakuErase_(cur.row);
     return true;
+  } finally { lock.releaseLock(); }
+}
+// 先生: 「合格！」のはんこを押す・取り消す（はんこの列だけを書く。押した日時を入れる）
+function api_sakuStamp(klass, id, on) {
+  requireClass_(klass);
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    delete MEMO_.saku;
+    var cur = sakuRows_().filter(function (x) { return x.id === String(id) && x.klass === klass; })[0];
+    if (!cur) throw new Error('作品が見つかりません');
+    var v = on ? new Date() : '';
+    sakuSheet_().getRange(cur.row, SAKU_COL_.stamp).setValue(v);
+    return on ? v.getTime() : 0;
   } finally { lock.releaseLock(); }
 }

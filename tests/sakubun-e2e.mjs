@@ -150,6 +150,11 @@ await tp.waitForSelector('.gk-flist li');
 check(/食べ方」→「たべかた/.test(await tp.locator('.gk-flist').innerText()) && await tp.locator('.gk-fix').count() === 3 && await tp.locator('.gk-fixto').count() === 1, '先生: 修正案を出すと 赤い わくと なおした字が出る');
 await tp.screenshot({ path: path.join(SHOTS, 'sakubun-teacher.png') });
 
+// 「合格！」のはんこ: 先生が押すと用紙に重なり、児童の一覧・書く画面にも出る
+await tp.locator('#gk-stamp').click();
+await tp.waitForSelector('#gk-sheet .gk-stamp');
+check(/取り消す/.test(await tp.locator('#gk-stamp').innerText()) && /合格/.test(await tp.locator('.gk-wtab').first().innerText()), '先生: 合格！を押すと 用紙と作品の番号に出る');
+await tp.screenshot({ path: path.join(SHOTS, 'sakubun-stamp-teacher.png') });
 // 児童: コメントが届き、よんだ にできる。友だちの文が読める
 await page.locator('.gk-side .back, .bar .back').first().click().catch(() => {});
 await page.goto(BASE + '?demo');
@@ -160,9 +165,11 @@ await page.waitForSelector('.gk-work');
 check(/先生から/.test(await page.locator('.gk-work').innerText()), '児童: 一覧に 先生からのコメントの印');
 check(await page.locator('#gk-friends').count() === 1, '児童: 読み合いが開くと 友だちの文 のボタン');
 check(/なおし 1/.test(await page.locator('.gk-work').innerText()), '児童: 一覧に 先生の なおし の印');
+check(/合(格|かく)！/.test(await page.locator('.gk-work').innerText()), '児童: 一覧に 合格！の印（3年は「合かく」）');
 await page.locator('.gk-work').click();
 await page.waitForSelector('[data-fix]');
 check(await page.locator('.gk-fix').count() === 3, '児童: 修正案が 赤い わくで出る');
+check(await page.locator('#gk-sheet .gk-stamp').count() === 1 && /合(格|かく)/.test(await page.locator('.gk-gokaku').innerText()), '児童: 書く画面にも 合格！のはんこ');
 await shot('sakubun-fix');
 await page.locator('[data-fix]').click();
 const fixed = await page.evaluate(() => document.querySelector('textarea.gk-ime').value);

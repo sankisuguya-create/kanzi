@@ -1051,6 +1051,12 @@
       b.style.left = (G.x(at.col) + C / 2) + 'px'; b.style.top = '2px'; b.style.width = C + 'px';
       b.addEventListener('click', function (ev) { ev.stopPropagation(); m.onClick(); }); frag.appendChild(b);
     });
+    if (opt.stamp) { // 「合格！」のはんこ: 1枚目の左上（書き終わりの側。字の少ない所）に重ねる
+      var st = document.createElement('div'); st.className = 'gk-stamp'; st.setAttribute('role', 'img'); st.setAttribute('aria-label', '合格のはんこ');
+      st.innerHTML = '<span>合格！</span>'; var sz = Math.round(C * 3.4);
+      st.style.cssText = 'left:' + (G.W - gkPageW() + gkPad() + C * 0.3) + 'px;top:' + (gkPad() + C * 0.3) + 'px;width:' + sz + 'px;height:' + sz + 'px;font-size:' + Math.round(C * 0.95) + 'px';
+      frag.appendChild(st);
+    }
     if (opt.caret != null) {
       var cp = L.pos[opt.caret + compLen];
       if (cp) {
@@ -1101,7 +1107,7 @@
         (r.works.length ? '<h2>' + K('[書|か]いた[文|ぶん]') + '</h2><div class="gk-works">' + r.works.map(function (w) {
           var u = unread(w);
           return '<button class="gk-work" data-id="' + esc(w.id) + '"><b>' + esc(Genko.title(w.text)) + '</b><span class="meta">' + Genko.count(w.text) + K('[字|じ]・') + esc(dateShort(w.updated)) + '</span>' +
-            (w.show ? '<span class="gk-badge">' + K('👀 [友|とも]だちに [見|み]せる') + '</span>' : '') + (u ? '<span class="gk-badge c">💬 ' + K('[先|せん][生|せい]から ') + u + '</span>' : '') + (w.fixes.length ? '<span class="gk-badge c">✏️ ' + K('[先|せん][生|せい]の なおし ') + w.fixes.length + '</span>' : '') + '</button>';
+            (w.stamp ? '<span class="gk-badge g">💮 ' + K('[合|ごう][格|かく]！') + '</span>' : '') + (w.show ? '<span class="gk-badge">' + K('👀 [友|とも]だちに [見|み]せる') + '</span>' : '') + (u ? '<span class="gk-badge c">💬 ' + K('[先|せん][生|せい]から ') + u + '</span>' : '') + (w.fixes.length ? '<span class="gk-badge c">✏️ ' + K('[先|せん][生|せい]の なおし ') + w.fixes.length + '</span>' : '') + '</button>';
         }).join('') + '</div>' : '');
       on('#gk-tpl', function () { sakubunEdit(Genko.normWork({ id: Genko.newId(), text: Genko.template(myName()), mode: 'tpl', updated: Date.now() }), true); });
       on('#gk-free', function () { sakubunEdit(Genko.normWork({ id: Genko.newId(), text: Genko.blank(myName()), mode: 'free', updated: Date.now() }), true); });
@@ -1120,6 +1126,7 @@
     var order = false, selLine = null; w.remap = {}; w.fixDone = []; // fixDone＝児童が「なおす」「そのまま」で済ませた修正案（次の保存で先生の列から外す） // 段落の入れかえ: order＝入れかえ中、selLine＝えらんだ段落（改行で数えた番号）、w.remap＝まだ送っていないコメントの付け先の移し方
     app.innerHTML = '<div class="gk-app"><aside class="gk-side">' +
       '<button class="back" id="back">もどる</button>' +
+      (w.stamp ? '<p class="gk-gokaku">💮 ' + K('[先|せん][生|せい]から「[合|ごう][格|かく]！」') + '<span class="meta">' + esc(dateShort(w.stamp)) + '</span></p>' : '') +
       '<button class="gk-btn" id="gk-sample" aria-pressed="false">' + K('📄 お[手|て][本|ほん]を [見|み]る') + '</button>' +
       '<button class="gk-btn primary" id="gk-check">' + K('[見|み]なおす') + '</button>' +
       '<button class="gk-btn" id="gk-order" aria-pressed="false">' + K('↔ [段|だん][落|らく]の じゅんばんを かえる') + '</button>' +
@@ -1138,7 +1145,7 @@
     gkSize();
     function draw() {
       if (sample) { gkRender(sheet, Genko.SAMPLE, {}); return; }
-      gkRender(sheet, ta.value, { caret: focused && !order ? ta.selectionStart : null, comp: comp, flags: flags, holes: w.mode === 'tpl', marks: commentMarks(), selLine: order ? selLine : null, fixes: gkFixView({ text: ta.value, fixes: w.fixes }) });
+      gkRender(sheet, ta.value, { caret: focused && !order ? ta.selectionStart : null, comp: comp, flags: flags, holes: w.mode === 'tpl', marks: commentMarks(), selLine: order ? selLine : null, fixes: gkFixView({ text: ta.value, fixes: w.fixes }), stamp: w.stamp });
     }
     function commentMarks() {
       return Object.keys(w.comments).map(function (k) { return { line: +k, label: '💬', cls: w.comments[k].read ? 'read' : '', title: w.comments[k].t, onClick: function () { var e = document.getElementById('gk-c-' + k); if (e) e.focus(); } }; });
@@ -1338,7 +1345,7 @@
           var top = sorted(k)[0], fl = Genko.check(top.text).length, nf = k.works.reduce(function (n, w) { return n + w.fixes.length; }, 0);
           return '<button class="gk-kid' + (k.trial ? ' trial' : '') + '" data-k="' + esc(keyOf(k)) + '" aria-pressed="' + (keyOf(k) === kidKey) + '"><b>' + nm + '</b>' +
             '<span class="meta">' + k.works.length + '作品・いちばん長い作品 ' + Genko.count(top.text) + '字・' + esc(dateShort(Math.max.apply(null, k.works.map(function (w) { return w.updated; })))) + '</span>' +
-            (fl ? '<span class="gk-warn">▲ 見なおしの指摘 ' + fl + '件（いちばん長い作品）</span>' : '') + (nf ? '<span class="meta">✏️ 修正案 ' + nf + '件（児童がまだ見ていない）</span>' : '') + '</button>';
+            (fl ? '<span class="gk-warn">▲ 見なおしの指摘 ' + fl + '件（いちばん長い作品）</span>' : '') + (nf ? '<span class="meta">✏️ 修正案 ' + nf + '件（児童がまだ見ていない）</span>' : '') + (k.works.some(function (w) { return w.stamp; }) ? '<span class="gk-badge g">💮 合格 ' + k.works.filter(function (w) { return w.stamp; }).length + '作品</span>' : '') + '</button>';
         }).join('') + '</div>';
       on('#gk-printall', function () {
         gkPrint(kids.filter(function (k) { return k.works.length && !k.trial; }).sort(function (a, b) { return (Number(a.no) || 999) - (Number(b.no) || 999); }).map(function (k) { return sorted(k)[0].text; }));
@@ -1349,8 +1356,14 @@
     function tabs(k) {
       var l = sorted(k);
       $('#gk-wtabs').innerHTML = l.map(function (w, i) {
-        return '<button role="tab" class="gk-wtab" data-id="' + esc(w.id) + '" aria-selected="' + (w.id === wid) + '"><b>' + (i + 1) + '</b><span>' + esc(Genko.title(w.text)) + '</span><span class="meta">' + Genko.count(w.text) + '字' + (w.show ? '・👀見せる' : '') + '</span></button>';
-      }).join('') + '<button class="gk-btn gk-printone" id="gk-printone">🖨 この作品を印刷（B4）</button>';
+        return '<button role="tab" class="gk-wtab" data-id="' + esc(w.id) + '" aria-selected="' + (w.id === wid) + '"><b>' + (i + 1) + '</b><span>' + esc(Genko.title(w.text)) + '</span><span class="meta">' + Genko.count(w.text) + '字' + (w.show ? '・👀見せる' : '') + (w.stamp ? '・💮合格' : '') + '</span></button>';
+      }).join('') + (function () { var w = curWork(); return w ? '<button class="gk-btn gk-stampbtn" id="gk-stamp" aria-pressed="' + !!w.stamp + '">' + (w.stamp ? '💮 合格（押した: ' + esc(dateShort(w.stamp)) + '）を取り消す' : '💮「合格！」を押す') + '</button>' : ''; })() +
+        '<button class="gk-btn gk-printone" id="gk-printone">🖨 この作品を印刷（B4）</button>';
+      on('#gk-stamp', function () {
+        var w = curWork(), b = $('#gk-stamp'); if (!w) return; b.disabled = true;
+        Platform.sakuStamp(klass, w.id, !w.stamp, k.trial ? S.info.email : '').then(function (v) { w.stamp = Number(v) || 0; side(); main(); },
+          function (e) { b.disabled = false; b.textContent = '× ' + (e && e.message || '押せませんでした'); });
+      });
       on('#gk-printone', function () { var w = curWork(); if (w) gkPrint([w.text]); });
       app.querySelectorAll('.gk-wtab').forEach(function (b) { b.addEventListener('click', function () { wid = b.dataset.id; editLine = null; pick = null; main(); }); });
     }
@@ -1364,7 +1377,7 @@
       var marks = []; for (var i = 2; i < lines.length; i++) if (lines[i].replace(/[　 ]/g, '')) (function (i) {
         var c = w.comments[i]; marks.push({ line: i, label: c ? '💬' : '＋', cls: c ? 'has' : '', title: c ? c.t : 'コメントを書く', onClick: function () { editLine = i; pick = null; main(); } });
       })(i);
-      gkRender(sh, w.text, { flags: Genko.check(w.text), marks: marks, fixes: gkFixView(w), pick: pick });
+      gkRender(sh, w.text, { flags: Genko.check(w.text), marks: marks, fixes: gkFixView(w), pick: pick, stamp: w.stamp });
       var trialEmail = k.trial ? S.info.email : '';
       var ks = Object.keys(w.comments).sort(function (a, b) { return a - b; });
       var picked = pick ? w.text.slice(pick.a, pick.b + 1) : '';
