@@ -810,7 +810,7 @@ function api_sakuSave(json) {
       cur.fixes = Genko.remapFixes(cur.fixes, remap).filter(function (f) { return done.indexOf(f.id) < 0; });
       sh.getRange(cur.row, SAKU_COL_.fixes).setValue(JSON.stringify(cur.fixes));
     }
-    if (w.show) mine.forEach(function (x) { if (x.id !== w.id && x.show) sh.getRange(x.row, SAKU_COL_.show).setValue(false); });
+    if (w.show) mine.forEach(function (x) { if (x.id !== w.id && x.show && Genko.isReport(x) === Genko.isReport(w)) sh.getRange(x.row, SAKU_COL_.show).setValue(false); });
     w.updated = now.getTime(); w.fixes = cur ? cur.fixes : []; if (cur) w.comments = cur.comments;
     return JSON.stringify(sakuOut_(w));
   } finally { lock.releaseLock(); }
@@ -846,7 +846,7 @@ function api_sakuFriends() {
   var no = {}; roster_().forEach(function (x) { no[x.email] = Number(x.no) || 999; });
   var list = sakuRows_().filter(function (w) { return w.klass === me.klass && w.show && w.email !== me.email && w.email in no && classOf_(w.email) === me.klass; })
     .sort(function (a, b) { return no[a.email] - no[b.email]; })
-    .map(function (w) { return { id: w.id, text: w.text }; });
+    .map(function (w) { return { id: w.id, text: w.text, mode: Genko.isReport(w) ? 'report' : '' }; });
   return JSON.stringify({ share: true, works: list });
 }
 // 先生: 担当学級の作品の一覧（児童ごと。名簿の番号順）と、読み合いが開いているか

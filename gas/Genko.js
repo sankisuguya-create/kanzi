@@ -59,6 +59,39 @@
   }
   function blank(name) { return [Z + Z + Z, nameLine(name), Z].join('\n'); }
 
+  // ---- レポートを書く（設計書 §30。横書き・利用者の指定）。組み方（layout）は縦書きと同じで、画面と印刷で向きだけを変える。
+  //   はじめから見出し「１．調べたきっかけや理由／２．調べ方／３．調べて分かったこと／４．まとめ」と〈使った本〉が入っている。
+  //   見出しの行・〈使った本〉から後の行は、1マスあけの判定をしない
+  var REPORT_HEADS = ['１．調べたきっかけや理由', '２．調べ方', '３．調べて分かったこと', '４．まとめ'];
+  var BOOK = '〈使った本〉';
+  function isReport(w) { return !!w && (w === 'report' || w.mode === 'report'); }
+  function reportTemplate(name) {
+    var ls = [Z + Z + Z + '【　　　　　】のくふう', nameLine(name)];
+    REPORT_HEADS.forEach(function (h) { ls.push('', h, Z); }); // 見出しの直前は1行あける（利用者の指定）
+    ls.push(BOOK, Z);
+    return ls.join('\n');
+  }
+  function isHead(line) { return /^[１-９1-9][．.]/.test(String(line || '')); }
+  // 見出しの行は書きかえられない（利用者の指定）。見出しの行の並びと、直前の空き行を1つの文字列にして、変わったかどうかを比べる
+  // （もとの作品に空き行がなくても、その作品の形のまま守る）
+  function headSig(text) {
+    var ls = String(text || '').split('\n'), out = [];
+    ls.forEach(function (l, i) { if (REPORT_HEADS.indexOf(l) >= 0 || (isHead(l) && i >= 2)) out.push((i > 0 && ls[i - 1] === '' ? '_' : '') + l); });
+    return out.join('|');
+  }
+  // お手本（自作。テスト・教科書の文はうつさない。事実の出典は docs/features/report-writing.md）
+  var REPORT_SAMPLE = [Z + Z + Z + '図書館の本のならべ方のくふう', nameLine('高木　北子'),
+    '', REPORT_HEADS[0],
+    Z + 'わたしは、本を読むのがすきで、よく市の図書館に行きます。たくさんの本があるのに、読みたい本がすぐに見つかるのはなぜだろうと思いました。そこで、本のならべ方のくふうについて、調べることにしました。',
+    '', REPORT_HEADS[1],
+    Z + '図書館についての本を読んでから、市の図書館を見学しました。また、司書の方に話をうかがいました。',
+    '', REPORT_HEADS[2],
+    Z + '本には、せなかに番号のついたラベルがはってあります。本で調べると、本は、なかみによって０から９の番号に分けられていると書いてありました。',
+    Z + '司書の方は、「絵本は、小さい子が自分で取り出せるように、ひくいたなにならべています。」とおっしゃっていました。',
+    '', REPORT_HEADS[3],
+    Z + '図書館の本は、ただならんでいるのではなく、だれでもさがしやすいように、くふうしてならべられていることが分かりました。こんど図書館に行くときは、ラベルの番号を見て本をさがしたいと思います。',
+    BOOK, 'れい　山本花子「図書館のひみつ」〇〇書店、２０２４年、１２ページ'].join('\n');
+
   // お手本（自作。教科書の文はうつさない: 設計書 §27 と同じ方針。事実の出典は docs/features/setsumei-writing.md）
   var SAMPLE = [Z + Z + Z + 'すがたをかえる葉っぱ', nameLine('高木　北子'),
     Z + '茶の葉には、いろいろな飲み方のくふうがあります。',
@@ -72,15 +105,22 @@
   function paraNo(text, line) { var ls = String(text || '').split('\n'), n = 0; for (var i = 2; i <= line && i < ls.length; i++) if (bare(ls[i])) n++; return n; }
   // 見なおし（要件2）: [{ line, msg }]（line は 0 から。-1 は文章全体）。空の配列なら だいじょうぶ
   //   題名がない・上をあけていない／名前がない／段落のはじめを1マスあけていない／【】の穴が残っている
-  function check(text) {
-    var lines = String(text || '').split('\n'), out = [];
+  function check(text, mode) {
+    var lines = String(text || '').split('\n'), out = [], rep = mode === 'report', book = false;
     var t = lines[0] || '', n = lines[1] || '';
     if (!bare(t) || /。/.test(t)) out.push({ line: 0, msg: '1行目に 題名を 書こう', tag: '題名' });
     else if (t.indexOf(Z + Z) !== 0) out.push({ line: 0, msg: '題名は 上を 3マス あけて 書こう', tag: '上を あける' });
     if (!bare(n) || /。/.test(n)) out.push({ line: 1, msg: '2行目に 名前を 書こう', tag: '名前' });
     for (var i = 2; i < lines.length; i++) {
+      if (rep && bare(lines[i]) === bare(BOOK)) book = true;
+      if (rep && (book || isHead(lines[i]))) continue;
       if (bare(lines[i]) && lines[i][0] !== Z) out.push({ line: i, msg: paraNo(text, i) + '番目の 段落：はじめを 1マス あけよう', tag: '1マス あける' });
     }
+    if (rep) lines.forEach(function (l, i) { // 見出しの下に まだ何も書いていない
+      if (!isHead(l)) return;
+      for (var j = i + 1; j < lines.length && !isHead(lines[j]) && bare(lines[j]) !== bare(BOOK); j++) if (bare(lines[j])) return;
+      out.push({ line: i, msg: '「' + bare(l).replace(/^[１-９1-9][．.]/, '') + '」を 書こう', tag: '中みを 書く' });
+    });
     if (/【[^】]*】/.test(text)) out.push({ line: -1, msg: '【　】の あなを うめよう', tag: 'あな' });
     return out;
   }
@@ -93,7 +133,7 @@
   var MAX_CHARS = 4000; // 原稿用紙10枚。セルの上限（5万字）に十分届かない
   function normWork(w) {
     w = w || {};
-    var o = { id: String(w.id || '').slice(0, 40), text: toZen(String(w.text || '')).slice(0, MAX_CHARS), mode: w.mode === 'free' ? 'free' : 'tpl', show: !!w.show, updated: Number(w.updated) || 0 };
+    var o = { id: String(w.id || '').slice(0, 40), text: toZen(String(w.text || '')).slice(0, MAX_CHARS), mode: w.mode === 'free' || w.mode === 'report' ? w.mode : 'tpl', show: !!w.show, updated: Number(w.updated) || 0 };
     o.comments = {};
     if (w.comments && typeof w.comments === 'object') for (var k in w.comments) {
       var c = w.comments[k], line = Number(k);
@@ -164,7 +204,7 @@
   function newId() { return 'w' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
 
   var Genko = { Z: Z, ROWS: ROWS, COLS: COLS, HANG: HANG, OPEN: OPEN, SMALL: SMALL, MAX_CHARS: MAX_CHARS,
-    toZen: toZen, layout: layout, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
+    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
     check: check, paraNo: paraNo, moveParagraph: moveParagraph, remapComments: remapComments, normFixes: normFixes, fixLocate: fixLocate, applyFix: applyFix, remapFixes: remapFixes, composeMap: composeMap, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
   if (typeof module !== 'undefined' && module.exports) module.exports = Genko; else root.Genko = Genko;
 })(typeof globalThis !== "undefined" ? globalThis : this);
