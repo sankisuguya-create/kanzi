@@ -92,3 +92,16 @@ test('修正案: もとの字の所に当てる・書きかえられたら近い
   assert.deepEqual(G.remapFixes([f], { 2: 3, 3: 2 })[0].line, 3, '段落の入れかえに合わせて移す');
   assert.equal(G.normFixes([{ line: 2, start: 0, from: 'あ', to: 'あ' }, { line: 2, start: 0, from: '', to: 'x' }]).length, 0, '変わらない・もとの字が無い修正案は落とす');
 });
+
+// レポートを書く（§30）
+test('レポート: テンプレートに見出し4つと〈使った本〉、見出しの下が空なら指摘、お手本は指摘なし', () => {
+  const t = G.reportTemplate('やまだ　たろう');
+  for (const h of G.REPORT_HEADS) assert.ok(t.split('\n').includes(h));
+  assert.ok(t.includes(G.BOOK));
+  const f = G.check(t, 'report');
+  assert.equal(f.filter((x) => x.tag === '中みを 書く').length, 4);
+  assert.ok(!f.some((x) => x.tag === '1マス あける'), '見出し・〈使った本〉の行は 1マスあけを問わない');
+  assert.deepEqual(G.check(G.REPORT_SAMPLE, 'report'), []);
+  assert.equal(G.normWork({ mode: 'report', text: t }).mode, 'report');
+  assert.ok(G.isReport({ mode: 'report' }) && !G.isReport({ mode: 'tpl' }));
+});

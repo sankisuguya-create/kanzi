@@ -135,7 +135,7 @@
   //   児童: オフのボタンは押せず、うすく見える（disabled。「選んだ漢字がない」時と同じ見た目）
   //   先生のおためし: ボタンの右上にチップを重ねる（ボタンの外にも中の文字にも場所を取らないので、並びは児童画面と同じ）
   var GATE_LABEL = { 'm.browse': 'ぜんぶ見る', 'm.read': '読む', 'm.write': '書く', 'm.fk': 'カード（漢字→読み）', 'm.fy': 'カード（読み→漢字）',
-    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': '一文の分解', 'o.setsumei': '説明文の分解', 'o.sakubun': '説明文を書く', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
+    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': '一文の分解', 'o.setsumei': '説明文の分解', 'o.sakubun': '説明文を書く', 'o.report': 'レポートを書く', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
     's.sel': '出す字: 選んだ漢字', 's.rnd': '出す字: ランダム', 's.miss': '出す字: まちがいの多い漢字',
     't.p50': 'れんしゅうプリント50問', 't.p10': 'れんしゅうプリント10問', 't.hint': 'れんしゅうプリントのヒント', 't.paper': '紙で練習', 't.juku': '二文字モード' };
   var GATE_POLL_MS = 30000;
@@ -980,30 +980,42 @@
   // ================= 説明文を書く（その他画面から入る。設計書 §28）====================
   // 原稿用紙（20×20）に1マス1字で縦書き。字は見えない入力欄で受け、マス目に描く（変換中の字もマスに出す）。
   // 左に操作、右（7割以上）に原稿用紙。用紙が足りなければ左へ増え、用紙の中だけを左右にスクロールする（利用者の指定）
-  var GK = { cell: 32 };
+  // レポートを書く（§30）は横書き: GK.yoko の間は 行＝上から下へ、マス＝左から右へ。用紙は下へ増え、ページごと縦にスクロールする
+  var GK = { cell: 32, yoko: false };
   function gkSize(extra) { GK.cell = Math.max(22, Math.min(36, Math.floor((window.innerHeight - (extra || 0) - (window.innerWidth >= 760 ? 70 : 330)) / Genko.ROWS))); }
   function gkPad() { return Math.round(GK.cell * 0.9); }
   function gkPageW() { return Genko.COLS * GK.cell + gkPad() * 2; }
   function gkPageH() { return Genko.ROWS * GK.cell + gkPad() * 2; }
   var GK_GAP = 16;
+  // pt(col, row) → マスの左上 { x, y }。span(cls) の向き: 縦書きは行が縦、横書きは行が横
   function gkGeom(nP) {
+    if (GK.yoko) {
+      var H = nP * gkPageH() + (nP - 1) * GK_GAP;
+      return { W: gkPageW(), H: H, pageAt: function (p) { return { left: 0, top: p * (gkPageH() + GK_GAP) }; },
+        pt: function (col, row) { var p = Math.floor(col / Genko.COLS), c = col % Genko.COLS; return { x: gkPad() + row * GK.cell, y: p * (gkPageH() + GK_GAP) + gkPad() + c * GK.cell }; } };
+    }
     var W = nP * gkPageW() + (nP - 1) * GK_GAP;
-    return { W: W, H: gkPageH(), x: function (col) { var p = Math.floor(col / Genko.COLS), c = col % Genko.COLS; return W - p * (gkPageW() + GK_GAP) - gkPad() - (c + 1) * GK.cell; }, y: function (row) { return gkPad() + row * GK.cell; } };
+    return { W: W, H: gkPageH(), pageAt: function (p) { return { left: W - (p + 1) * gkPageW() - p * GK_GAP, top: 0 }; },
+      pt: function (col, row) { var p = Math.floor(col / Genko.COLS), c = col % Genko.COLS; return { x: W - p * (gkPageW() + GK_GAP) - gkPad() - (c + 1) * GK.cell, y: gkPad() + row * GK.cell }; } };
   }
   function gkDrawPage(cv, w, h) {
     var dpr = window.devicePixelRatio || 1; cv.width = w * dpr; cv.height = h * dpr; cv.style.width = w + 'px'; cv.style.height = h + 'px';
     var g = cv.getContext('2d'); g.scale(dpr, dpr);
     var col = getComputedStyle(document.documentElement).getPropertyValue('--gk-grid').trim() || '#D9A88A', P = gkPad(), C = GK.cell, xr = w - P, a = xr - Genko.COLS * C;
     g.strokeStyle = col; g.lineWidth = 2; g.strokeRect(a + 0.5, P + 0.5, Genko.COLS * C, Genko.ROWS * C); g.lineWidth = 1;
-    for (var k = 1; k < Genko.COLS; k++) { var x = Math.round(xr - k * C) + 0.5; g.beginPath(); g.moveTo(x, P); g.lineTo(x, P + Genko.ROWS * C); g.stroke(); }
+    // 行の区切りは濃く、マスの区切りは うすく（縦書きは縦の線、横書きは横の線が行の区切り）
+    function vl(k) { var x = Math.round(a + k * C) + 0.5; g.beginPath(); g.moveTo(x, P); g.lineTo(x, P + Genko.ROWS * C); g.stroke(); }
+    function hl(k) { var y = P + k * C + 0.5; g.beginPath(); g.moveTo(a, y); g.lineTo(xr, y); g.stroke(); }
+    for (var k = 1; k < Genko.COLS; k++) (GK.yoko ? hl : vl)(k);
     g.globalAlpha = 0.55;
-    for (var r = 1; r < Genko.ROWS; r++) { var y = P + r * C + 0.5; g.beginPath(); g.moveTo(a, y); g.lineTo(xr, y); g.stroke(); }
+    for (var r = 1; r < Genko.ROWS; r++) (GK.yoko ? vl : hl)(r);
     g.globalAlpha = 1;
   }
   function gkLineStarts(s) { var r = [0]; for (var i = 0; i < s.length; i++) if (s[i] === '\n') r.push(i + 1); return r; }
   // src を el（.gk-sheet）に描く。opt: { comp:{at,text}, caret, flags:[{line,tag}], holes, marks:[{line,label,cls,onClick}] }
   function gkRender(el, src, opt) {
     opt = opt || {};
+    GK.yoko = !!opt.yoko; el.classList.toggle('yoko', GK.yoko); if (el.parentNode) el.parentNode.classList.toggle('yoko', GK.yoko);
     var disp = src, compAt = -1, compLen = 0;
     if (opt.comp && opt.comp.text) { compAt = opt.comp.at; compLen = opt.comp.text.length; disp = src.slice(0, compAt) + opt.comp.text + src.slice(compAt); }
     var L = Genko.layout(disp), nP = Genko.pages(L.cols), G = gkGeom(nP), C = GK.cell, fs = Math.round(C * 0.7);
@@ -1013,22 +1025,23 @@
     var frag = document.createDocumentFragment();
     for (var p = 0; p < nP; p++) {
       var d = document.createElement('div'); d.className = 'gk-page';
-      d.style.left = (G.W - (p + 1) * gkPageW() - p * GK_GAP) + 'px'; d.style.width = gkPageW() + 'px'; d.style.height = gkPageH() + 'px';
+      var pa = G.pageAt(p); d.style.left = pa.left + 'px'; d.style.top = pa.top + 'px'; d.style.width = gkPageW() + 'px'; d.style.height = gkPageH() + 'px';
       var cv = document.createElement('canvas'); d.appendChild(cv); frag.appendChild(d); gkDrawPage(cv, gkPageW(), gkPageH());
     }
-    function box(cls, col, row, h) { var b = document.createElement('div'); b.className = cls; b.style.cssText = 'left:' + G.x(col) + 'px;top:' + G.y(row) + 'px;width:' + C + 'px;height:' + (h || C) + 'px'; frag.appendChild(b); return b; }
+    // span＝行にそって何マス分か（行全体なら Genko.ROWS）
+    function box(cls, col, row, span) { var b = document.createElement('div'), q = G.pt(col, row), L2 = (span || 1) * C; b.className = cls; b.style.cssText = 'left:' + q.x + 'px;top:' + q.y + 'px;width:' + (GK.yoko ? L2 : C) + 'px;height:' + (GK.yoko ? C : L2) + 'px'; frag.appendChild(b); return b; }
     if (opt.holes) { var inH = false; L.cells.forEach(function (c) { if (c.c === '【') inH = true; if (inH) box('gk-hole', c.col, c.row); if (c.c === '】') inH = false; }); }
     L.cells.forEach(function (c) {
       var e = document.createElement('div');
       e.className = 'gk-ch' + (c.small ? ' small' : '') + (c.hang ? ' hang' : '') + (c.i >= compAt && c.i < compAt + compLen ? ' comp' : '');
-      e.style.cssText = 'left:' + G.x(c.col) + 'px;top:' + G.y(c.row) + 'px;width:' + C + 'px;height:' + C + 'px;font-size:' + fs + 'px';
+      var q = G.pt(c.col, c.row); e.style.cssText = 'left:' + q.x + 'px;top:' + q.y + 'px;width:' + C + 'px;height:' + C + 'px;font-size:' + fs + 'px';
       e.textContent = c.c; frag.appendChild(e);
     });
     var starts = gkLineStarts(disp);
     if (opt.selLine != null && starts[opt.selLine] != null) { // 入れかえる段落: その段落のマスを全部囲む（空の段落は その行を1本）
       var s0 = starts[opt.selLine], s1 = opt.selLine + 1 < starts.length ? starts[opt.selLine + 1] - 1 : disp.length, any = false;
       L.cells.forEach(function (c) { if (c.i >= s0 && c.i < s1) { box('gk-sel', c.col, c.row); any = true; } });
-      if (!any && L.pos[s0]) box('gk-sel', L.pos[s0].col, 0, C * Genko.ROWS);
+      if (!any && L.pos[s0]) box('gk-sel', L.pos[s0].col, 0, Genko.ROWS);
     }
     // 修正案: もとの字を赤い わくで囲み、なおした字を その行の左に小さく赤で（空なら「けす」）
     if (opt.fixes) opt.fixes.forEach(function (f) {
@@ -1036,27 +1049,34 @@
       L.cells.forEach(function (c) { if (c.i >= f.at && c.i < f.at + f.len) { box('gk-fix', c.col, c.row); if (!first) first = c; } });
       if (!first) return;
       var n = document.createElement('div'); n.className = 'gk-fixto'; n.textContent = f.to || 'けす';
-      n.style.cssText = 'left:' + (G.x(first.col) - Math.round(C * 0.42)) + 'px;top:' + G.y(first.row) + 'px;font-size:' + Math.round(C * 0.42) + 'px'; frag.appendChild(n);
+      var fq = G.pt(first.col, first.row), fz = Math.round(C * 0.42);
+      n.style.cssText = (GK.yoko ? 'left:' + fq.x + 'px;top:' + (fq.y - fz) + 'px;writing-mode:horizontal-tb' : 'left:' + (fq.x - fz) + 'px;top:' + fq.y + 'px') + ';font-size:' + fz + 'px'; frag.appendChild(n);
     });
     if (opt.pick) L.cells.forEach(function (c) { if (c.i >= opt.pick.a && c.i <= opt.pick.b) box('gk-pick', c.col, c.row); });
     if (opt.flags) opt.flags.forEach(function (f, fi) {
       if (f.line < 0) return;
       var at = L.pos[starts[f.line]]; if (!at) return;
-      box('gk-flag', at.col, 0, f.line <= 1 ? C * Genko.ROWS : C);
-      if (fi === 0) { var t = document.createElement('div'); t.className = 'gk-flagtag'; t.textContent = '▲ ' + f.tag; t.style.left = (G.x(at.col) + C / 2) + 'px'; t.style.top = (G.y(Genko.ROWS) + 2) + 'px'; frag.appendChild(t); }
+      var ats = f.tag === '中みを 書く'; // 見出しの指摘は 見出しの行全体
+      box('gk-flag', at.col, 0, f.line <= 1 || ats ? Genko.ROWS : 1);
+      if (fi === 0) { var t = document.createElement('div'), tq = G.pt(at.col, GK.yoko ? 0 : Genko.ROWS); t.className = 'gk-flagtag'; t.textContent = '▲ ' + f.tag;
+        if (GK.yoko) { var te = G.pt(at.col, Genko.ROWS); t.style.left = (te.x - 4) + 'px'; t.style.top = (te.y + 4) + 'px'; t.style.transform = 'translateX(-100%)'; } // 横書き: 行の右はし（ふつう空いている） else { t.style.left = (tq.x + C / 2) + 'px'; t.style.top = (tq.y + 2) + 'px'; }
+        frag.appendChild(t); }
     });
     if (opt.marks) opt.marks.forEach(function (m) {
       var at = L.pos[starts[m.line]]; if (!at) return;
       var b = document.createElement('button'); b.type = 'button'; b.className = 'gk-mark ' + (m.cls || ''); b.textContent = m.label; if (m.title) b.title = m.title;
-      b.style.left = (G.x(at.col) + C / 2) + 'px'; b.style.top = '2px'; b.style.width = C + 'px';
+      var mq = G.pt(at.col, 0);
+      if (GK.yoko) { b.style.left = '2px'; b.style.top = mq.y + 'px'; b.style.width = (gkPad() - 4) + 'px'; b.style.height = C + 'px'; b.style.transform = 'none'; b.style.padding = '0'; }
+      else { b.style.left = (mq.x + C / 2) + 'px'; b.style.top = '2px'; b.style.width = C + 'px'; }
       b.addEventListener('click', function (ev) { ev.stopPropagation(); m.onClick(); }); frag.appendChild(b);
     });
     if (opt.caret != null) {
       var cp = L.pos[opt.caret + compLen];
       if (cp) {
-        var y = G.y(cp.row) + (cp.after ? C : 0), ce = document.createElement('div'); ce.className = 'gk-caret';
-        ce.style.cssText = 'left:' + (G.x(cp.col) + 3) + 'px;top:' + (y - 1) + 'px;width:' + (C - 6) + 'px;height:3px'; frag.appendChild(ce);
-        if (keep) { keep.style.left = G.x(cp.col) + 'px'; keep.style.top = y + 'px'; }
+        var cq = G.pt(cp.col, cp.row), ce = document.createElement('div'); ce.className = 'gk-caret';
+        if (GK.yoko) { var x = cq.x + (cp.after ? C : 0); ce.style.cssText = 'left:' + (x - 1) + 'px;top:' + (cq.y + 3) + 'px;width:3px;height:' + (C - 6) + 'px'; if (keep) { keep.style.left = x + 'px'; keep.style.top = cq.y + 'px'; } }
+        else { var y = cq.y + (cp.after ? C : 0); ce.style.cssText = 'left:' + (cq.x + 3) + 'px;top:' + (y - 1) + 'px;width:' + (C - 6) + 'px;height:3px'; if (keep) { keep.style.left = cq.x + 'px'; keep.style.top = y + 'px'; } }
+        frag.appendChild(ce);
       }
     }
     el.insertBefore(frag, keep || null);
@@ -1065,13 +1085,13 @@
   // 押した所に一番近い文字の位置（カーソルを置く場所）
   function gkHit(el, src, ev) {
     var r = el.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top, L = Genko.layout(src), G = gkGeom(Genko.pages(L.cols)), best = src.length, bd = 1e9;
-    L.pos.forEach(function (p, i) { if (!p) return; var d = Math.abs(G.x(p.col) + GK.cell / 2 - x) * 3 + Math.abs(G.y(p.row) + (p.after ? GK.cell : 0) - y); if (d < bd) { bd = d; best = i; } });
+    L.pos.forEach(function (p, i) { if (!p) return; var q = G.pt(p.col, p.row), d = GK.yoko ? Math.abs(q.y + GK.cell / 2 - y) * 3 + Math.abs(q.x + (p.after ? GK.cell : 0) - x) : Math.abs(q.x + GK.cell / 2 - x) * 3 + Math.abs(q.y + (p.after ? GK.cell : 0) - y); if (d < bd) { bd = d; best = i; } });
     return best;
   }
   // 押した所の字の番号（マスの中なら その字、外なら一番近い字。字がなければ -1）
   function gkCellAt(el, src, ev) {
     var r = el.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top, L = Genko.layout(src), G = gkGeom(Genko.pages(L.cols)), best = -1, bd = 1e9;
-    L.cells.forEach(function (c) { var cx = G.x(c.col) + GK.cell / 2, cy = G.y(c.row) + GK.cell / 2, d = Math.abs(cx - x) * 3 + Math.abs(cy - y); if (d < bd) { bd = d; best = c.i; } });
+    L.cells.forEach(function (c) { var q = G.pt(c.col, c.row), cx = q.x + GK.cell / 2, cy = q.y + GK.cell / 2, d = GK.yoko ? Math.abs(cy - y) * 3 + Math.abs(cx - x) : Math.abs(cx - x) * 3 + Math.abs(cy - y); if (d < bd) { bd = d; best = c.i; } });
     return bd < GK.cell * 4 ? best : -1;
   }
   // 作品の修正案を、いまの本文で あてはまる所に（あてはまらないものは出さない）
@@ -1080,33 +1100,45 @@
   var GK_RULES = '<details class="gk-rules"><summary>' + '原稿用紙の きまり' + '</summary><ul>' +
     '<li>1行は20マス。右の行から書いて、左へすすむ。</li><li>1行目に題名（上を3マスあける）。2行目に名前（下につめて、いちばん下は1マスあける。名字と名前のあいだも1マス）。本文は3行目から。</li>' +
     '<li>段落のはじめは1マスあける。1マスに1字。小さい「ゃ・ゅ・ょ・っ」も1マス。</li><li>「、」「。」は行のいちばん上に書かない。前の行の最後のマスに、字といっしょに入れる。</li></ul></details>';
+  var GK_RULES_YOKO = '<details class="gk-rules"><summary>' + '横書きの きまり' + '</summary><ul>' +
+    '<li>1行は20マス。左から右へ書いて、下の行へすすむ。</li><li>1行目に題名（左を3マスあける）。2行目に名前（右につめて、いちばん右は1マスあける）。</li>' +
+    '<li>「１．調べたきっかけや理由」などの見出しは そのまま。見出しの下の段落は、はじめを1マスあける。</li><li>「、」「。」は行のいちばん左に書かない。前の行の最後のマスに、字といっしょに入れる。</li>' +
+    '<li>人から聞いたことは「 」に入れたり、「〜そうです」と書いたりする。〈使った本〉に、書いた人・本の名前・出した会社・年・ページを書く。</li></ul></details>';
+  // 説明文（縦書き）と レポート（横書き・§30）で ちがう所
+  function gkKind(R) {
+    return R ? { title: K('レポートを [書|か]く'), rules: GK_RULES_YOKO, sample: Genko.REPORT_SAMPLE, sampleName: '図書館の本のならべ方のくふう', tname: 'レポートを書く' }
+      : { title: K('[説|せつ][明|めい][文|ぶん]を [書|か]く'), rules: GK_RULES, sample: Genko.SAMPLE, sampleName: 'すがたをかえる葉っぱ', tname: '説明文を書く' };
+  }
   function dateShort(t) { if (!t) return ''; var d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2); }
   function unread(w) { return Object.keys(w.comments || {}).filter(function (k) { return !w.comments[k].read; }).length; }
 
   // 児童: 作品の一覧（いくつでも書ける。友だちに見せるのは1つだけ: 利用者の指定）
-  function sakubunHome() {
+  function sakubunHome(R) {
+    R = R === true; var KD = gkKind(R), home = function () { sakubunHome(R); };
     clearScreen();
-    app.innerHTML = '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + K('[説|せつ][明|めい][文|ぶん]を [書|か]く') + '</span><span></span></header><main class="gk-home"><p>よみこみ中…</p></main>';
+    app.innerHTML = '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + KD.title + '</span><span></span></header><main class="gk-home"><p>よみこみ中…</p></main>';
     on('#back', otherMenu);
     var alive = true; cleanup.push(function () { alive = false; });
     Platform.sakuMine(S.info.email).then(function (r) {
       if (!alive) return;
-      S.saku = r;
+      S.saku = r; var works = r.works.filter(function (w) { return Genko.isReport(w) === R; });
       $('.gk-home').innerHTML =
-        '<div class="gk-new"><button class="big primary" id="gk-tpl">' + K('テンプレートで [書|か]く') + '<span class="meta">' + K('[題|だい][名|めい]・はじめ・おわりが [入|はい]っている') + '</span></button>' +
-        '<button class="big" id="gk-free">' + K('[白|はく][紙|し]に [書|か]く') + '<span class="meta">' + K('[自|じ][分|ぶん]で ぜんぶ [書|か]く') + '</span></button></div>' +
-        '<div class="gk-new"><button class="big" id="gk-sample">' + K('お[手|て][本|ほん]を [見|み]る') + '<span class="meta">すがたをかえる葉っぱ</span></button>' +
+        (R ? '<div class="gk-new"><button class="big primary" id="gk-rep">' + K('レポートを [書|か]きはじめる') + '<span class="meta">' + K('[見|み][出|だ]し（１．[調|しら]べたきっかけや[理|り][由|ゆう] など）が [入|はい]っている') + '</span></button></div>'
+          : '<div class="gk-new"><button class="big primary" id="gk-tpl">' + K('テンプレートで [書|か]く') + '<span class="meta">' + K('[題|だい][名|めい]・はじめ・おわりが [入|はい]っている') + '</span></button>' +
+        '<button class="big" id="gk-free">' + K('[白|はく][紙|し]に [書|か]く') + '<span class="meta">' + K('[自|じ][分|ぶん]で ぜんぶ [書|か]く') + '</span></button></div>') +
+        '<div class="gk-new"><button class="big" id="gk-sample">' + K('お[手|て][本|ほん]を [見|み]る') + '<span class="meta">' + KD.sampleName + '</span></button>' +
         (r.share ? '<button class="big" id="gk-friends">' + K('[友|とも]だちの[文|ぶん]を [読|よ]む') + '<span class="meta">' + K('[先|せん][生|せい]が ひらいているよ') + '</span></button>' : '') + '</div>' +
         (r.offline ? '<p class="hint">' + K('つうしんが できないので、この たんまつに [書|か]いたものだけ [出|だ]しているよ') + '</p>' : '') +
-        (r.works.length ? '<h2>' + K('[書|か]いた[文|ぶん]') + '</h2><div class="gk-works">' + r.works.map(function (w) {
+        (works.length ? '<h2>' + K(R ? '[書|か]いたレポート' : '[書|か]いた[文|ぶん]') + '</h2><div class="gk-works">' + works.map(function (w) {
           var u = unread(w);
           return '<button class="gk-work" data-id="' + esc(w.id) + '"><b>' + esc(Genko.title(w.text)) + '</b><span class="meta">' + Genko.count(w.text) + K('[字|じ]・') + esc(dateShort(w.updated)) + '</span>' +
             (w.show ? '<span class="gk-badge">' + K('👀 [友|とも]だちに [見|み]せる') + '</span>' : '') + (u ? '<span class="gk-badge c">💬 ' + K('[先|せん][生|せい]から ') + u + '</span>' : '') + (w.fixes.length ? '<span class="gk-badge c">✏️ ' + K('[先|せん][生|せい]の なおし ') + w.fixes.length + '</span>' : '') + '</button>';
         }).join('') + '</div>' : '');
       on('#gk-tpl', function () { sakubunEdit(Genko.normWork({ id: Genko.newId(), text: Genko.template(myName()), mode: 'tpl', updated: Date.now() }), true); });
       on('#gk-free', function () { sakubunEdit(Genko.normWork({ id: Genko.newId(), text: Genko.blank(myName()), mode: 'free', updated: Date.now() }), true); });
-      on('#gk-sample', function () { sakubunView([{ id: 'sample', text: Genko.SAMPLE }], K('お[手|て][本|ほん]'), sakubunHome); });
-      on('#gk-friends', function () { Platform.sakuFriends().then(function (f) { if (!f.share) return sakubunHome(); sakubunView(f.works, K('[友|とも]だちの[文|ぶん]'), sakubunHome); }); });
+      on('#gk-rep', function () { sakubunEdit(Genko.normWork({ id: Genko.newId(), text: Genko.reportTemplate(myName()), mode: 'report', updated: Date.now() }), true); });
+      on('#gk-sample', function () { sakubunView([{ id: 'sample', text: KD.sample }], K('お[手|て][本|ほん]'), home, R); });
+      on('#gk-friends', function () { Platform.sakuFriends().then(function (f) { if (!f.share) return home(); sakubunView(f.works.filter(function (w) { return Genko.isReport(w) === R; }), K('[友|とも]だちの[文|ぶん]'), home, R); }); });
       app.querySelectorAll('.gk-work').forEach(function (b) { b.addEventListener('click', function () { sakubunEdit(S.saku.works.filter(function (w) { return w.id === b.dataset.id; })[0]); }); });
     });
   }
@@ -1116,7 +1148,7 @@
   function sakubunEdit(work, fresh) {
     clearScreen();
     document.body.classList.add('gk-screen'); cleanup.push(function () { document.body.classList.remove('gk-screen'); });
-    var w = Genko.normWork(work), flags = null, comp = null, focused = false, timer = null, dirty = !!fresh, sample = false;
+    var w = Genko.normWork(work), R = Genko.isReport(w), KD = gkKind(R), home = function () { sakubunHome(R); }, flags = null, comp = null, focused = false, timer = null, dirty = !!fresh, sample = false;
     var order = false, selLine = null; w.remap = {}; w.fixDone = []; // fixDone＝児童が「なおす」「そのまま」で済ませた修正案（次の保存で先生の列から外す） // 段落の入れかえ: order＝入れかえ中、selLine＝えらんだ段落（改行で数えた番号）、w.remap＝まだ送っていないコメントの付け先の移し方
     app.innerHTML = '<div class="gk-app"><aside class="gk-side">' +
       '<button class="back" id="back">もどる</button>' +
@@ -1129,7 +1161,7 @@
       '<div class="gk-result" id="gk-result" aria-live="polite"></div>' +
       '<label class="gk-show"><input type="checkbox" id="gk-show"' + (w.show ? ' checked' : '') + '> ' + K('この[文|ぶん]を [友|とも]だちに [見|み]せる') + '</label>' +
       '<div id="gk-fixes"></div><div id="gk-comments"></div>' +
-      '<span class="gk-saved" id="gk-saved" aria-live="polite">' + (fresh ? '' : '✓ ほぞんしました') + '</span>' + GK_RULES +
+      '<span class="gk-saved" id="gk-saved" aria-live="polite">' + (fresh ? '' : '✓ ほぞんしました') + '</span>' + KD.rules +
       '<details class="gk-del"><summary>' + K('この[文|ぶん]を [消|け]す') + '</summary><button class="gk-btn danger" id="gk-del">' + K('[消|け]す（もとに もどせません）') + '</button></details>' +
       '</aside><main class="gk-main"><div class="gk-scroll" id="gk-sc"><div class="gk-sheet" id="gk-sheet"></div></div></main></div>';
     var sheet = $('#gk-sheet'), ta = document.createElement('textarea');
@@ -1137,8 +1169,8 @@
     sheet.appendChild(ta);
     gkSize();
     function draw() {
-      if (sample) { gkRender(sheet, Genko.SAMPLE, {}); return; }
-      gkRender(sheet, ta.value, { caret: focused && !order ? ta.selectionStart : null, comp: comp, flags: flags, holes: w.mode === 'tpl', marks: commentMarks(), selLine: order ? selLine : null, fixes: gkFixView({ text: ta.value, fixes: w.fixes }) });
+      if (sample) { gkRender(sheet, KD.sample, { yoko: R }); return; }
+      gkRender(sheet, ta.value, { yoko: R, caret: focused && !order ? ta.selectionStart : null, comp: comp, flags: flags, holes: w.mode !== 'free', marks: commentMarks(), selLine: order ? selLine : null, fixes: gkFixView({ text: ta.value, fixes: w.fixes }) });
     }
     function commentMarks() {
       return Object.keys(w.comments).map(function (k) { return { line: +k, label: '💬', cls: w.comments[k].read ? 'read' : '', title: w.comments[k].t, onClick: function () { var e = document.getElementById('gk-c-' + k); if (e) e.focus(); } }; });
@@ -1178,7 +1210,7 @@
       var rm = w.remap; w.remap = {}; // 送る分のコメントの移し方。送っている間に入れかえた分は次に送る
       var out = Genko.normWork(w); out.remap = rm; var fd = w.fixDone; w.fixDone = []; out.fixDone = fd;
       return Platform.sakuSave(out).then(function (back) {
-        if (back && back.deleted) { clearTimeout(timer); dirty = false; status(K('この[文|ぶん]は [消|け]されています')); setTimeout(function () { if ($('#gk-saved')) sakubunHome(); }, 1500); return; }
+        if (back && back.deleted) { clearTimeout(timer); dirty = false; status(K('この[文|ぶん]は [消|け]されています')); setTimeout(function () { if ($('#gk-saved')) home(); }, 1500); return; }
         if (back && back.comments && !Object.keys(w.remap).length) w.comments = back.comments;
         if (back && back.fixes && !Object.keys(w.remap).length) w.fixes = back.fixes.filter(function (f) { return w.fixDone.indexOf(f.id) < 0; });
         status('✓ ほぞんしました'); paintComments(); paintFixes(); draw(); },
@@ -1195,14 +1227,15 @@
     ta.addEventListener('compositionend', function () { comp = null; setTimeout(function () { normalize(); changed(); draw(); }, 0); });
     ta.addEventListener('input', function (e) { if (e.isComposing || comp) return; normalize(); changed(); draw(); });
     ['keyup', 'select'].forEach(function (ev) { ta.addEventListener(ev, function () { if (!comp) draw(); }); });
-    // 矢印は縦書きの向きに読みかえる（↓次の字 ↑前の字 ←次の行 →前の行）
+    // 矢印は縦書きの向きに読みかえる（↓次の字 ↑前の字 ←次の行 →前の行）。横書き: →次の字 ←前の字 ↓次の行 ↑前の行
     ta.addEventListener('keydown', function (e) {
       if (comp || ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.key) < 0) return;
       e.preventDefault();
       var s = ta.selectionStart, n = s, L = Genko.layout(ta.value);
-      if (e.key === 'ArrowDown') n = Math.min(ta.value.length, s + 1);
-      else if (e.key === 'ArrowUp') n = Math.max(0, s - 1);
-      else { var p = L.pos[s]; n = gkNearest(L, p.col + (e.key === 'ArrowLeft' ? 1 : -1), p.row, s); }
+      var nx = R ? 'ArrowRight' : 'ArrowDown', pv = R ? 'ArrowLeft' : 'ArrowUp', nl = R ? 'ArrowDown' : 'ArrowLeft';
+      if (e.key === nx) n = Math.min(ta.value.length, s + 1);
+      else if (e.key === pv) n = Math.max(0, s - 1);
+      else { var p = L.pos[s]; n = gkNearest(L, p.col + (e.key === nl ? 1 : -1), p.row, s); }
       ta.selectionStart = ta.selectionEnd = n; draw();
     });
     // マスを押す → そこにカーソル。テンプレートの【】の中を押したら穴ごと選ぶ（打つと置きかわる）
@@ -1214,22 +1247,22 @@
       }
       var best = gkHit(sheet, ta.value, ev), v = ta.value, a = v.lastIndexOf('【', best), b = v.indexOf('】', a);
       ta.focus({ preventScroll: true });
-      if (w.mode === 'tpl' && a >= 0 && b >= best - 1 && v.lastIndexOf('】', best - 1) < a) { ta.selectionStart = a; ta.selectionEnd = b + 1; }
+      if (w.mode !== 'free' && a >= 0 && b >= best - 1 && v.lastIndexOf('】', best - 1) < a) { ta.selectionStart = a; ta.selectionEnd = b + 1; }
       else ta.selectionStart = ta.selectionEnd = best;
       draw();
     });
-    on('#back', function () { send().then(sakubunHome, sakubunHome); });
+    on('#back', function () { send().then(home, home); });
     on('#gk-check', function () {
       if (order) { order = false; selLine = null; paintOrder(); }
-      var out = Genko.check(ta.value);
+      var out = Genko.check(ta.value, w.mode);
       flags = out.length ? out : null;
-      $('#gk-result').innerHTML = out.length ? out.map(function (f) { return '<span class="ng">▲ ' + esc(K(f.msg)) + '</span>'; }).join('') : '<span class="ok">✓ ' + K('[題|だい][名|めい]・[名|な][前|まえ]・1マスあけ、だいじょうぶ！') + '</span>';
+      $('#gk-result').innerHTML = out.length ? out.map(function (f) { return '<span class="ng">▲ ' + esc(K(f.msg)) + '</span>'; }).join('') : '<span class="ok">✓ ' + K(R ? '[題|だい][名|めい]・[名|な][前|まえ]・[見|み][出|だ]しの[中|なか]み・1マスあけ、だいじょうぶ！' : '[題|だい][名|めい]・[名|な][前|まえ]・1マスあけ、だいじょうぶ！') + '</span>';
       draw();
     });
     on('#gk-sample', function () {
       sample = !sample; var b = $('#gk-sample'); b.setAttribute('aria-pressed', String(sample));
       b.innerHTML = sample ? K('✏️ [自|じ][分|ぶん]の[文|ぶん]に もどる') : K('📄 お[手|て][本|ほん]を [見|み]る');
-      $('#gk-check').disabled = sample; $('#gk-order').disabled = sample; if (sample) { ta.blur(); order = false; selLine = null; paintOrder(); } draw(); $('#gk-sc').scrollLeft = 0;
+      $('#gk-check').disabled = sample; $('#gk-order').disabled = sample; if (sample) { ta.blur(); order = false; selLine = null; paintOrder(); } draw(); $('#gk-sc').scrollLeft = 0; $('#gk-sc').scrollTop = 0;
     });
     function paintOrder() {
       $('#gk-orderbox').hidden = !order;
@@ -1251,7 +1284,7 @@
     on('#gk-prev', function () { move(-1); });
     on('#gk-next', function () { move(1); });
     $('#gk-show').addEventListener('change', function (e) { w.show = e.target.checked; dirty = true; status('… ほぞん中'); send(); });
-    on('#gk-del', function () { clearTimeout(timer); dirty = false; Platform.sakuDelete(w.id).then(sakubunHome, sakubunHome); });
+    on('#gk-del', function () { clearTimeout(timer); dirty = false; Platform.sakuDelete(w.id).then(home, home); });
     function resize() { gkSize(); draw(); }
     window.addEventListener('resize', resize); cleanup.push(function () { window.removeEventListener('resize', resize); });
     paintComments(); paintFixes(); draw();
@@ -1260,16 +1293,16 @@
   }
 
   // 読むだけの原稿用紙（お手本・友だちの文）。左に作品の一覧、右に用紙
-  function sakubunView(list, heading, back) {
+  function sakubunView(list, heading, back, R) {
     clearScreen();
     document.body.classList.add('gk-screen'); cleanup.push(function () { document.body.classList.remove('gk-screen'); });
     var cur = 0;
     app.innerHTML = '<div class="gk-app"><aside class="gk-side"><button class="back" id="back">もどる</button><h2>' + heading + '</h2>' +
       (list.length ? (list.length > 1 ? '<div class="gk-works">' + list.map(function (w, i) { return '<button class="gk-work" data-i="' + i + '" aria-pressed="' + (i === 0) + '"><b>' + esc(Genko.title(w.text)) + '</b></button>'; }).join('') + '</div>' : '')
         : '<p>' + K('まだ [見|み]られる[文|ぶん]が ないよ') + '</p>') +
-      GK_RULES + '</aside><main class="gk-main"><div class="gk-scroll"><div class="gk-sheet" id="gk-sheet"></div></div></main></div>';
+      gkKind(R).rules + '</aside><main class="gk-main"><div class="gk-scroll"><div class="gk-sheet" id="gk-sheet"></div></div></main></div>';
     on('#back', back);
-    function draw() { gkSize(); if (list[cur]) gkRender($('#gk-sheet'), list[cur].text, {}); }
+    function draw() { gkSize(); if (list[cur]) gkRender($('#gk-sheet'), list[cur].text, { yoko: !!R }); }
     app.querySelectorAll('.gk-work').forEach(function (b) { b.addEventListener('click', function () {
       cur = +b.dataset.i; app.querySelectorAll('.gk-work').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); draw(); }); });
     window.addEventListener('resize', draw); cleanup.push(function () { window.removeEventListener('resize', draw); });
@@ -1280,27 +1313,27 @@
   // ---- 印刷（B4 横・400字詰めの原稿用紙。利用者の指定）。1枚＝20行×20マス。字は画面と同じ組み方（Genko.layout）
   // 寸法は mm。B4 横＝364×257。マスは11mm角（紙に収まり、字が大きく読める大きさ）。原稿用紙1枚分ずつ紙を分ける
   var PR = { W: 364, H: 257, C: 11 };
-  function gkPrintPages(text) {
+  function gkPrintPages(text, yoko) {
     var L = Genko.layout(text), nP = Genko.pages(L.cols), C = PR.C, gw = Genko.COLS * C, gh = Genko.ROWS * C;
     var x0 = (PR.W - gw) / 2, y0 = (PR.H - gh) / 2, out = '';
     for (var p = 0; p < nP; p++) {
       var g = '<svg class="gk-pgrid" width="' + PR.W + 'mm" height="' + PR.H + 'mm" viewBox="0 0 ' + PR.W + ' ' + PR.H + '"><rect x="' + x0 + '" y="' + y0 + '" width="' + gw + '" height="' + gh + '" fill="none" stroke-width="0.5"/>';
-      for (var k = 1; k < Genko.COLS; k++) g += '<line x1="' + (x0 + k * C) + '" y1="' + y0 + '" x2="' + (x0 + k * C) + '" y2="' + (y0 + gh) + '" stroke-width="0.25"/>';
-      for (var r = 1; r < Genko.ROWS; r++) g += '<line x1="' + x0 + '" y1="' + (y0 + r * C) + '" x2="' + (x0 + gw) + '" y2="' + (y0 + r * C) + '" stroke-width="0.12"/>';
+      for (var k = 1; k < Genko.COLS; k++) g += '<line x1="' + (x0 + k * C) + '" y1="' + y0 + '" x2="' + (x0 + k * C) + '" y2="' + (y0 + gh) + '" stroke-width="' + (yoko ? 0.12 : 0.25) + '"/>';
+      for (var r = 1; r < Genko.ROWS; r++) g += '<line x1="' + x0 + '" y1="' + (y0 + r * C) + '" x2="' + (x0 + gw) + '" y2="' + (y0 + r * C) + '" stroke-width="' + (yoko ? 0.25 : 0.12) + '"/>';
       g += '</svg>';
       var chs = L.cells.filter(function (c) { return Math.floor(c.col / Genko.COLS) === p; }).map(function (c) {
-        var x = x0 + gw - (c.col % Genko.COLS + 1) * C, y = y0 + c.row * C;
+        var x = yoko ? x0 + c.row * C : x0 + gw - (c.col % Genko.COLS + 1) * C, y = yoko ? y0 + (c.col % Genko.COLS) * C : y0 + c.row * C;
         return '<div class="gk-pch' + (c.small ? ' small' : '') + (c.hang ? ' hang' : '') + '" style="left:' + x + 'mm;top:' + y + 'mm">' + esc(c.c) + '</div>';
       }).join('');
-      out += '<section class="gk-pp">' + g + chs + (nP > 1 ? '<div class="gk-pno">' + (p + 1) + ' / ' + nP + '</div>' : '') + '</section>';
+      out += '<section class="gk-pp' + (yoko ? ' yoko' : '') + '">' + g + chs + (nP > 1 ? '<div class="gk-pno">' + (p + 1) + ' / ' + nP + '</div>' : '') + '</section>';
     }
     return out;
   }
   // works: 印刷する本文の配列。紙は作品ごとに分ける。印刷が終わったら（または取りやめたら）消す
-  function gkPrint(texts) {
+  function gkPrint(texts, yoko) {
     var old = document.getElementById('gk-print'); if (old) old.remove();
     var box = document.createElement('div'); box.id = 'gk-print'; box.lang = 'ja';
-    box.innerHTML = texts.map(gkPrintPages).join('');
+    box.innerHTML = texts.map(function (t) { return gkPrintPages(t, yoko); }).join('');
     document.body.appendChild(box); document.body.classList.add('gk-printing');
     var done = function () { document.body.classList.remove('gk-printing'); box.remove(); window.removeEventListener('afterprint', done); };
     window.addEventListener('afterprint', done);
@@ -1311,10 +1344,11 @@
 
   // 先生: 学級の作文を児童ごとにまとめて見る（上の 1・2・3 で その児童の作品を切りかえる。文字数の多い順）。
   // 段落ごとのコメントと、字を えらんで出す修正案（児童が「なおす」で採用する: W2）。読み合いのオン／オフ
-  function sakubunTeacher(klass) {
+  function sakubunTeacher(klass, R) {
+    R = R === true; var KD = gkKind(R);
     clearScreen();
     document.body.classList.add('gk-screen'); cleanup.push(function () { document.body.classList.remove('gk-screen'); });
-    app.innerHTML = '<div class="gk-app"><aside class="gk-side"><button class="back" id="back">先生画面に もどる</button><h2>説明文を書く（' + esc(klassLabel(klass)) + '）</h2><div id="gk-tside"><p>よみこみ中…</p></div></aside>' +
+    app.innerHTML = '<div class="gk-app"><aside class="gk-side"><button class="back" id="back">先生画面に もどる</button><h2>' + KD.tname + '（' + esc(klassLabel(klass)) + '）</h2><div id="gk-tside"><p>よみこみ中…</p></div></aside>' +
       '<main class="gk-main"><h2 id="gk-tname" class="gk-tname"></h2><nav class="gk-wtabs" id="gk-wtabs" role="tablist" aria-label="この児童の作品"></nav>' +
       '<div class="gk-scroll"><div class="gk-sheet" id="gk-sheet"></div></div><div id="gk-tc"></div></main></div>';
     on('#back', function () { teacher(klass, null, true); });
@@ -1335,13 +1369,13 @@
         '<div class="gk-kids">' + kids.slice().sort(function (a, b) { return (b.trial ? 1 : 0) - (a.trial ? 1 : 0) || (a.works.length ? 1 : 0) - (b.works.length ? 1 : 0); }).map(function (k) {
           var nm = esc((k.no ? k.no + ' ' : '') + k.name);
           if (!k.works.length) return '<div class="gk-kid none"><b>' + nm + '</b><span class="meta">まだ書いていない</span></div>';
-          var top = sorted(k)[0], fl = Genko.check(top.text).length, nf = k.works.reduce(function (n, w) { return n + w.fixes.length; }, 0);
+          var top = sorted(k)[0], fl = Genko.check(top.text, top.mode).length, nf = k.works.reduce(function (n, w) { return n + w.fixes.length; }, 0);
           return '<button class="gk-kid' + (k.trial ? ' trial' : '') + '" data-k="' + esc(keyOf(k)) + '" aria-pressed="' + (keyOf(k) === kidKey) + '"><b>' + nm + '</b>' +
             '<span class="meta">' + k.works.length + '作品・いちばん長い作品 ' + Genko.count(top.text) + '字・' + esc(dateShort(Math.max.apply(null, k.works.map(function (w) { return w.updated; })))) + '</span>' +
             (fl ? '<span class="gk-warn">▲ 見なおしの指摘 ' + fl + '件（いちばん長い作品）</span>' : '') + (nf ? '<span class="meta">✏️ 修正案 ' + nf + '件（児童がまだ見ていない）</span>' : '') + '</button>';
         }).join('') + '</div>';
       on('#gk-printall', function () {
-        gkPrint(kids.filter(function (k) { return k.works.length && !k.trial; }).sort(function (a, b) { return (Number(a.no) || 999) - (Number(b.no) || 999); }).map(function (k) { return sorted(k)[0].text; }));
+        gkPrint(kids.filter(function (k) { return k.works.length && !k.trial; }).sort(function (a, b) { return (Number(a.no) || 999) - (Number(b.no) || 999); }).map(function (k) { return sorted(k)[0].text; }), R);
       });
       on('#gk-share', function () { var v = !data.share; Platform.sakuShare(klass, v).then(function (r) { data.share = r; side(); }); });
       app.querySelectorAll('.gk-kid[data-k]').forEach(function (b) { b.addEventListener('click', function () { selectKid(kids.filter(function (k) { return keyOf(k) === b.dataset.k; })[0]); side(); main(); }); });
@@ -1351,7 +1385,7 @@
       $('#gk-wtabs').innerHTML = l.map(function (w, i) {
         return '<button role="tab" class="gk-wtab" data-id="' + esc(w.id) + '" aria-selected="' + (w.id === wid) + '"><b>' + (i + 1) + '</b><span>' + esc(Genko.title(w.text)) + '</span><span class="meta">' + Genko.count(w.text) + '字' + (w.show ? '・👀見せる' : '') + '</span></button>';
       }).join('') + '<button class="gk-btn gk-printone" id="gk-printone">🖨 この作品を印刷（B4）</button>';
-      on('#gk-printone', function () { var w = curWork(); if (w) gkPrint([w.text]); });
+      on('#gk-printone', function () { var w = curWork(); if (w) gkPrint([w.text], R); });
       app.querySelectorAll('.gk-wtab').forEach(function (b) { b.addEventListener('click', function () { wid = b.dataset.id; editLine = null; pick = null; main(); }); });
     }
     function main() {
@@ -1364,7 +1398,7 @@
       var marks = []; for (var i = 2; i < lines.length; i++) if (lines[i].replace(/[　 ]/g, '')) (function (i) {
         var c = w.comments[i]; marks.push({ line: i, label: c ? '💬' : '＋', cls: c ? 'has' : '', title: c ? c.t : 'コメントを書く', onClick: function () { editLine = i; pick = null; main(); } });
       })(i);
-      gkRender(sh, w.text, { flags: Genko.check(w.text), marks: marks, fixes: gkFixView(w), pick: pick });
+      gkRender(sh, w.text, { yoko: R, flags: Genko.check(w.text, w.mode), marks: marks, fixes: gkFixView(w), pick: pick });
       var trialEmail = k.trial ? S.info.email : '';
       var ks = Object.keys(w.comments).sort(function (a, b) { return a - b; });
       var picked = pick ? w.text.slice(pick.a, pick.b + 1) : '';
@@ -1420,9 +1454,10 @@
       Platform.sakuTeacher(klass).then(function (d) {
         if (!alive) return;
         data = d;
-        (data.students || []).forEach(function (k) { k.works = (k.works || []).map(Genko.normWork); });
+        var mine = function (w) { return Genko.isReport(w) === R; }; // 説明文とレポートは 別の画面で見る
+        (data.students || []).forEach(function (k) { k.works = (k.works || []).map(Genko.normWork).filter(mine); });
         // 「児童画面を ためす」で書いた作品は、この端末だけに残る（サーバーへは送らない）。見分けがつくように別の行で出す
-        var tw = Platform.sakuTrialWorks(S.info.email);
+        var tw = Platform.sakuTrialWorks(S.info.email).filter(mine);
         if (tw.length) data.students.unshift({ no: '', name: 'おためし（この端末だけ・児童には届きません）', works: tw, trial: true });
         if (!kidKey) { var f = data.students.filter(function (k) { return k.works.length; })[0]; if (f) selectKid(f); }
         side(); main();
@@ -1443,7 +1478,8 @@
     cleanup.push(function () { document.body.classList.remove('chooser-screen'); });
     var acts = [{ id: 'bunkai', label: K('[一|いち][文|ぶん]の [分|ぶん][解|かい]'), sub: 'ぶんを 5つの やくわりに わける' },
       { id: 'setsumei', label: K('[説|せつ][明|めい][文|ぶん]の [分|ぶん][解|かい]'), sub: K('はじめ・[中|なか]・おわりに わける') },
-      { id: 'sakubun', label: K('[説|せつ][明|めい][文|ぶん]を [書|か]く'), sub: K('げんこう[用|よう][紙|し]に [書|か]く') }];
+      { id: 'sakubun', label: K('[説|せつ][明|めい][文|ぶん]を [書|か]く'), sub: K('げんこう[用|よう][紙|し]に [書|か]く') },
+      { id: 'report', label: K('レポートを [書|か]く'), sub: K('[横|よこ][書|が]きで [調|しら]べたことを [書|か]く') }];
     app.innerHTML =
       '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + K('その[他|た]') + '</span><span></span></header>' +
       K('<main class="chooser"><h2>その[他|た]</h2>') + acts.map(function (a) {
@@ -1453,7 +1489,8 @@
     app.querySelectorAll('.chooser .big').forEach(function (b) {
       b.addEventListener('click', function () {
         if (b.dataset.id === 'setsumei') return startSession('setsumei', Sched.setsumeiPick(KANZI_SETSUMEI, S.p));
-        if (b.dataset.id === 'sakubun') return sakubunHome();
+        if (b.dataset.id === 'sakubun') return sakubunHome(false);
+        if (b.dataset.id === 'report') return sakubunHome(true);
         if (b.dataset.id !== 'bunkai') return;
         b.disabled = true;
         // 内蔵の問題集 + 学級の自作問題（取れなければ内蔵だけ）。1回5問
@@ -2311,6 +2348,9 @@
           '</section><section class="tsets"><h2>説明文を書く</h2>' +
           '<p class="hint">児童は「その他 → 説明文を書く」で、原稿用紙に縦書きで書きます（1人いくつでも。友だちに見せるのは1人1つ）。作品を一覧して、段落ごとにコメントを付けられます。「読み合う」をひらくと、児童どうしで見せる作品を読めます。</p>' +
           '<p><button id="gk-open">作品を見る・コメントする</button></p>' +
+          '</section><section class="tsets"><h2>レポートを書く</h2>' +
+          '<p class="hint">児童は「その他 → レポートを書く」で、横書きの原稿用紙に書きます。はじめから見出し（１．調べたきっかけや理由／２．調べ方／３．調べて分かったこと／４．まとめ）と〈使った本〉が入っています。コメント・修正案・読み合い・印刷は 説明文を書く と同じです（読み合いの オン／オフも共通）。</p>' +
+          '<p><button id="gk-open-rep">作品を見る・コメントする</button></p>' +
           '</section><section class="tsets"><h2>過年度データ</h2><div id="arch"><p class="hint">よみこみ中…</p></div></section>';
         app.querySelectorAll('details.tset').forEach(function (d) { d.addEventListener('toggle', function () { S.open[d.id] = d.open; }); });
         var sel = $('#klass'); if (sel) sel.addEventListener('change', function () { teacher(sel.value); });
@@ -2332,7 +2372,8 @@
           nav.querySelectorAll('.stab').forEach(function (b, i) { b.addEventListener('click', function () { show(labels[i]); }); });
           show(cur);
         })();
-        on('#gk-open', function () { sakubunTeacher(klass); });
+        on('#gk-open', function () { sakubunTeacher(klass, false); });
+        on('#gk-open-rep', function () { sakubunTeacher(klass, true); });
         // 漢字テストの範囲: テストごとに管理。編集・見せる切替とも押すたびに保存（自動保存）
         // 学級で まちがいの おおい字（よむ: 3人以上が答え、最後の答えがまちがいの人が3割以上）→ あかい わく
         var fails = {};

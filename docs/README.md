@@ -2,7 +2,7 @@
 
 | 置き場 | 中身 | 書くとき |
 |---|---|---|
-| [design.md](design.md) | 全体の設計書。目的・決定一覧（WHY）・データ・保存・学級と担当・ゲート・過年度など、モードをまたぐ決定の正本。§1〜§28 の節番号はコード・テストのコメントから引かれているので変えない | モードをまたぐ決定を変えた時 |
+| [design.md](design.md) | 全体の設計書。目的・決定一覧（WHY）・データ・保存・学級と担当・ゲート・過年度など、モードをまたぐ決定の正本。§1〜§30 の節番号はコード・テストのコメントから引かれているので変えない | モードをまたぐ決定を変えた時 |
 | [research.md](research.md) | 根拠の一覧（`S`＝制度・基準、`R`＝研究、`T`＝実装資源）。design.md から番号で引く | 根拠を足した時 |
 | [features/](features/) | モードごとの仕様（実装済み）。design.md の節から分けたものは節番号を引き継ぐ | モードを足した・変えた時 |
 | [requirements/](requirements/) | 実装前の要件定義（利用者の指定・決定・未決事項）。実装後も、何を頼まれたかの記録として残す | 新しいモードを頼まれた時 |
@@ -17,6 +17,7 @@
 | れんしゅうプリント | [features/tprint.md](features/tprint.md) | §26 |
 | 説明文の分解 | [features/setsumei.md](features/setsumei.md) | §27 |
 | 説明文を書く | [features/setsumei-writing.md](features/setsumei-writing.md)（要件: [requirements/setsumei-writing.md](requirements/setsumei-writing.md)） | §28 |
+| レポートを書く | [features/report-writing.md](features/report-writing.md) | §30 |
 
 よむ・かく・カード・ひらがな・カタカナ・テストの範囲・ボタンのオン・オフ・過年度データは design.md の本文（§12〜§24）にある。
 

@@ -270,8 +270,8 @@
     if (!isGas || trial) {
       if (w.fixDone && w.fixDone.length) o.fixes = o.fixes.filter(function (f) { return w.fixDone.indexOf(f.id) < 0; });
       o.dirty = false; sakuPut(o, false);
-      if (!trial) { var mine = sakuDemoAll(); if (o.show) Object.keys(mine).forEach(function (k) { if (k !== o.id && mine[k].show && !/^peer/.test(k)) { mine[k].show = false; } }); store.set('kanzi.saku.demoClass', mine); sakuDemoPut(o);
-        if (o.show) { var loc = sakuLocal(); Object.keys(loc).forEach(function (k) { if (k !== o.id) loc[k].show = false; }); store.set(sakuKey(), loc); } }
+      if (!trial) { var mine = sakuDemoAll(); if (o.show) Object.keys(mine).forEach(function (k) { if (k !== o.id && mine[k].show && !/^peer/.test(k) && Genko.isReport(mine[k]) === Genko.isReport(o)) { mine[k].show = false; } }); store.set('kanzi.saku.demoClass', mine); sakuDemoPut(o);
+        if (o.show) { var loc = sakuLocal(); Object.keys(loc).forEach(function (k) { if (k !== o.id && Genko.isReport(loc[k]) === Genko.isReport(o)) loc[k].show = false; }); store.set(sakuKey(), loc); } }
       return Promise.resolve(o);
     }
     var payload = JSON.parse(JSON.stringify(o)); if (w.remap && Object.keys(w.remap).length) payload.remap = w.remap;
@@ -281,7 +281,7 @@
       if (raw.deleted) { var lc = sakuLocal(); delete lc[raw.id]; store.set(sakuKey(), lc); return { id: raw.id, deleted: true }; }
       var back = Genko.normWork(raw), cur = sakuLocal()[back.id];
       if (cur && cur.text === o.text && cur.show === o.show && cur.mode === o.mode) { back.dirty = false; sakuPut(back, false); }
-      if (back.show) { var loc = sakuLocal(); Object.keys(loc).forEach(function (k) { if (k !== back.id) loc[k].show = false; }); store.set(sakuKey(), loc); }
+      if (back.show) { var loc = sakuLocal(); Object.keys(loc).forEach(function (k) { if (k !== back.id && Genko.isReport(loc[k]) === Genko.isReport(back)) loc[k].show = false; }); store.set(sakuKey(), loc); }
       return back;
     });
   }

@@ -518,7 +518,7 @@ test('説明文を書く: 友だちの文は 先生が開いた間だけ、同�
   const f = JSON.parse(env.api_sakuFriends());
   assert.equal(f.share, true);
   assert.deepEqual(f.works.map((w) => w.text), ['あおいの文']);
-  assert.deepEqual(Object.keys(f.works[0]).sort(), ['id', 'text'], 'メール・コメントは返さない');
+  assert.deepEqual(Object.keys(f.works[0]).sort(), ['id', 'mode', 'text'], 'メール・コメントは返さない（mode は説明文とレポートの区別だけ）');
   assert.throws(() => makeEnv(sheets, T).api_sakuShare('3-2', true), /担当/);
 });
 test('説明文を書く: 先生は担当学級の作品にコメントでき、児童の保存はコメントの列を上書きしない', () => {
