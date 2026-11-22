@@ -52,6 +52,13 @@ await page.locator('#gk-check').click();
 const n1 = await page.locator('#gk-result .ng').count();
 check(n1 === n0 - 1, '打つと その見出しの指摘が消える ' + n1);
 await shot('report-2-typed');
+// 見出しは書きかえられない
+const before = await page.evaluate(() => document.querySelector('textarea.gk-ime').value);
+await page.evaluate(() => { const ta = document.querySelector('textarea.gk-ime'); ta.focus(); const i = ta.value.indexOf('２．調べ方') + 3; ta.selectionStart = ta.selectionEnd = i; });
+await page.keyboard.insertText('あ');
+await page.evaluate(() => { const ta = document.querySelector('textarea.gk-ime'); ta.focus(); const i = ta.value.indexOf('２．調べ方'); ta.selectionStart = ta.selectionEnd = i; });
+await page.locator('textarea.gk-ime').press('Backspace');
+check(await page.evaluate(() => document.querySelector('textarea.gk-ime').value) === before, '見出しの行・直前の空き行は 打っても消しても もとに戻る');
 // 矢印: → で次の字
 await page.evaluate(() => document.querySelector('textarea.gk-ime').focus());
 const a = await page.evaluate(() => document.querySelector('textarea.gk-ime').selectionStart);

@@ -67,21 +67,28 @@
   function isReport(w) { return !!w && (w === 'report' || w.mode === 'report'); }
   function reportTemplate(name) {
     var ls = [Z + Z + Z + '【　　　　　】のくふう', nameLine(name)];
-    REPORT_HEADS.forEach(function (h) { ls.push(h, Z); });
+    REPORT_HEADS.forEach(function (h) { ls.push('', h, Z); }); // 見出しの直前は1行あける（利用者の指定）
     ls.push(BOOK, Z);
     return ls.join('\n');
   }
   function isHead(line) { return /^[１-９1-9][．.]/.test(String(line || '')); }
+  // 見出しの行は書きかえられない（利用者の指定）。見出しの行の並びと、直前の空き行を1つの文字列にして、変わったかどうかを比べる
+  // （もとの作品に空き行がなくても、その作品の形のまま守る）
+  function headSig(text) {
+    var ls = String(text || '').split('\n'), out = [];
+    ls.forEach(function (l, i) { if (REPORT_HEADS.indexOf(l) >= 0 || (isHead(l) && i >= 2)) out.push((i > 0 && ls[i - 1] === '' ? '_' : '') + l); });
+    return out.join('|');
+  }
   // お手本（自作。テスト・教科書の文はうつさない。事実の出典は docs/features/report-writing.md）
   var REPORT_SAMPLE = [Z + Z + Z + '図書館の本のならべ方のくふう', nameLine('高木　北子'),
-    REPORT_HEADS[0],
+    '', REPORT_HEADS[0],
     Z + 'わたしは、本を読むのがすきで、よく市の図書館に行きます。たくさんの本があるのに、読みたい本がすぐに見つかるのはなぜだろうと思いました。そこで、本のならべ方のくふうについて、調べることにしました。',
-    REPORT_HEADS[1],
+    '', REPORT_HEADS[1],
     Z + '図書館についての本を読んでから、市の図書館を見学しました。また、司書の方に話をうかがいました。',
-    REPORT_HEADS[2],
+    '', REPORT_HEADS[2],
     Z + '本には、せなかに番号のついたラベルがはってあります。本で調べると、本は、なかみによって０から９の番号に分けられていると書いてありました。',
     Z + '司書の方は、「絵本は、小さい子が自分で取り出せるように、ひくいたなにならべています。」とおっしゃっていました。',
-    REPORT_HEADS[3],
+    '', REPORT_HEADS[3],
     Z + '図書館の本は、ただならんでいるのではなく、だれでもさがしやすいように、くふうしてならべられていることが分かりました。こんど図書館に行くときは、ラベルの番号を見て本をさがしたいと思います。',
     BOOK, 'れい　山本花子「図書館のひみつ」〇〇書店、２０２４年、１２ページ'].join('\n');
 
@@ -197,7 +204,7 @@
   function newId() { return 'w' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
 
   var Genko = { Z: Z, ROWS: ROWS, COLS: COLS, HANG: HANG, OPEN: OPEN, SMALL: SMALL, MAX_CHARS: MAX_CHARS,
-    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
+    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
     check: check, paraNo: paraNo, moveParagraph: moveParagraph, remapComments: remapComments, normFixes: normFixes, fixLocate: fixLocate, applyFix: applyFix, remapFixes: remapFixes, composeMap: composeMap, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
   if (typeof module !== 'undefined' && module.exports) module.exports = Genko; else root.Genko = Genko;
 })(typeof globalThis !== "undefined" ? globalThis : this);

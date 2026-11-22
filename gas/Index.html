@@ -844,7 +844,7 @@ textarea.gk-ime { position: absolute; opacity: 0; width: 2px; height: 2px; paddi
   .gk-pno { position: absolute; right: 12mm; bottom: 8mm; font-size: 4mm; color: #555; }
 }
 </style>
-<meta name="kanzi-ver" content="35ba039">
+<meta name="kanzi-ver" content="d475740">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -1407,21 +1407,28 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   function isReport(w) { return !!w && (w === 'report' || w.mode === 'report'); }
   function reportTemplate(name) {
     var ls = [Z + Z + Z + '【　　　　　】のくふう', nameLine(name)];
-    REPORT_HEADS.forEach(function (h) { ls.push(h, Z); });
+    REPORT_HEADS.forEach(function (h) { ls.push('', h, Z); }); // 見出しの直前は1行あける（利用者の指定）
     ls.push(BOOK, Z);
     return ls.join('\n');
   }
   function isHead(line) { return /^[１-９1-9][．.]/.test(String(line || '')); }
+  // 見出しの行は書きかえられない（利用者の指定）。見出しの行の並びと、直前の空き行を1つの文字列にして、変わったかどうかを比べる
+  // （もとの作品に空き行がなくても、その作品の形のまま守る）
+  function headSig(text) {
+    var ls = String(text || '').split('\n'), out = [];
+    ls.forEach(function (l, i) { if (REPORT_HEADS.indexOf(l) >= 0 || (isHead(l) && i >= 2)) out.push((i > 0 && ls[i - 1] === '' ? '_' : '') + l); });
+    return out.join('|');
+  }
   // お手本（自作。テスト・教科書の文はうつさない。事実の出典は docs/features/report-writing.md）
   var REPORT_SAMPLE = [Z + Z + Z + '図書館の本のならべ方のくふう', nameLine('高木　北子'),
-    REPORT_HEADS[0],
+    '', REPORT_HEADS[0],
     Z + 'わたしは、本を読むのがすきで、よく市の図書館に行きます。たくさんの本があるのに、読みたい本がすぐに見つかるのはなぜだろうと思いました。そこで、本のならべ方のくふうについて、調べることにしました。',
-    REPORT_HEADS[1],
+    '', REPORT_HEADS[1],
     Z + '図書館についての本を読んでから、市の図書館を見学しました。また、司書の方に話をうかがいました。',
-    REPORT_HEADS[2],
+    '', REPORT_HEADS[2],
     Z + '本には、せなかに番号のついたラベルがはってあります。本で調べると、本は、なかみによって０から９の番号に分けられていると書いてありました。',
     Z + '司書の方は、「絵本は、小さい子が自分で取り出せるように、ひくいたなにならべています。」とおっしゃっていました。',
-    REPORT_HEADS[3],
+    '', REPORT_HEADS[3],
     Z + '図書館の本は、ただならんでいるのではなく、だれでもさがしやすいように、くふうしてならべられていることが分かりました。こんど図書館に行くときは、ラベルの番号を見て本をさがしたいと思います。',
     BOOK, 'れい　山本花子「図書館のひみつ」〇〇書店、２０２４年、１２ページ'].join('\n');
 
@@ -1537,7 +1544,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   function newId() { return 'w' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
 
   var Genko = { Z: Z, ROWS: ROWS, COLS: COLS, HANG: HANG, OPEN: OPEN, SMALL: SMALL, MAX_CHARS: MAX_CHARS,
-    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
+    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
     check: check, paraNo: paraNo, moveParagraph: moveParagraph, remapComments: remapComments, normFixes: normFixes, fixLocate: fixLocate, applyFix: applyFix, remapFixes: remapFixes, composeMap: composeMap, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
   if (typeof module !== 'undefined' && module.exports) module.exports = Genko; else root.Genko = Genko;
 })(typeof globalThis !== "undefined" ? globalThis : this);
@@ -6920,14 +6927,14 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       }).join('') + '</ul>' : '';
       app.querySelectorAll('[data-fix],[data-keep]').forEach(function (b) { b.addEventListener('click', function () {
         var id = b.dataset.fix || b.dataset.keep, f = w.fixes.filter(function (x) { return x.id === id; })[0]; if (!f) return;
-        if (b.dataset.fix) { var t = Genko.applyFix(ta.value, f); if (t != null) ta.value = t; }
+        if (b.dataset.fix) { var t = Genko.applyFix(ta.value, f); if (t != null && (!R || Genko.headSig(t) === sig)) ta.value = t; }
         w.fixes = w.fixes.filter(function (x) { return x.id !== id; }); w.fixDone.push(id);
         changed(); paintFixes(); draw();
       }); });
     }
     function status(t) { var e = $('#gk-saved'); if (e) e.textContent = t; }
     function changed() {
-      w.text = ta.value; Platform.sakuDraft(w); dirty = true; flags = null; $('#gk-result').innerHTML = ''; status('… ほぞん中');
+      w.text = ta.value; if (R) last = { v: ta.value, c: ta.selectionStart }; Platform.sakuDraft(w); dirty = true; flags = null; $('#gk-result').innerHTML = ''; status('… ほぞん中');
       clearTimeout(timer); timer = setTimeout(send, 3000);
     }
     function send() {
@@ -6947,13 +6954,23 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     function vis() { if (document.visibilityState === 'hidden') send(); }
     document.addEventListener('visibilitychange', vis); cleanup.push(function () { document.removeEventListener('visibilitychange', vis); });
     function normalize() { var c = ta.selectionStart, v = Genko.toZen(ta.value); if (v !== ta.value) { ta.value = v; ta.selectionStart = ta.selectionEnd = c; } }
+    // レポート: 見出しの行（と直前の空き行）を変える入力は もとに戻す（§30。見出しは書きかえられない）
+    var last = { v: ta.value, c: 0 }, sig = R ? Genko.headSig(ta.value) : '';
+    function guard() {
+      if (!R) return true;
+      if (Genko.headSig(ta.value) === sig) { last = { v: ta.value, c: ta.selectionStart }; return true; }
+      ta.value = last.v; ta.selectionStart = ta.selectionEnd = last.c;
+      $('#gk-result').innerHTML = '<span class="ng">▲ ' + K('[見|み][出|だ]しは かえられないよ。[見|み][出|だ]しの [下|した]の [行|ぎょう]に [書|か]こう') + '</span>';
+      draw(); return false;
+    }
+    function remember() { last = { v: ta.value, c: ta.selectionStart }; }
     ta.addEventListener('focus', function () { focused = true; draw(); });
     ta.addEventListener('blur', function () { focused = false; draw(); });
     ta.addEventListener('compositionstart', function () { comp = { at: ta.selectionStart, text: '' }; });
     ta.addEventListener('compositionupdate', function (e) { if (comp) { comp.text = e.data || ''; draw(); } });
-    ta.addEventListener('compositionend', function () { comp = null; setTimeout(function () { normalize(); changed(); draw(); }, 0); });
-    ta.addEventListener('input', function (e) { if (e.isComposing || comp) return; normalize(); changed(); draw(); });
-    ['keyup', 'select'].forEach(function (ev) { ta.addEventListener(ev, function () { if (!comp) draw(); }); });
+    ta.addEventListener('compositionend', function () { comp = null; setTimeout(function () { normalize(); if (!guard()) return; changed(); draw(); }, 0); });
+    ta.addEventListener('input', function (e) { if (e.isComposing || comp) return; normalize(); if (!guard()) return; changed(); draw(); });
+    ['keyup', 'select'].forEach(function (ev) { ta.addEventListener(ev, function () { if (!comp) { remember(); draw(); } }); });
     // 矢印は縦書きの向きに読みかえる（↓次の字 ↑前の字 ←次の行 →前の行）。横書き: →次の字 ←前の字 ↓次の行 ↑前の行
     ta.addEventListener('keydown', function (e) {
       if (comp || ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.key) < 0) return;
@@ -6974,9 +6991,13 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       }
       var best = gkHit(sheet, ta.value, ev), v = ta.value, a = v.lastIndexOf('【', best), b = v.indexOf('】', a);
       ta.focus({ preventScroll: true });
+      if (R) { // 見出しの行・直前の空き行を押したら、見出しの下の行のはじめ（1マスあけの後ろ）へ
+        var ls0 = v.split('\n'), ln0 = v.slice(0, best).split('\n').length - 1, tgt = Genko.isHead(ls0[ln0]) ? ln0 + 1 : (ls0[ln0] === '' && Genko.isHead(ls0[ln0 + 1] || '') ? ln0 + 2 : -1);
+        if (tgt > 0 && tgt < ls0.length) { var st = 0; for (var q = 0; q < tgt; q++) st += ls0[q].length + 1; best = st + (ls0[tgt][0] === Genko.Z ? 1 : 0); }
+      }
       if (w.mode !== 'free' && a >= 0 && b >= best - 1 && v.lastIndexOf('】', best - 1) < a) { ta.selectionStart = a; ta.selectionEnd = b + 1; }
       else ta.selectionStart = ta.selectionEnd = best;
-      draw();
+      remember(); draw();
     });
     on('#back', function () { send().then(home, home); });
     on('#gk-check', function () {
@@ -7003,6 +7024,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       if (selLine == null) return;
       var r = Genko.moveParagraph(ta.value, selLine, dir);
       if (!r) return;
+      if (R && Genko.headSig(r.text) !== sig) { $('#gk-orderhint').innerHTML = K('[見|み][出|だ]しは うごかせないよ'); return; }
       ta.value = r.text; w.comments = Genko.remapComments(w.comments, r.map); w.fixes = Genko.remapFixes(w.fixes, r.map); w.remap = Genko.composeMap(w.remap, r.map);
       selLine += dir; changed(); paintComments(); paintFixes(); paintOrder(); draw();
     }
@@ -7174,6 +7196,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
       var w = curWork(); if (!w || (ev.target.closest && ev.target.closest('button'))) return;
       var i = gkCellAt($('#gk-sheet'), w.text, ev); if (i < 0) return;
       var line = w.text.slice(0, i).split('\n').length - 1; if (line < 2) return; // 題名・名前は修正案の対象にしない
+      if (R && Genko.isHead(w.text.split('\n')[line])) return; // レポートの見出しも対象にしない（§30）
       if (pick && pick.line === line) { pick.a = Math.min(pick.a, i); pick.b = Math.max(pick.b, i); } else pick = { line: line, a: i, b: i };
       editLine = null; main();
     });

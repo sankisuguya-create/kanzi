@@ -1193,14 +1193,14 @@
       }).join('') + '</ul>' : '';
       app.querySelectorAll('[data-fix],[data-keep]').forEach(function (b) { b.addEventListener('click', function () {
         var id = b.dataset.fix || b.dataset.keep, f = w.fixes.filter(function (x) { return x.id === id; })[0]; if (!f) return;
-        if (b.dataset.fix) { var t = Genko.applyFix(ta.value, f); if (t != null) ta.value = t; }
+        if (b.dataset.fix) { var t = Genko.applyFix(ta.value, f); if (t != null && (!R || Genko.headSig(t) === sig)) ta.value = t; }
         w.fixes = w.fixes.filter(function (x) { return x.id !== id; }); w.fixDone.push(id);
         changed(); paintFixes(); draw();
       }); });
     }
     function status(t) { var e = $('#gk-saved'); if (e) e.textContent = t; }
     function changed() {
-      w.text = ta.value; Platform.sakuDraft(w); dirty = true; flags = null; $('#gk-result').innerHTML = ''; status('… ほぞん中');
+      w.text = ta.value; if (R) last = { v: ta.value, c: ta.selectionStart }; Platform.sakuDraft(w); dirty = true; flags = null; $('#gk-result').innerHTML = ''; status('… ほぞん中');
       clearTimeout(timer); timer = setTimeout(send, 3000);
     }
     function send() {
@@ -1220,13 +1220,23 @@
     function vis() { if (document.visibilityState === 'hidden') send(); }
     document.addEventListener('visibilitychange', vis); cleanup.push(function () { document.removeEventListener('visibilitychange', vis); });
     function normalize() { var c = ta.selectionStart, v = Genko.toZen(ta.value); if (v !== ta.value) { ta.value = v; ta.selectionStart = ta.selectionEnd = c; } }
+    // レポート: 見出しの行（と直前の空き行）を変える入力は もとに戻す（§30。見出しは書きかえられない）
+    var last = { v: ta.value, c: 0 }, sig = R ? Genko.headSig(ta.value) : '';
+    function guard() {
+      if (!R) return true;
+      if (Genko.headSig(ta.value) === sig) { last = { v: ta.value, c: ta.selectionStart }; return true; }
+      ta.value = last.v; ta.selectionStart = ta.selectionEnd = last.c;
+      $('#gk-result').innerHTML = '<span class="ng">▲ ' + K('[見|み][出|だ]しは かえられないよ。[見|み][出|だ]しの [下|した]の [行|ぎょう]に [書|か]こう') + '</span>';
+      draw(); return false;
+    }
+    function remember() { last = { v: ta.value, c: ta.selectionStart }; }
     ta.addEventListener('focus', function () { focused = true; draw(); });
     ta.addEventListener('blur', function () { focused = false; draw(); });
     ta.addEventListener('compositionstart', function () { comp = { at: ta.selectionStart, text: '' }; });
     ta.addEventListener('compositionupdate', function (e) { if (comp) { comp.text = e.data || ''; draw(); } });
-    ta.addEventListener('compositionend', function () { comp = null; setTimeout(function () { normalize(); changed(); draw(); }, 0); });
-    ta.addEventListener('input', function (e) { if (e.isComposing || comp) return; normalize(); changed(); draw(); });
-    ['keyup', 'select'].forEach(function (ev) { ta.addEventListener(ev, function () { if (!comp) draw(); }); });
+    ta.addEventListener('compositionend', function () { comp = null; setTimeout(function () { normalize(); if (!guard()) return; changed(); draw(); }, 0); });
+    ta.addEventListener('input', function (e) { if (e.isComposing || comp) return; normalize(); if (!guard()) return; changed(); draw(); });
+    ['keyup', 'select'].forEach(function (ev) { ta.addEventListener(ev, function () { if (!comp) { remember(); draw(); } }); });
     // 矢印は縦書きの向きに読みかえる（↓次の字 ↑前の字 ←次の行 →前の行）。横書き: →次の字 ←前の字 ↓次の行 ↑前の行
     ta.addEventListener('keydown', function (e) {
       if (comp || ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.key) < 0) return;
@@ -1247,9 +1257,13 @@
       }
       var best = gkHit(sheet, ta.value, ev), v = ta.value, a = v.lastIndexOf('【', best), b = v.indexOf('】', a);
       ta.focus({ preventScroll: true });
+      if (R) { // 見出しの行・直前の空き行を押したら、見出しの下の行のはじめ（1マスあけの後ろ）へ
+        var ls0 = v.split('\n'), ln0 = v.slice(0, best).split('\n').length - 1, tgt = Genko.isHead(ls0[ln0]) ? ln0 + 1 : (ls0[ln0] === '' && Genko.isHead(ls0[ln0 + 1] || '') ? ln0 + 2 : -1);
+        if (tgt > 0 && tgt < ls0.length) { var st = 0; for (var q = 0; q < tgt; q++) st += ls0[q].length + 1; best = st + (ls0[tgt][0] === Genko.Z ? 1 : 0); }
+      }
       if (w.mode !== 'free' && a >= 0 && b >= best - 1 && v.lastIndexOf('】', best - 1) < a) { ta.selectionStart = a; ta.selectionEnd = b + 1; }
       else ta.selectionStart = ta.selectionEnd = best;
-      draw();
+      remember(); draw();
     });
     on('#back', function () { send().then(home, home); });
     on('#gk-check', function () {
@@ -1276,6 +1290,7 @@
       if (selLine == null) return;
       var r = Genko.moveParagraph(ta.value, selLine, dir);
       if (!r) return;
+      if (R && Genko.headSig(r.text) !== sig) { $('#gk-orderhint').innerHTML = K('[見|み][出|だ]しは うごかせないよ'); return; }
       ta.value = r.text; w.comments = Genko.remapComments(w.comments, r.map); w.fixes = Genko.remapFixes(w.fixes, r.map); w.remap = Genko.composeMap(w.remap, r.map);
       selLine += dir; changed(); paintComments(); paintFixes(); paintOrder(); draw();
     }
@@ -1447,6 +1462,7 @@
       var w = curWork(); if (!w || (ev.target.closest && ev.target.closest('button'))) return;
       var i = gkCellAt($('#gk-sheet'), w.text, ev); if (i < 0) return;
       var line = w.text.slice(0, i).split('\n').length - 1; if (line < 2) return; // 題名・名前は修正案の対象にしない
+      if (R && Genko.isHead(w.text.split('\n')[line])) return; // レポートの見出しも対象にしない（§30）
       if (pick && pick.line === line) { pick.a = Math.min(pick.a, i); pick.b = Math.max(pick.b, i); } else pick = { line: line, a: i, b: i };
       editLine = null; main();
     });

@@ -98,6 +98,11 @@ test('レポート: テンプレートに見出し4つと〈使った本〉、�
   const t = G.reportTemplate('やまだ　たろう');
   for (const h of G.REPORT_HEADS) assert.ok(t.split('\n').includes(h));
   assert.ok(t.includes(G.BOOK));
+  const ls = t.split('\n');
+  for (const h of G.REPORT_HEADS) assert.equal(ls[ls.indexOf(h) - 1], '', '見出しの直前は1行あける');
+  assert.notEqual(G.headSig(t.replace('２．調べ方', '２．調べ方だよ')), G.headSig(t), '見出しを書きかえると変わる');
+  assert.notEqual(G.headSig(t.replace('\n２．', '２．')), G.headSig(t), '直前の空き行を消すと変わる');
+  assert.equal(G.headSig(t.replace('理由\n　', '理由\n　あいう')), G.headSig(t), '本文を書いても変わらない');
   const f = G.check(t, 'report');
   assert.equal(f.filter((x) => x.tag === '中みを 書く').length, 4);
   assert.ok(!f.some((x) => x.tag === '1マス あける'), '見出し・〈使った本〉の行は 1マスあけを問わない');
