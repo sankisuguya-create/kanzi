@@ -122,6 +122,35 @@
     [{ id: '4a', label: '水・米・人のひみつ', lines: ['西宮の酒づくりには、よい水、よい米、すぐれたぎじゅつをもつ人という、いくつものひみつがあることが分かりました。とくに、【水の量やせいしつがかわらないように気をつけていること】に、おどろきました。こんど、【宮水のいど】を見に行きたいと思います。'] },
      { id: '4b', label: 'のんでもらうくふう', lines: ['酒をつくる人たちは、おいしい酒をつくるだけでなく、多くの人にのんでもらうためのくふうもしていることが分かりました。とくに、【入れ物の色や形まで考えていること】に、おどろきました。こんど、【店で酒のびん】を見るときは、どんなくふうがあるか、さがしてみたいと思います。'] },
      { id: '4c', label: 'むかしと今', lines: ['むかしは人の手で、今は機械で酒をつくっていますが、どちらも人のぎじゅつや気くばりが大切だと分かりました。とくに、【そうじに一番時間をかけていること】に、おどろきました。こんど、【酒ミュージアム】に行って、むかしの道具を見てみたいと思います。'] }]] };
+  // ---- レポートを組み立てる（§30。練習「ふでばこの道具」の作文例で、見出しごとに えらんで組み合わせ、合うかを判定する）
+  // sel: [1の番号, 2の番号, 3の番号, 4の番号]（0＝ア 1＝イ 2＝ウ）。返す: 合わない所 [{ parts: [見出しの番号…], msg }]（空なら合う）
+  //   ４↔３: まとめは ３の くふうの話でないと合わない（ア↔ア・イ↔イ・ウ↔ウ）
+  //   ２↔３: ３アは「本には」→ ２は本で調べた（イ）。３ウは「先生に聞くと」→ ２は人に聞いた（ウ）
+  //   １↔３: １アは「えんぴつ」がきっかけ → ３にえんぴつ（ア）。１ウは「あなや切りこみ」→ ３ア（切りこみ）か３ウ（あな）
+  var KUMI_3 = ['書く・消すくふう', '正しく使うくふう', 'あんぜんのくふう'];
+  function kumiCheck(sel) {
+    var a = sel[0], b = sel[1], c = sel[2], d = sel[3], out = [];
+    if (d !== c) out.push({ parts: [2, 3], msg: 'まとめは「' + KUMI_3[d] + '」の話なのに、３で書いたのは「' + KUMI_3[c] + '」です' });
+    if (c === 0 && b !== 1) out.push({ parts: [1, 2], msg: '３に「本には…書いてありました」とあるのに、２の調べ方に 本が 出てきません' });
+    if (c === 2 && b !== 2) out.push({ parts: [1, 2], msg: '３に「先生に聞くと」とあるのに、２の調べ方に 人に聞いたことが 出てきません' });
+    if (a === 0 && c !== 0) out.push({ parts: [0, 2], msg: 'えんぴつの形が きっかけなのに、３に えんぴつの話が ありません' });
+    if (a === 2 && c === 1) out.push({ parts: [0, 2], msg: 'あなや切りこみに 気づいたのが きっかけなのに、３に その話が ありません' });
+    return out;
+  }
+  function kumiText(sel, set) {
+    set = set || REPORT_FUDE;
+    var ls = [Z + Z + Z + set.title, nameLine('')];
+    REPORT_HEADS.forEach(function (h, i) { ls.push('', h); ls = ls.concat(exLines(set.parts[i][sel[i]], false)); });
+    return ls.join('\n');
+  }
+  // 問題: 半分くらいは合う組み合わせ（rnd は 0〜1 を返す関数。検査で決まった値を渡せる）
+  function kumiProblem(rnd) {
+    rnd = rnd || Math.random;
+    var all = []; for (var i = 0; i < 81; i++) all.push([Math.floor(i / 27), Math.floor(i / 9) % 3, Math.floor(i / 3) % 3, i % 3]);
+    var ok = all.filter(function (x) { return !kumiCheck(x).length; }), ng = all.filter(function (x) { return kumiCheck(x).length; });
+    var list = rnd() < 0.5 ? ok : ng;
+    return list[Math.floor(rnd() * list.length)].slice();
+  }
   var REPORT_STAGES = ['copy', 'pick', 'edit', 'free'];
   var REPORT_SETS = [REPORT_FUDE, REPORT_EXAMPLES];
   // 先生の設定は「段階.題材」の1つの文字列（例 pick.fude。@はメールの判定に当たるので使わない）。題材の既定は練習（fude）
@@ -284,7 +313,7 @@
   function newId() { return 'w' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
 
   var Genko = { Z: Z, ROWS: ROWS, COLS: COLS, HANG: HANG, OPEN: OPEN, SMALL: SMALL, MAX_CHARS: MAX_CHARS,
-    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, isSub: isSub, REPORT_EXAMPLES: REPORT_EXAMPLES, REPORT_STAGES: REPORT_STAGES, normStage: normStage, stageOf: stageOf, exSet: exSet, REPORT_SETS: REPORT_SETS, exLines: exLines, reportCopyModel: reportCopyModel, setSection: setSection, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
+    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, isSub: isSub, REPORT_EXAMPLES: REPORT_EXAMPLES, REPORT_STAGES: REPORT_STAGES, normStage: normStage, kumiCheck: kumiCheck, kumiText: kumiText, kumiProblem: kumiProblem, stageOf: stageOf, exSet: exSet, REPORT_SETS: REPORT_SETS, exLines: exLines, reportCopyModel: reportCopyModel, setSection: setSection, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
     check: check, paraNo: paraNo, moveParagraph: moveParagraph, remapComments: remapComments, normFixes: normFixes, fixLocate: fixLocate, applyFix: applyFix, remapFixes: remapFixes, composeMap: composeMap, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
   if (typeof module !== 'undefined' && module.exports) module.exports = Genko; else root.Genko = Genko;
 })(typeof globalThis !== "undefined" ? globalThis : this);

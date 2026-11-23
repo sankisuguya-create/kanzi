@@ -858,7 +858,7 @@ textarea.gk-ime { position: absolute; opacity: 0; width: 2px; height: 2px; paddi
   .gk-pno { position: absolute; right: 12mm; bottom: 8mm; font-size: 4mm; color: #555; }
 }
 </style>
-<meta name="kanzi-ver" content="252176e">
+<meta name="kanzi-ver" content="1ae83c7">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -1162,7 +1162,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   // ---- 児童画面のボタンのオン・オフ（学級ごと。先生がおためし画面で切り替える）
   // 持つのはオフにしたボタンのキーだけ。m.＝メニューのボタン、s.＝「どの字で やる？」の選び方（読む・書く・カードで共通）
   // 先生画面・児童画面・GAS サーバーが同じ一覧を使う（ここが唯一の定義）
-  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 'm.other', 'o.bunkai', 'o.setsumei', 'o.sakubun', 'o.report', 's.test', 's.due', 's.sel', 's.rnd', 's.miss', 't.p50', 't.p10', 't.hint', 't.paper', 't.juku'];
+  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 'm.other', 'o.bunkai', 'o.setsumei', 'o.sakubun', 'o.report', 'o.kumi', 's.test', 's.due', 's.sel', 's.rnd', 's.miss', 't.p50', 't.p10', 't.hint', 't.paper', 't.juku'];
   // 配列・「,」区切りの文字列のどちらでも受け、知らないキー・重なりを除いて GATE_KEYS の順に並べる
   function normGates(v) {
     var list = Array.isArray(v) ? v.map(String) : String(v || '').split(',');
@@ -1476,6 +1476,35 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     [{ id: '4a', label: '水・米・人のひみつ', lines: ['西宮の酒づくりには、よい水、よい米、すぐれたぎじゅつをもつ人という、いくつものひみつがあることが分かりました。とくに、【水の量やせいしつがかわらないように気をつけていること】に、おどろきました。こんど、【宮水のいど】を見に行きたいと思います。'] },
      { id: '4b', label: 'のんでもらうくふう', lines: ['酒をつくる人たちは、おいしい酒をつくるだけでなく、多くの人にのんでもらうためのくふうもしていることが分かりました。とくに、【入れ物の色や形まで考えていること】に、おどろきました。こんど、【店で酒のびん】を見るときは、どんなくふうがあるか、さがしてみたいと思います。'] },
      { id: '4c', label: 'むかしと今', lines: ['むかしは人の手で、今は機械で酒をつくっていますが、どちらも人のぎじゅつや気くばりが大切だと分かりました。とくに、【そうじに一番時間をかけていること】に、おどろきました。こんど、【酒ミュージアム】に行って、むかしの道具を見てみたいと思います。'] }]] };
+  // ---- レポートを組み立てる（§30。練習「ふでばこの道具」の作文例で、見出しごとに えらんで組み合わせ、合うかを判定する）
+  // sel: [1の番号, 2の番号, 3の番号, 4の番号]（0＝ア 1＝イ 2＝ウ）。返す: 合わない所 [{ parts: [見出しの番号…], msg }]（空なら合う）
+  //   ４↔３: まとめは ３の くふうの話でないと合わない（ア↔ア・イ↔イ・ウ↔ウ）
+  //   ２↔３: ３アは「本には」→ ２は本で調べた（イ）。３ウは「先生に聞くと」→ ２は人に聞いた（ウ）
+  //   １↔３: １アは「えんぴつ」がきっかけ → ３にえんぴつ（ア）。１ウは「あなや切りこみ」→ ３ア（切りこみ）か３ウ（あな）
+  var KUMI_3 = ['書く・消すくふう', '正しく使うくふう', 'あんぜんのくふう'];
+  function kumiCheck(sel) {
+    var a = sel[0], b = sel[1], c = sel[2], d = sel[3], out = [];
+    if (d !== c) out.push({ parts: [2, 3], msg: 'まとめは「' + KUMI_3[d] + '」の話なのに、３で書いたのは「' + KUMI_3[c] + '」です' });
+    if (c === 0 && b !== 1) out.push({ parts: [1, 2], msg: '３に「本には…書いてありました」とあるのに、２の調べ方に 本が 出てきません' });
+    if (c === 2 && b !== 2) out.push({ parts: [1, 2], msg: '３に「先生に聞くと」とあるのに、２の調べ方に 人に聞いたことが 出てきません' });
+    if (a === 0 && c !== 0) out.push({ parts: [0, 2], msg: 'えんぴつの形が きっかけなのに、３に えんぴつの話が ありません' });
+    if (a === 2 && c === 1) out.push({ parts: [0, 2], msg: 'あなや切りこみに 気づいたのが きっかけなのに、３に その話が ありません' });
+    return out;
+  }
+  function kumiText(sel, set) {
+    set = set || REPORT_FUDE;
+    var ls = [Z + Z + Z + set.title, nameLine('')];
+    REPORT_HEADS.forEach(function (h, i) { ls.push('', h); ls = ls.concat(exLines(set.parts[i][sel[i]], false)); });
+    return ls.join('\n');
+  }
+  // 問題: 半分くらいは合う組み合わせ（rnd は 0〜1 を返す関数。検査で決まった値を渡せる）
+  function kumiProblem(rnd) {
+    rnd = rnd || Math.random;
+    var all = []; for (var i = 0; i < 81; i++) all.push([Math.floor(i / 27), Math.floor(i / 9) % 3, Math.floor(i / 3) % 3, i % 3]);
+    var ok = all.filter(function (x) { return !kumiCheck(x).length; }), ng = all.filter(function (x) { return kumiCheck(x).length; });
+    var list = rnd() < 0.5 ? ok : ng;
+    return list[Math.floor(rnd() * list.length)].slice();
+  }
   var REPORT_STAGES = ['copy', 'pick', 'edit', 'free'];
   var REPORT_SETS = [REPORT_FUDE, REPORT_EXAMPLES];
   // 先生の設定は「段階.題材」の1つの文字列（例 pick.fude。@はメールの判定に当たるので使わない）。題材の既定は練習（fude）
@@ -1638,7 +1667,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   function newId() { return 'w' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
 
   var Genko = { Z: Z, ROWS: ROWS, COLS: COLS, HANG: HANG, OPEN: OPEN, SMALL: SMALL, MAX_CHARS: MAX_CHARS,
-    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, isSub: isSub, REPORT_EXAMPLES: REPORT_EXAMPLES, REPORT_STAGES: REPORT_STAGES, normStage: normStage, stageOf: stageOf, exSet: exSet, REPORT_SETS: REPORT_SETS, exLines: exLines, reportCopyModel: reportCopyModel, setSection: setSection, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
+    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, isSub: isSub, REPORT_EXAMPLES: REPORT_EXAMPLES, REPORT_STAGES: REPORT_STAGES, normStage: normStage, kumiCheck: kumiCheck, kumiText: kumiText, kumiProblem: kumiProblem, stageOf: stageOf, exSet: exSet, REPORT_SETS: REPORT_SETS, exLines: exLines, reportCopyModel: reportCopyModel, setSection: setSection, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
     check: check, paraNo: paraNo, moveParagraph: moveParagraph, remapComments: remapComments, normFixes: normFixes, fixLocate: fixLocate, applyFix: applyFix, remapFixes: remapFixes, composeMap: composeMap, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
   if (typeof module !== 'undefined' && module.exports) module.exports = Genko; else root.Genko = Genko;
 })(typeof globalThis !== "undefined" ? globalThis : this);
@@ -5970,7 +5999,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
   //   児童: オフのボタンは押せず、うすく見える（disabled。「選んだ漢字がない」時と同じ見た目）
   //   先生のおためし: ボタンの右上にチップを重ねる（ボタンの外にも中の文字にも場所を取らないので、並びは児童画面と同じ）
   var GATE_LABEL = { 'm.browse': 'ぜんぶ見る', 'm.read': '読む', 'm.write': '書く', 'm.fk': 'カード（漢字→読み）', 'm.fy': 'カード（読み→漢字）',
-    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': '一文の分解', 'o.setsumei': '説明文の分解', 'o.sakubun': '説明文を書く', 'o.report': 'レポートを書く', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
+    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': '一文の分解', 'o.setsumei': '説明文の分解', 'o.sakubun': '説明文を書く', 'o.report': 'レポートを書く', 'o.kumi': 'レポートを組み立てる', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
     's.sel': '出す字: 選んだ漢字', 's.rnd': '出す字: ランダム', 's.miss': '出す字: まちがいの多い漢字',
     't.p50': 'れんしゅうプリント50問', 't.p10': 'れんしゅうプリント10問', 't.hint': 'れんしゅうプリントのヒント', 't.paper': '紙で練習', 't.juku': '二文字モード' };
   var GATE_POLL_MS = 30000;
@@ -7363,6 +7392,69 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     load();
   }
 
+  // ================= レポートを組み立てる（その他画面から入る。§30）====================
+  // 練習「ふでばこの道具」の作文例（見出しごとに ア〜ウ）を組み合わせた レポートを見て、①「合う／合わない」を判定し、
+  // ②合わない所を えらびなおして 合うレポートに組み立てる。記録は残さない（練習）
+  function kumitate() {
+    clearScreen();
+    document.body.classList.add('gk-screen'); cleanup.push(function () { document.body.classList.remove('gk-screen'); });
+    var E = Genko.exSet('free.fude'), sel = Genko.kumiProblem(), phase = 'judge', flagged = [], done = 0;
+    app.innerHTML = '<div class="gk-app"><aside class="gk-side"><button class="back" id="back">もどる</button><h2>' + K('レポートを [組|く]み[立|た]てる') + '</h2>' +
+      '<div id="km-q" class="gk-ex"></div><div class="gk-result" id="km-res" aria-live="polite"></div><div id="km-cards" class="gk-ex"></div></aside>' +
+      '<main class="gk-main"><div class="gk-scroll"><div class="gk-sheet" id="gk-sheet"></div></div></main></div>';
+    on('#back', otherMenu);
+    function draw() {
+      var t = Genko.kumiText(sel, E), ls = t.split('\n'), fl = [];
+      flagged.forEach(function (i) { var h = ls.indexOf(Genko.REPORT_HEADS[i]); if (h >= 0) fl.push({ line: h, tag: '中みを 書く', msg: '' }); });
+      gkSize(); gkRender($('#gk-sheet'), t, { yoko: true, flags: fl });
+      if (fl.length) { var tg = $('.gk-flagtag'); if (tg) tg.textContent = K('▲ ここが [合|あ]わない'); }
+    }
+    function reasons(list) { return list.map(function (r) { return '<span class="ng">▲ ' + esc(r.msg) + '</span>'; }).join(''); }
+    function paint() {
+      var bad = Genko.kumiCheck(sel);
+      if (phase === 'judge') {
+        $('#km-q').innerHTML = '<p class="gk-hint">' + K('この レポートは、[文|ぶん]と[文|ぶん]が [合|あ]っているかな？') + '</p><div class="gk-two"><button class="gk-btn" id="km-ok">' + K('[合|あ]っている') + '</button><button class="gk-btn" id="km-ng">' + K('[合|あ]っていない') + '</button></div>';
+        $('#km-res').innerHTML = ''; $('#km-cards').innerHTML = '';
+        ['ok', 'ng'].forEach(function (k) { on('#km-' + k, function () {
+          var right = (k === 'ok') === !bad.length;
+          flagged = []; bad.forEach(function (r) { r.parts.forEach(function (i) { if (flagged.indexOf(i) < 0) flagged.push(i); }); });
+          $('#km-res').innerHTML = (right ? '<span class="ok">' + K('✓ せいかい！') + '</span>' : '<span class="ng">' + K('✕ ざんねん。') + '</span>') +
+            (bad.length ? reasons(bad) : '<span class="ok">' + K('きっかけ・[調|しら]べ[方|かた]・[分|わ]かったこと・まとめが つながっているね') + '</span>');
+          phase = bad.length ? 'fix' : 'next'; paintNext(); draw();
+        }); });
+        return;
+      }
+    }
+    function paintNext() {
+      var bad = Genko.kumiCheck(sel);
+      if (phase === 'next') {
+        $('#km-q').innerHTML = '<button class="gk-btn primary" id="km-next">' + K('[次|つぎ]の もんだい') + '</button>';
+        $('#km-cards').innerHTML = done ? '<p class="gk-hint">' + K('[組|く]み[立|た]てた [数|かず]: ') + done + '</p>' : '';
+        on('#km-next', function () { sel = Genko.kumiProblem(); phase = 'judge'; flagged = []; paint(); draw(); });
+        return;
+      }
+      // fix: 見出しごとに えらびなおす。合うようになったら できあがり
+      $('#km-q').innerHTML = '<p class="gk-hint">' + K('[合|あ]わない [所|ところ]を えらびなおして、[合|あ]う レポートに しよう') + '</p>';
+      $('#km-cards').innerHTML = E.parts.map(function (list, i) {
+        return '<div class="gk-exg"><b>' + esc(Genko.REPORT_HEADS[i]) + '</b><div class="gk-exbtns">' + list.map(function (ex, j) {
+          return '<button class="gk-read" data-km="' + i + ':' + j + '" aria-pressed="' + (sel[i] === j) + '">' + String.fromCharCode(0x30A2 + j * 2) + '　' + esc(ex.label) + '</button>';
+        }).join('') + '</div></div>';
+      }).join('') + '<button class="gk-btn primary" id="km-check">' + K('[合|あ]っているか たしかめる') + '</button>';
+      app.querySelectorAll('[data-km]').forEach(function (b) { b.addEventListener('click', function () {
+        var ij = b.dataset.km.split(':'); sel[+ij[0]] = +ij[1]; flagged = []; $('#km-res').innerHTML = ''; paintNext(); draw(); }); });
+      on('#km-check', function () {
+        var nb = Genko.kumiCheck(sel);
+        flagged = []; nb.forEach(function (r) { r.parts.forEach(function (i) { if (flagged.indexOf(i) < 0) flagged.push(i); }); });
+        if (!nb.length) { done++; phase = 'next'; $('#km-res').innerHTML = '<span class="ok">' + K('✓ できあがり！ [合|あ]う レポートに なったね') + '</span>'; paintNext(); }
+        else $('#km-res').innerHTML = reasons(nb);
+        draw();
+      });
+    }
+    window.addEventListener('resize', draw); cleanup.push(function () { window.removeEventListener('resize', draw); });
+    paint(); draw();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if ($('#gk-sheet')) draw(); });
+  }
+
   // その他画面: 今後の活動の入口を並べる chooser 型の画面
   function otherMenu() {
     clearScreen();
@@ -7371,7 +7463,8 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     var acts = [{ id: 'bunkai', label: K('[一|いち][文|ぶん]の [分|ぶん][解|かい]'), sub: 'ぶんを 5つの やくわりに わける' },
       { id: 'setsumei', label: K('[説|せつ][明|めい][文|ぶん]の [分|ぶん][解|かい]'), sub: K('はじめ・[中|なか]・おわりに わける') },
       { id: 'sakubun', label: K('[説|せつ][明|めい][文|ぶん]を [書|か]く'), sub: K('げんこう[用|よう][紙|し]に [書|か]く') },
-      { id: 'report', label: K('レポートを [書|か]く'), sub: K('[横|よこ][書|が]きで [調|しら]べたことを [書|か]く') }];
+      { id: 'report', label: K('レポートを [書|か]く'), sub: K('[横|よこ][書|が]きで [調|しら]べたことを [書|か]く') },
+      { id: 'kumi', label: K('レポートを [組|く]み[立|た]てる'), sub: K('[文|ぶん]を えらんで、[合|あ]うか たしかめる') }];
     app.innerHTML =
       '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + K('その[他|た]') + '</span><span></span></header>' +
       K('<main class="chooser"><h2>その[他|た]</h2>') + acts.map(function (a) {
@@ -7383,6 +7476,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
         if (b.dataset.id === 'setsumei') return startSession('setsumei', Sched.setsumeiPick(KANZI_SETSUMEI, S.p));
         if (b.dataset.id === 'sakubun') return sakubunHome(false);
         if (b.dataset.id === 'report') return sakubunHome(true);
+        if (b.dataset.id === 'kumi') return kumitate();
         if (b.dataset.id !== 'bunkai') return;
         b.disabled = true;
         // 内蔵の問題集 + 学級の自作問題（取れなければ内蔵だけ）。1回5問

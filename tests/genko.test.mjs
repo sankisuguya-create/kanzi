@@ -110,3 +110,13 @@ test('レポート: テンプレートに見出し4つと〈使った本〉、�
   assert.equal(G.normWork({ mode: 'report', text: t }).mode, 'report');
   assert.ok(G.isReport({ mode: 'report' }) && !G.isReport({ mode: 'tpl' }));
 });
+
+test('レポートを組み立てる: 合う組み合わせと 合わない理由', () => {
+  assert.deepEqual(G.kumiCheck([1, 1, 0, 0]), []);
+  assert.deepEqual(G.kumiCheck([1, 2, 2, 2]), []);
+  assert.ok(G.kumiCheck([1, 1, 0, 2]).some((r) => r.parts.includes(3)), '３と４が合わない');
+  assert.ok(G.kumiCheck([1, 0, 0, 0]).some((r) => r.msg.includes('本')), '３アは本で調べた２が要る');
+  assert.ok(G.kumiCheck([0, 1, 1, 1]).some((r) => r.msg.includes('えんぴつ')), '１アは３アが要る');
+  let ok = 0; const rs = [0.1, 0.3, 0.7, 0.9]; for (let i = 0; i < 200; i++) { let k = i; if (!G.kumiCheck(G.kumiProblem(() => rs[(k++) % 4])).length) ok++; }
+  assert.ok(ok > 0 && ok < 200);
+});

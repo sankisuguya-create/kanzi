@@ -115,5 +115,22 @@ await page.locator('[data-ex="3:1"]').click();
 const v2 = await page.evaluate(() => document.querySelector('textarea.gk-ime').value);
 check(!v2.includes('よい水、よい米') && v2.includes('のんでもらうためのくふう') && v2.split('４．まとめ').length === 2, 'えらびなおすと 入れかわる（見出しは そのまま）');
 await shot('report-5-pick');
+// レポートを組み立てる: 判定 → 合わなければ えらびなおして 合うレポートに
+await page.goto(BASE + '?demo');
+await page.waitForSelector('#go-other'); await page.locator('#go-other').click();
+await page.locator('.chooser .big[data-id="kumi"]').click();
+await page.waitForSelector('#km-ng');
+let fixed = false;
+for (let t = 0; t < 10 && !fixed; t++) {
+  await page.locator('#km-ng').click();
+  if (await page.locator('#km-check').count()) {
+    check(await page.locator('.gk-flag').count() > 0, '組み立てる: 合わない見出しに しるし');
+    for (const x of ['0:1', '1:1', '2:0', '3:0']) await page.locator('[data-km="' + x + '"]').click();
+    await page.locator('#km-check').click();
+    fixed = (await page.locator('#km-res .ok').count()) > 0;
+    await shot('report-6-kumi');
+  } else { await page.locator('#km-next').click(); }
+}
+check(fixed, '組み立てる: えらびなおして 合うレポートに できる');
 check(errors.length === 0, 'コンソールのエラーなし ' + errors.join(' / '));
 await browser.close(); server.close();
