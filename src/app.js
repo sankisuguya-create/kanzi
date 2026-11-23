@@ -1202,12 +1202,44 @@
     }
     // レポートのヒント（§30）: 酒づくりの作文例を、見出しごとに 児童が自分で1段ずつ開く（はじめは かくしてある）
     //   ヒント1＝何を書くか（ア〜ウの見出し）→ ヒント2＝文を読む → ヒント3＝文を本文に入れる（【　】は自分のことばに かえる穴）
-    var hintLv = {}, picked = {};
+    var hintLv = {}, picked = {}, inlineSample = false;
+    // 見本（酒づくりの作文例のア）を別のまどで開く。見ながら打ちこめるように（利用者の指定）。
+    // まどが開けない時（ポップアップを止める設定など）は、左に見本を出す
+    function sampleHtml() {
+      var ls = Genko.reportCopyModel('', Genko.REPORT_EXAMPLES).split('\n'), body = '';
+      ls.forEach(function (l, i) {
+        if (i === 1 || !l.replace(/[　 ]/g, '')) return;
+        if (i === 0) body += '<h1>' + esc(l.replace(/^[　]+/, '')) + '</h1>';
+        else if (Genko.isHead(l) || l === Genko.BOOK) body += '<h2>' + esc(l) + '</h2>';
+        else if (Genko.isSub(l)) body += '<h3>' + esc(l) + '</h3>';
+        else body += '<p>' + esc(l.replace(/^[　]+/, '')) + '</p>'; // 1マスあけは text-indent で出す
+      });
+      return body;
+    }
+    function openSample() {
+      var wnd = null;
+      try { wnd = window.open('', 'kanzi-report-sample', 'width=560,height=760'); } catch (e) { wnd = null; }
+      try {
+        if (!wnd) throw new Error('blocked');
+        wnd.document.open();
+        wnd.document.write('<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>見本：西宮の酒づくりのくふう</title>' +
+          '<style>body{margin:0;padding:16px 20px;background:#fff;color:#222;font-family:"Noto Sans JP","Hiragino Sans",sans-serif;font-size:22px;line-height:1.9}' +
+          'h1{font-size:26px;margin:0 0 8px}h2{font-size:22px;margin:18px 0 4px;color:#0F5EA8}h3{font-size:21px;margin:8px 0 0}p{margin:0;text-indent:1em}.top{font-size:16px;color:#555;margin:0 0 10px}</style></head><body>' +
+          '<p class="top">見本（このまどを 横にならべて、見ながら 書こう）</p>' + sampleHtml() + '</body></html>');
+        wnd.document.close(); wnd.focus();
+        $('#gk-exmsg').innerHTML = K('[見|み][本|ほん]を べつの まどで ひらいたよ');
+      } catch (e) {
+        inlineSample = true; paintEx();
+        $('#gk-exmsg').innerHTML = K('べつの まどが ひらけないので、ここに [見|み][本|ほん]を [出|だ]したよ');
+      }
+    }
     var HINT_NEXT = ['💡 ヒント1：[何|なに]を [書|か]くか', '💡 ヒント2：[文|ぶん]を [読|よ]む', '💡 ヒント3：[文|ぶん]を [入|い]れる'];
     function paintEx() {
       var box = $('#gk-ex'); if (!box) return;
       var E = Genko.REPORT_EXAMPLES;
-      box.innerHTML = '<h3>' + K('こまったら ヒントを [見|み]よう') + '</h3>' + E.parts.map(function (list, i) {
+      box.innerHTML = '<button class="gk-btn" id="gk-sampwin">' + K('📄 [見|み][本|ほん]を べつの まどで ひらく') + '</button>' +
+        (inlineSample ? '<div class="gk-exmodel gk-samp">' + sampleHtml() + '</div>' : '') +
+        '<h3>' + K('こまったら ヒントを [見|み]よう') + '</h3>' + E.parts.map(function (list, i) {
         var lv = hintLv[i] || 0, body = '';
         if (lv >= 1) body = '<div class="gk-exbtns">' + list.map(function (ex, j) {
           var lab = '<b>' + String.fromCharCode(0x30A2 + j * 2) + '　' + esc(ex.label) + '</b>';
@@ -1217,6 +1249,7 @@
         return '<div class="gk-exg"><b>' + esc(Genko.REPORT_HEADS[i]) + '</b>' + body +
           (lv < 3 ? '<button class="gk-hintbtn" data-hint="' + i + '">' + K(HINT_NEXT[lv]) + '</button>' : '') + '</div>';
       }).join('') + '<p class="gk-hint" id="gk-exmsg" aria-live="polite"></p>';
+      on('#gk-sampwin', openSample);
       box.querySelectorAll('[data-hint]').forEach(function (b) { b.addEventListener('click', function () { var i = +b.dataset.hint; hintLv[i] = (hintLv[i] || 0) + 1; paintEx(); }); });
       box.querySelectorAll('[data-ex]').forEach(function (b) { b.addEventListener('click', function () {
         var ij = b.dataset.ex.split(':'), i = +ij[0], ex = E.parts[i][+ij[1]];

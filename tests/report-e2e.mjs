@@ -103,6 +103,10 @@ await page.locator('[data-ex="2:0"]').click();
 const v1 = await page.evaluate(() => document.querySelector('textarea.gk-ime').value);
 check(v1.includes('宮水') && /【[^】　]+】/.test(v1), 'ヒント3: 文が本文に入る（【　】の穴つき）');
 await shot('report-5-hint');
+const [pop] = await Promise.all([page.waitForEvent('popup'), page.locator('#gk-sampwin').click()]);
+await pop.waitForLoadState();
+check((await pop.textContent('body')).includes('宮水') && (await pop.title()).includes('見本'), '見本を べつの まどで ひらける');
+await pop.setViewportSize({ width: 560, height: 760 }); await pop.screenshot({ path: path.join(SHOTS, 'report-7-samplewin.png') }); await pop.close();
 // レポートを組み立てる: 判定 → 合わなければ えらびなおして 合うレポートに
 await page.goto(BASE + '?demo');
 await page.waitForSelector('#go-other'); await page.locator('#go-other').click();
