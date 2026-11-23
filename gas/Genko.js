@@ -74,9 +74,9 @@
   function isHead(line) { return /^[１-９1-9][．.]/.test(String(line || '')); }
   function isSub(line) { return /^[（(][１-９1-9][）)]/.test(String(line || '')); } // （１）などの小見出し（1マスあけを問わない）
 
-  // ---- 作文例（社会「西宮の酒づくり」・地域教材の事実だけで書く。§30 の段階: 写す→えらぶ→かえる→自由）
+  // ---- 作文例。練習（ふでばこ）は「レポートを組み立てる」、本番（社会「西宮の酒づくり」・地域教材の事実だけ）は「レポートを書く」のヒント（§30）
   //   見出しごとに 2〜3 つ。組み合わせは自由（３に合わない４も えらべる: 違和感に気づかせるため。利用者の指定）。
-  //   【 】＝「かえる」の段階で穴になる所（「えらぶ」では【 】を外して入れる）。（１）で始まる行は小見出し（1マスあけない）
+  //   【 】＝ヒント3で本文に入れた時に穴になる所（自分のことばに かえる）。（１）で始まる行は小見出し（1マスあけない）
   // 練習（ふでばこの道具）: 自分の道具を見れば すぐ調べられる題材。事実は一般に知られた製品のくふうだけ（出典は docs/features/report-writing.md）
   var REPORT_FUDE = { id: 'fude', topic: 'ふでばこの道具（練習）', title: 'ふでばこの道具のくふう', parts: [
     [{ id: '1a', label: 'えんぴつの形に気づいた', lines: ['毎日使っている【えんぴつ】をよく見ると、六角形になっていました。なぜまるくないのだろうと、ふしぎに思いました。そこで、ふでばこの道具のくふうについて調べることにしました。'] },
@@ -140,7 +140,7 @@
   function kumiText(sel, set) {
     set = set || REPORT_FUDE;
     var ls = [Z + Z + Z + set.title, nameLine('')];
-    REPORT_HEADS.forEach(function (h, i) { ls.push('', h); ls = ls.concat(exLines(set.parts[i][sel[i]], false)); });
+    REPORT_HEADS.forEach(function (h, i) { ls.push('', h); ls = ls.concat(sel[i] >= 0 ? exLines(set.parts[i][sel[i]], false) : [Z + '（まだ えらんでいない）']); });
     return ls.join('\n');
   }
   // 問題: 半分くらいは合う組み合わせ（rnd は 0〜1 を返す関数。検査で決まった値を渡せる）
@@ -151,16 +151,7 @@
     var list = rnd() < 0.5 ? ok : ng;
     return list[Math.floor(rnd() * list.length)].slice();
   }
-  var REPORT_STAGES = ['copy', 'pick', 'edit', 'free'];
   var REPORT_SETS = [REPORT_FUDE, REPORT_EXAMPLES];
-  // 先生の設定は「段階.題材」の1つの文字列（例 pick.fude。@はメールの判定に当たるので使わない）。題材の既定は練習（fude）
-  function normStage(v) {
-    var m = String(v || '').split('.'), st = REPORT_STAGES.indexOf(m[0]) >= 0 ? m[0] : 'free';
-    var tp = REPORT_SETS.some(function (x) { return x.id === m[1]; }) ? m[1] : 'fude';
-    return st + '.' + tp;
-  }
-  function stageOf(v) { return normStage(v).split('.')[0]; }
-  function exSet(v) { var tp = normStage(v).split('.')[1]; return REPORT_SETS.filter(function (x) { return x.id === tp; })[0]; }
   function exLines(ex, holes) { // 本文に入れる行（段落は1マスあけ。小見出しはそのまま）
     return ex.lines.map(function (l) { if (!holes) l = l.replace(/[【】]/g, ''); return isSub(l) ? l : Z + l; });
   }
@@ -313,7 +304,7 @@
   function newId() { return 'w' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
 
   var Genko = { Z: Z, ROWS: ROWS, COLS: COLS, HANG: HANG, OPEN: OPEN, SMALL: SMALL, MAX_CHARS: MAX_CHARS,
-    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, isSub: isSub, REPORT_EXAMPLES: REPORT_EXAMPLES, REPORT_STAGES: REPORT_STAGES, normStage: normStage, kumiCheck: kumiCheck, kumiText: kumiText, kumiProblem: kumiProblem, stageOf: stageOf, exSet: exSet, REPORT_SETS: REPORT_SETS, exLines: exLines, reportCopyModel: reportCopyModel, setSection: setSection, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
+    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, isSub: isSub, REPORT_EXAMPLES: REPORT_EXAMPLES, kumiCheck: kumiCheck, kumiText: kumiText, kumiProblem: kumiProblem, REPORT_SETS: REPORT_SETS, REPORT_FUDE: REPORT_FUDE, exLines: exLines, reportCopyModel: reportCopyModel, setSection: setSection, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
     check: check, paraNo: paraNo, moveParagraph: moveParagraph, remapComments: remapComments, normFixes: normFixes, fixLocate: fixLocate, applyFix: applyFix, remapFixes: remapFixes, composeMap: composeMap, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
   if (typeof module !== 'undefined' && module.exports) module.exports = Genko; else root.Genko = Genko;
 })(typeof globalThis !== "undefined" ? globalThis : this);
