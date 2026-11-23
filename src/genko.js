@@ -76,7 +76,30 @@
   // ---- 作文例（社会「西宮の酒づくり」・地域教材の事実だけで書く。§30 の段階: 写す→えらぶ→かえる→自由）
   //   見出しごとに 2〜3 つ。組み合わせは自由（３に合わない４も えらべる: 違和感に気づかせるため。利用者の指定）。
   //   【 】＝「かえる」の段階で穴になる所（「えらぶ」では【 】を外して入れる）。（１）で始まる行は小見出し（1マスあけない）
-  var REPORT_EXAMPLES = { topic: '西宮の酒づくり', title: '西宮の酒づくりのくふう', parts: [
+  // 練習（ふでばこの道具）: 自分の道具を見れば すぐ調べられる題材。事実は一般に知られた製品のくふうだけ（出典は docs/features/report-writing.md）
+  var REPORT_FUDE = { id: 'fude', topic: 'ふでばこの道具（練習）', title: 'ふでばこの道具のくふう', parts: [
+    [{ id: '1a', label: 'えんぴつの形に気づいた', lines: ['毎日使っている【えんぴつ】をよく見ると、六角形になっていました。なぜまるくないのだろうと、ふしぎに思いました。そこで、ふでばこの道具のくふうについて調べることにしました。'] },
+     { id: '1b', label: '友だちとくらべた', lines: ['【友だち】とふでばこの中の道具をくらべていたら、形や色がいろいろあることに気づきました。どれにも、何かわけがあるのかなと思いました。そこで、ふでばこの道具のくふうについて調べることにしました。'] },
+     { id: '1c', label: '新しいふでばこ', lines: ['【三年生になって】、新しいふでばこを買ってもらいました。中の道具を一つずつ見ていると、小さなあなや切りこみがあることに気づきました。そこで、ふでばこの道具のくふうについて調べることにしました。'] }],
+    [{ id: '2a', label: '自分の道具を見た', lines: ['自分のふでばこの道具を、一つずつよく見ました。また、【友だちの道具】ともくらべました。'] },
+     { id: '2b', label: '本で調べた', lines: ['自分の道具をよく見てから、文ぼう具の本で、そのわけを調べました。'] },
+     { id: '2c', label: '人に聞いた', lines: ['自分の道具をよく見てから、【家の人】や先生に、そのわけを聞きました。'] }],
+    [{ id: '3a', label: '書く・消すくふう', lines: ['（１）えんぴつの形',
+        'えんぴつは、六角形になっています。六角形だと、つくえの上でころがりにくく、三本の指で持ちやすいそうです。',
+        '（２）消しゴムのケース',
+        '消しゴムの紙のケースには、【角に切りこみ】があります。本には、ケースのはしで消しゴムがおれにくくなるようにしていると書いてありました。'] },
+     { id: '3b', label: '正しく使うくふう', lines: ['（１）じょうぎの目もり',
+        'じょうぎの０の目もりは、はしから少しはなれた所にあります。はしがすりへっても、正しく長さをはかれるようにしているそうです。',
+        '（２）はさみの持つ所',
+        'はさみの持つ所は、【二つのあなの大きさ】がちがいます。小さいあなに親ゆび、大きいあなにほかのゆびを入れると、力を入れやすいそうです。'] },
+     { id: '3c', label: 'あんぜんのくふう', lines: ['（１）キャップのあな',
+        'ペンのキャップには、小さなあながあいています。先生に聞くと、「まちがえてのみこんでしまっても、いきができるようにするためです。」と教えてくれました。',
+        '（２）はさみの先',
+        '子ども用のはさみは、【刃の先がまるく】なっています。人にささったり、けがをしたりしにくいようにしているそうです。'] }],
+    [{ id: '4a', label: '書きやすさ', lines: ['いつも使っているえんぴつや消しゴムにも、書きやすく、使いやすくするくふうがあることが分かりました。とくに、【えんぴつが六角形なのにわけがあったこと】に、おどろきました。こんど、【ほかの文ぼう具】のくふうも見つけたいと思います。'] },
+     { id: '4b', label: '使う人のことを考えて', lines: ['ふでばこの道具は、使う人がまちがえずに使えるように考えてつくられていることが分かりました。とくに、【じょうぎの０の目もりの場所】に、おどろきました。こんど、【家にある道具】も、よく見てみたいと思います。'] },
+     { id: '4c', label: 'あんぜん', lines: ['ふでばこの道具には、使う人がけがをしないためのくふうがあることが分かりました。とくに、【キャップの小さなあな】に、おどろきました。こんど、【教室にあるほかの物】のあんぜんのくふうも、さがしてみたいと思います。'] }]] };
+  var REPORT_EXAMPLES = { id: 'sake', topic: '西宮の酒づくり（本番）', title: '西宮の酒づくりのくふう', parts: [
     [{ id: '1a', label: '社会の学習で知った', lines: ['社会の学習で、西宮には日本酒をつくる工場が多いことを知りました。なぜ西宮で【酒づくりがさかんなのか】、ふしぎに思いました。そこで、酒づくりのくふうについて調べることにしました。'] },
      { id: '1b', label: '酒ミュージアムで見た', lines: ['【家ぞくと】酒ミュージアムに行き、むかしの酒づくりで使った大きなたるを見ました。今はどのように酒をつくっているのか、気になりました。そこで、酒づくりのくふうについて調べることにしました。'] },
      { id: '1c', label: '近くの酒工場', lines: ['【わたしの家の近く】には、酒工場があります。いつも【大きなタンク】を見ながら、中で何をしているのだろうと思っていました。そこで、酒づくりのくふうについて調べることにしました。'] }],
@@ -99,14 +122,23 @@
      { id: '4b', label: 'のんでもらうくふう', lines: ['酒をつくる人たちは、おいしい酒をつくるだけでなく、多くの人にのんでもらうためのくふうもしていることが分かりました。とくに、【入れ物の色や形まで考えていること】に、おどろきました。こんど、【店で酒のびん】を見るときは、どんなくふうがあるか、さがしてみたいと思います。'] },
      { id: '4c', label: 'むかしと今', lines: ['むかしは人の手で、今は機械で酒をつくっていますが、どちらも人のぎじゅつや気くばりが大切だと分かりました。とくに、【そうじに一番時間をかけていること】に、おどろきました。こんど、【酒ミュージアム】に行って、むかしの道具を見てみたいと思います。'] }]] };
   var REPORT_STAGES = ['copy', 'pick', 'edit', 'free'];
-  function normStage(v) { return REPORT_STAGES.indexOf(v) >= 0 ? v : 'free'; }
+  var REPORT_SETS = [REPORT_FUDE, REPORT_EXAMPLES];
+  // 先生の設定は「段階.題材」の1つの文字列（例 pick.fude。@はメールの判定に当たるので使わない）。題材の既定は練習（fude）
+  function normStage(v) {
+    var m = String(v || '').split('.'), st = REPORT_STAGES.indexOf(m[0]) >= 0 ? m[0] : 'free';
+    var tp = REPORT_SETS.some(function (x) { return x.id === m[1]; }) ? m[1] : 'fude';
+    return st + '.' + tp;
+  }
+  function stageOf(v) { return normStage(v).split('.')[0]; }
+  function exSet(v) { var tp = normStage(v).split('.')[1]; return REPORT_SETS.filter(function (x) { return x.id === tp; })[0]; }
   function exLines(ex, holes) { // 本文に入れる行（段落は1マスあけ。小見出しはそのまま）
     return ex.lines.map(function (l) { if (!holes) l = l.replace(/[【】]/g, ''); return isSub(l) ? l : Z + l; });
   }
   // 写す段階の見本（各見出しの1つ目。４ａは３ａに合う）
-  function reportCopyModel(name) {
-    var ls = [Z + Z + Z + REPORT_EXAMPLES.title, nameLine(name || '')];
-    REPORT_HEADS.forEach(function (h, i) { ls.push('', h); ls = ls.concat(exLines(REPORT_EXAMPLES.parts[i][0], false)); });
+  function reportCopyModel(name, set) {
+    set = set || REPORT_FUDE;
+    var ls = [Z + Z + Z + set.title, nameLine(name || '')];
+    REPORT_HEADS.forEach(function (h, i) { ls.push('', h); ls = ls.concat(exLines(set.parts[i][0], false)); });
     ls.push(BOOK, Z);
     return ls.join('\n');
   }
@@ -251,7 +283,7 @@
   function newId() { return 'w' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
 
   var Genko = { Z: Z, ROWS: ROWS, COLS: COLS, HANG: HANG, OPEN: OPEN, SMALL: SMALL, MAX_CHARS: MAX_CHARS,
-    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, isSub: isSub, REPORT_EXAMPLES: REPORT_EXAMPLES, REPORT_STAGES: REPORT_STAGES, normStage: normStage, exLines: exLines, reportCopyModel: reportCopyModel, setSection: setSection, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
+    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, isSub: isSub, REPORT_EXAMPLES: REPORT_EXAMPLES, REPORT_STAGES: REPORT_STAGES, normStage: normStage, stageOf: stageOf, exSet: exSet, REPORT_SETS: REPORT_SETS, exLines: exLines, reportCopyModel: reportCopyModel, setSection: setSection, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
     check: check, paraNo: paraNo, moveParagraph: moveParagraph, remapComments: remapComments, normFixes: normFixes, fixLocate: fixLocate, applyFix: applyFix, remapFixes: remapFixes, composeMap: composeMap, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
   if (typeof module !== 'undefined' && module.exports) module.exports = Genko; else root.Genko = Genko;
 })(typeof globalThis !== "undefined" ? globalThis : this);

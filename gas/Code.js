@@ -2,7 +2,7 @@
 // シート: 名簿[メール, 学年, 組, 番号, 名前]（児童）／ 教師[メール, 学年, 組]（担当。1人で複数行可。組が空なら その学年の全学級）
 //         進捗[メール, read, write, meta, 更新] ／ 設定[キー, 値] ／ 名簿YYYY・進捗YYYY（年度末に「残す」でできる過年度データ）
 // 学級のキーは「学年-組」（例 3-1）。設定のキー: grades:<学級>（見せる学年 "1,2,3"）／ pointer:<学級>:<学年>（授業の進度）／ order:<学年>（出題順）
-//   ／ gates:<学級>（児童画面でオフにしたボタン "m.write,s.rnd"。Sched.GATE_KEYS）／ sakuShare:<学級>（説明文を書く の読み合い "1"）／ repStage:<学級>（レポートを書く の段階 copy/pick/edit。空＝自由。§30）
+//   ／ gates:<学級>（児童画面でオフにしたボタン "m.write,s.rnd"。Sched.GATE_KEYS）／ sakuShare:<学級>（説明文を書く の読み合い "1"）／ repStage:<学級>（レポートを書く の「段階.題材」例 pick.fude。空＝自由・練習。§30）
 //         作文[作品, メール, 学級, 本文, 型, 見せる, コメント, 更新]（説明文を書く §28。1作品＝1行）・作文YYYY（過年度）
 // 児童への応答には本人の進捗以外を含めない（不変条件 I7）。先生は担当学級のものだけ読み書きできる。
 var STUDENT_RE = /@kyoiku\.edu\.nishi\.or\.jp$/;
@@ -883,7 +883,7 @@ function api_sakuShare(klass, on) {
 function api_repStage(klass, stage) {
   requireClass_(klass);
   var v = Genko.normStage(String(stage || ''));
-  setSetting_('repStage:' + klass, v === 'free' ? '' : v);
+  setSetting_('repStage:' + klass, v === 'free.fude' ? '' : v); // 「段階.題材」。既定（自由・練習）は空
   return v;
 }
 // 先生: 修正案を足す（{ line, start, from, to }）。もとの字が いまの本文に無ければ足さない

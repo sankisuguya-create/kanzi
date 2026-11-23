@@ -1109,12 +1109,13 @@
     pick: { name: 'えらぶ', kid: '[作|さく][文|ぶん][例|れい]から えらんで [組|く]み[立|た]てよう', hint: '見出しごとに作文例を2〜3つから選ぶと本文に入る（組み合わせは自由。３に合わない４も選べる）' },
     edit: { name: 'かえる', kid: 'えらんだ[文|ぶん]の 【　】を [自|じ][分|ぶん]の ことばに かえよう', hint: '選んだ作文例の一部が【　】の穴になって入る。穴を自分の言葉に変える' },
     free: { name: '自由', kid: '', hint: '見出しだけの用紙に、自分で書く（今までどおり）' } };
-  function repStage() { return Genko.normStage(S.saku && S.saku.repStage); }
+  function repStage() { return Genko.stageOf(S.saku && S.saku.repStage); }
+  function repSet() { return Genko.exSet(S.saku && S.saku.repStage); }
   function repExText(ex, holes) { return Genko.exLines(ex, holes).join('\n'); }
   // 説明文（縦書き）と レポート（横書き・§30）で ちがう所
   function gkKind(R) {
     var cp = R && repStage() === 'copy';
-    return R ? { title: K('レポートを [書|か]く'), rules: GK_RULES_YOKO, sample: cp ? Genko.reportCopyModel('') : Genko.REPORT_SAMPLE, sampleName: cp ? Genko.REPORT_EXAMPLES.title : '図書館の本のならべ方のくふう', tname: 'レポートを書く' }
+    return R ? { title: K('レポートを [書|か]く'), rules: GK_RULES_YOKO, sample: cp ? Genko.reportCopyModel('', repSet()) : Genko.REPORT_SAMPLE, sampleName: cp ? repSet().title : '図書館の本のならべ方のくふう', tname: 'レポートを書く' }
       : { title: K('[説|せつ][明|めい][文|ぶん]を [書|か]く'), rules: GK_RULES, sample: Genko.SAMPLE, sampleName: 'すがたをかえる葉っぱ', tname: '説明文を書く' };
   }
   function dateShort(t) { if (!t) return ''; var d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2); }
@@ -1212,9 +1213,9 @@
     var picked = {};
     function paintEx() {
       var box = $('#gk-ex'); if (!box) return;
-      var st = repStage(), E = Genko.REPORT_EXAMPLES;
+      var st = repStage(), E = repSet();
       if (st === 'copy') {
-        box.innerHTML = '<h3>' + K('[見|み][本|ほん]（これを [写|うつ]そう）') + '</h3><div class="gk-exmodel">' + Genko.reportCopyModel('').split('\n').slice(2).filter(function (l) { return l.replace(/[　 ]/g, ''); }).map(function (l) { return '<p' + (Genko.isHead(l) || l === Genko.BOOK ? ' class="h"' : '') + '>' + esc(l) + '</p>'; }).join('') + '</div>';
+        box.innerHTML = '<h3>' + K('[見|み][本|ほん]（これを [写|うつ]そう）') + '</h3><div class="gk-exmodel">' + Genko.reportCopyModel('', E).split('\n').slice(2).filter(function (l) { return l.replace(/[　 ]/g, ''); }).map(function (l) { return '<p' + (Genko.isHead(l) || l === Genko.BOOK ? ' class="h"' : '') + '>' + esc(l) + '</p>'; }).join('') + '</div>';
         return;
       }
       box.innerHTML = '<h3>' + K(st === 'edit' ? '[作|さく][文|ぶん][例|れい]を えらんで、【　】を かえよう' : '[作|さく][文|ぶん][例|れい]から えらぼう') + '</h3>' + E.parts.map(function (list, i) {
@@ -1407,11 +1408,12 @@
     function side() {
       var kids = data.students || [];
       $('#gk-tside').innerHTML =
-        (R ? '<div class="gk-stagebox"><b>段階</b><div class="gk-seg" role="group" aria-label="レポートを書く の段階">' + Genko.REPORT_STAGES.map(function (k) { return '<button class="gk-btn" data-st="' + k + '" aria-pressed="' + (data.repStage === k) + '">' + REP_STAGE[k].name + '</button>'; }).join('') + '</div>' +
-          '<p class="hint">' + esc(REP_STAGE[data.repStage].hint) + '。児童の画面には、メニューから入り直した時に とどきます。</p>' +
-          '<details class="gk-exall"><summary>作文例（' + esc(Genko.REPORT_EXAMPLES.topic) + '）を見る</summary>' + Genko.REPORT_EXAMPLES.parts.map(function (list, i) {
+        (R ? '<div class="gk-stagebox"><b>段階</b><div class="gk-seg" role="group" aria-label="レポートを書く の段階">' + Genko.REPORT_STAGES.map(function (k) { return '<button class="gk-btn" data-st="' + k + '" aria-pressed="' + (Genko.stageOf(data.repStage) === k) + '">' + REP_STAGE[k].name + '</button>'; }).join('') + '</div>' +
+          '<b>作文例の題材</b><div class="gk-seg two" role="group" aria-label="作文例の題材">' + Genko.REPORT_SETS.map(function (x) { return '<button class="gk-btn" data-tp="' + x.id + '" aria-pressed="' + (Genko.exSet(data.repStage).id === x.id) + '">' + esc(x.topic) + '</button>'; }).join('') + '</div>' +
+          '<p class="hint">' + esc(REP_STAGE[Genko.stageOf(data.repStage)].hint) + '。児童の画面には、メニューから入り直した時に とどきます。</p>' +
+          '<details class="gk-exall"><summary>作文例（' + esc(Genko.exSet(data.repStage).topic) + '）を見る</summary>' + Genko.exSet(data.repStage).parts.map(function (list, i) {
             return '<h3>' + esc(Genko.REPORT_HEADS[i]) + '</h3>' + list.map(function (ex, j) { return '<p><b>' + String.fromCharCode(0x30A2 + j * 2) + '　' + esc(ex.label) + '</b><br>' + esc(ex.lines.join('\n')).replace(/\n/g, '<br>') + '</p>'; }).join('');
-          }).join('') + '<p class="hint">【　】は「かえる」で穴になる所。組み合わせは自由で、３に合わない４も選べます（違和感に気づかせるため）。事実は地域教材（西宮の酒づくり）にあるものだけです。</p></details></div>' : '') +
+          }).join('') + '<p class="hint">【　】は「かえる」で穴になる所。組み合わせは自由で、３に合わない４も選べます（違和感に気づかせるため）。合う組み合わせ: ' + (Genko.exSet(data.repStage).id === 'sake' ? '３ア↔４ア、３イ↔４ウ、３ウ↔４イ' : '３ア↔４ア、３イ↔４イ、３ウ↔４ウ') + '。</p></details></div>' : '') +
         '<p class="gk-share"><b>読み合う</b> <button class="gk-btn" id="gk-share" aria-pressed="' + data.share + '">' + (data.share ? '✓ ひらいている' : '✕ とじている') + '</button></p>' +
         '<p class="hint">ひらいている間、この学級の児童に「友だちの文」が出ます（各児童が「見せる」にした1作品の本文だけ。コメント・字数は見せません）。児童の画面には、メニューから入り直した時に とどきます。</p>' +
         '<p class="hint">' + kids.filter(function (k) { return k.works.length && !k.trial; }).length + '人 / ' + kids.filter(function (k) { return !k.trial; }).length + '人が書いています</p>' +
@@ -1428,7 +1430,9 @@
       on('#gk-printall', function () {
         gkPrint(kids.filter(function (k) { return k.works.length && !k.trial; }).sort(function (a, b) { return (Number(a.no) || 999) - (Number(b.no) || 999); }).map(function (k) { return sorted(k)[0].text; }), R);
       });
-      app.querySelectorAll('[data-st]').forEach(function (b) { b.addEventListener('click', function () { Platform.repStage(klass, b.dataset.st).then(function (v) { data.repStage = Genko.normStage(v); side(); }); }); });
+      var setRep = function (st, tp) { Platform.repStage(klass, st + '.' + tp).then(function (v) { data.repStage = Genko.normStage(v); side(); }); };
+      app.querySelectorAll('[data-tp]').forEach(function (b) { b.addEventListener('click', function () { setRep(Genko.stageOf(data.repStage), b.dataset.tp); }); });
+      app.querySelectorAll('[data-st]').forEach(function (b) { b.addEventListener('click', function () { setRep(b.dataset.st, Genko.exSet(data.repStage).id); }); });
       on('#gk-share', function () { var v = !data.share; Platform.sakuShare(klass, v).then(function (r) { data.share = r; side(); }); });
       app.querySelectorAll('.gk-kid[data-k]').forEach(function (b) { b.addEventListener('click', function () { selectKid(kids.filter(function (k) { return keyOf(k) === b.dataset.k; })[0]); side(); main(); }); });
     }
