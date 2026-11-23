@@ -72,6 +72,54 @@
     return ls.join('\n');
   }
   function isHead(line) { return /^[１-９1-9][．.]/.test(String(line || '')); }
+  function isSub(line) { return /^[（(][１-９1-9][）)]/.test(String(line || '')); } // （１）などの小見出し（1マスあけを問わない）
+
+  // ---- 作文例（社会「西宮の酒づくり」・地域教材の事実だけで書く。§30 の段階: 写す→えらぶ→かえる→自由）
+  //   見出しごとに 2〜3 つ。組み合わせは自由（３に合わない４も えらべる: 違和感に気づかせるため。利用者の指定）。
+  //   【 】＝「かえる」の段階で穴になる所（「えらぶ」では【 】を外して入れる）。（１）で始まる行は小見出し（1マスあけない）
+  var REPORT_EXAMPLES = { topic: '西宮の酒づくり', title: '西宮の酒づくりのくふう', parts: [
+    [{ id: '1a', label: '社会の学習で知った', lines: ['社会の学習で、西宮には日本酒をつくる工場が多いことを知りました。なぜ西宮で【酒づくりがさかんなのか】、ふしぎに思いました。そこで、酒づくりのくふうについて調べることにしました。'] },
+     { id: '1b', label: '酒ミュージアムで見た', lines: ['【家ぞくと】酒ミュージアムに行き、むかしの酒づくりで使った大きなたるを見ました。今はどのように酒をつくっているのか、気になりました。そこで、酒づくりのくふうについて調べることにしました。'] },
+     { id: '1c', label: '近くの酒工場', lines: ['【わたしの家の近く】には、酒工場があります。いつも【大きなタンク】を見ながら、中で何をしているのだろうと思っていました。そこで、酒づくりのくふうについて調べることにしました。'] }],
+    [{ id: '2a', label: '本で調べた', lines: ['地いきの学習の本を読んで、西宮の酒づくりについて調べました。また、本にのっている酒工場の方や杜氏の方の話を読みました。'] },
+     { id: '2b', label: 'ミュージアムを見学した', lines: ['酒ミュージアムを見学して、むかしの酒づくりの道具を見ました。それから、地いきの学習の本で、今の酒工場のようすを調べました。'] },
+     { id: '2c', label: '人に聞いた', lines: ['地いきの学習の本で調べてから、【家の人】に酒づくりについて話を聞きました。'] }],
+    [{ id: '3a', label: '水と米のくふう', lines: ['（１）水のくふう',
+        '本には、「酒づくりにとって、水はいちばん大切なものです。」と書いてありました。西宮では、宮水という水を、海がん近くのいどからくみあげて使っています。【わき出る量や水のせいしつがかわらないように】、いつも気をつけているそうです。',
+        '（２）米のくふう',
+        '西宮の酒工場では、山田錦という、酒づくりにてきした米を使っています。この米は、【近くの六甲山の北側あたり】でたくさんつくられて、西宮にはこばれてくるそうです。'] },
+     { id: '3b', label: '人と工場のくふう', lines: ['（１）人のぎじゅつ',
+        '西宮の酒は、杜氏を中心とした蔵人たちがつくっています。杜氏は、蔵の中で酒づくりのけいけんが一番ある人しかできません。杜氏の方は、「酒づくりで問題が起きたときに、蔵人から相談されたら解決の方法を教えています。」とおっしゃっていました。',
+        '（２）工場のくふう',
+        '今は、ほとんど機械で酒をつくっています。びんにつめる機械は、【１時間に数千本】の酒をびんづめできるそうです。また、工場で働いている人は、【工場の中のそうじ】に一番時間をかけているそうです。'] },
+     { id: '3c', label: 'これからのくふう', lines: ['（１）多くの人にのんでもらうくふう',
+        '酒工場の方は、日本酒をあまりのまなかった人にものんでもらえるように、【入れ物の色や形】をくふうしたり、ユニークな商品の名前を考えたりしているそうです。',
+        '（２）新しいものをつくるくふう',
+        '酒工場では、お酒を原料にした【けしょう品】や、日本酒とほかのざいりょうをまぜた新しいお酒もつくっているそうです。さいきんは、外国への輸出もふえていると書いてありました。'] }],
+    [{ id: '4a', label: '水・米・人のひみつ', lines: ['西宮の酒づくりには、よい水、よい米、すぐれたぎじゅつをもつ人という、いくつものひみつがあることが分かりました。とくに、【水の量やせいしつがかわらないように気をつけていること】に、おどろきました。こんど、【宮水のいど】を見に行きたいと思います。'] },
+     { id: '4b', label: 'のんでもらうくふう', lines: ['酒をつくる人たちは、おいしい酒をつくるだけでなく、多くの人にのんでもらうためのくふうもしていることが分かりました。とくに、【入れ物の色や形まで考えていること】に、おどろきました。こんど、【店で酒のびん】を見るときは、どんなくふうがあるか、さがしてみたいと思います。'] },
+     { id: '4c', label: 'むかしと今', lines: ['むかしは人の手で、今は機械で酒をつくっていますが、どちらも人のぎじゅつや気くばりが大切だと分かりました。とくに、【そうじに一番時間をかけていること】に、おどろきました。こんど、【酒ミュージアム】に行って、むかしの道具を見てみたいと思います。'] }]] };
+  var REPORT_STAGES = ['copy', 'pick', 'edit', 'free'];
+  function normStage(v) { return REPORT_STAGES.indexOf(v) >= 0 ? v : 'free'; }
+  function exLines(ex, holes) { // 本文に入れる行（段落は1マスあけ。小見出しはそのまま）
+    return ex.lines.map(function (l) { if (!holes) l = l.replace(/[【】]/g, ''); return isSub(l) ? l : Z + l; });
+  }
+  // 写す段階の見本（各見出しの1つ目。４ａは３ａに合う）
+  function reportCopyModel(name) {
+    var ls = [Z + Z + Z + REPORT_EXAMPLES.title, nameLine(name || '')];
+    REPORT_HEADS.forEach(function (h, i) { ls.push('', h); ls = ls.concat(exLines(REPORT_EXAMPLES.parts[i][0], false)); });
+    ls.push(BOOK, Z);
+    return ls.join('\n');
+  }
+  // 見出し hi（0〜3）の下の本文を lines に入れかえる。見出しの行と直前の空き行はそのまま（headSig は変わらない）。見出しがなければ null
+  function setSection(text, hi, lines) {
+    var ls = String(text || '').split('\n'), h = ls.indexOf(REPORT_HEADS[hi]);
+    if (h < 0) return null;
+    var j = h + 1;
+    while (j < ls.length && !isHead(ls[j]) && ls[j] !== BOOK) j++;
+    var end = j; if (j < ls.length && isHead(ls[j]) && ls[j - 1] === '' && j - 1 > h) end = j - 1; // 次の見出しの前の空き行は残す
+    return ls.slice(0, h + 1).concat(lines, ls.slice(end)).join('\n');
+  }
   // 見出しの行は書きかえられない（利用者の指定）。見出しの行の並びと、直前の空き行を1つの文字列にして、変わったかどうかを比べる
   // （もとの作品に空き行がなくても、その作品の形のまま守る）
   function headSig(text) {
@@ -113,7 +161,7 @@
     if (!bare(n) || /。/.test(n)) out.push({ line: 1, msg: '2行目に 名前を 書こう', tag: '名前' });
     for (var i = 2; i < lines.length; i++) {
       if (rep && bare(lines[i]) === bare(BOOK)) book = true;
-      if (rep && (book || isHead(lines[i]))) continue;
+      if (rep && (book || isHead(lines[i]) || isSub(lines[i]))) continue;
       if (bare(lines[i]) && lines[i][0] !== Z) out.push({ line: i, msg: paraNo(text, i) + '番目の 段落：はじめを 1マス あけよう', tag: '1マス あける' });
     }
     if (rep) lines.forEach(function (l, i) { // 見出しの下に まだ何も書いていない
@@ -204,7 +252,7 @@
   function newId() { return 'w' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
 
   var Genko = { Z: Z, ROWS: ROWS, COLS: COLS, HANG: HANG, OPEN: OPEN, SMALL: SMALL, MAX_CHARS: MAX_CHARS,
-    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
+    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, isSub: isSub, REPORT_EXAMPLES: REPORT_EXAMPLES, REPORT_STAGES: REPORT_STAGES, normStage: normStage, exLines: exLines, reportCopyModel: reportCopyModel, setSection: setSection, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
     check: check, paraNo: paraNo, moveParagraph: moveParagraph, remapComments: remapComments, normFixes: normFixes, fixLocate: fixLocate, applyFix: applyFix, remapFixes: remapFixes, composeMap: composeMap, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
   if (typeof module !== 'undefined' && module.exports) module.exports = Genko; else root.Genko = Genko;
 })(typeof globalThis !== "undefined" ? globalThis : this);

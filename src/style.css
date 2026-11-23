@@ -820,6 +820,19 @@ textarea.gk-ime { position: absolute; opacity: 0; width: 2px; height: 2px; paddi
 .gk-wtab .meta { font-size: 13px; color: var(--ink-sub); }
 .gk-flist .gk-two { display: inline-flex; gap: 6px; margin-left: 6px; }
 .gk-cedit input { display: block; width: 100%; font-size: 20px; min-height: 48px; margin-top: 4px; }
+/* ---- レポートを書く の段階（§30） */
+.gk-stage { margin: 0; padding: 10px 14px; border: 3px solid var(--cat-1); border-radius: 12px; background: var(--fill-a); font-size: 18px; font-weight: 700; }
+.gk-ex { display: flex; flex-direction: column; gap: 8px; }
+.gk-exg b { display: block; font-size: 16px; margin-bottom: 4px; }
+.gk-exbtns { display: flex; flex-direction: column; gap: 6px; }
+.gk-exbtns .gk-read { min-height: 48px; text-align: left; }
+.gk-exbtns .gk-read[aria-pressed="true"] { border-color: var(--cat-1); border-width: 3px; background: var(--fill-a); font-weight: 700; }
+.gk-exmodel { font-size: 15px; line-height: 1.7; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; max-height: 50vh; overflow-y: auto; }
+.gk-exmodel p { margin: 0 0 4px; } .gk-exmodel p.h { font-weight: 700; margin-top: 6px; }
+.gk-stagebox { display: flex; flex-direction: column; gap: 6px; }
+.gk-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.gk-seg .gk-btn { min-height: 48px; font-size: 16px; padding: 4px; }
+.gk-exall { font-size: 15px; } .gk-exall h3 { font-size: 16px; margin: 8px 0 2px; } .gk-exall p { margin: 0 0 6px; line-height: 1.6; }
 /* ---- 説明文を書く: 印刷（B4 横・400字詰め）。画面には出さず、印刷の時だけ この部分だけを出す */
 #gk-print { display: none; }
 .gk-printone { margin-left: auto; min-height: 48px; font-size: 16px; }

@@ -2,7 +2,7 @@
 // シート: 名簿[メール, 学年, 組, 番号, 名前]（児童）／ 教師[メール, 学年, 組]（担当。1人で複数行可。組が空なら その学年の全学級）
 //         進捗[メール, read, write, meta, 更新] ／ 設定[キー, 値] ／ 名簿YYYY・進捗YYYY（年度末に「残す」でできる過年度データ）
 // 学級のキーは「学年-組」（例 3-1）。設定のキー: grades:<学級>（見せる学年 "1,2,3"）／ pointer:<学級>:<学年>（授業の進度）／ order:<学年>（出題順）
-//   ／ gates:<学級>（児童画面でオフにしたボタン "m.write,s.rnd"。Sched.GATE_KEYS）／ sakuShare:<学級>（説明文を書く の読み合い "1"）
+//   ／ gates:<学級>（児童画面でオフにしたボタン "m.write,s.rnd"。Sched.GATE_KEYS）／ sakuShare:<学級>（説明文を書く の読み合い "1"）／ repStage:<学級>（レポートを書く の段階 copy/pick/edit。空＝自由。§30）
 //         作文[作品, メール, 学級, 本文, 型, 見せる, コメント, 更新]（説明文を書く §28。1作品＝1行）・作文YYYY（過年度）
 // 児童への応答には本人の進捗以外を含めない（不変条件 I7）。先生は担当学級のものだけ読み書きできる。
 var STUDENT_RE = /@kyoiku\.edu\.nishi\.or\.jp$/;
@@ -68,7 +68,7 @@ function api_lbRosterCheck() {
   var baseK = {}; base.forEach(function (x) { baseK[x.klass] = true; });
   var mineK = {}; mine.forEach(function (x) { mineK[x.klass] = true; });
   var orphan = Object.keys(settings_()).filter(function (k) {
-    var m = /^(?:grades|pointer|gates|bunkai|write|sakuShare|test):([^:]+)/.exec(k); return m && !baseK[m[1]];
+    var m = /^(?:grades|pointer|gates|bunkai|write|sakuShare|repStage|test):([^:]+)/.exec(k); return m && !baseK[m[1]];
   });
   return { using: baseRoster_() ? 'base' : 'sheet', ok: !kanziOnly.length && !moved.length && !orphan.length,
     kanziOnly: kanziOnly, classMoved: moved, orphanSettings: orphan, baseOnlyClasses: Object.keys(baseK).filter(function (k) { return !mineK[k]; }).sort() };
@@ -85,7 +85,7 @@ function api_lbRosterUse(on) {
 
 // 画面から呼べる関数（ここに無いものは呼べない）。api_ を足したらここにも足す（tests/gas.test.mjs が照らし合わせる）
 function lbApi_(name, args) {
-  var API = { api_archiveAnonymize: api_archiveAnonymize, api_archiveSave: api_archiveSave, api_archiveView: api_archiveView, api_archiveYears: api_archiveYears, api_bunkai: api_bunkai, api_gates: api_gates, api_init: api_init, api_lbRosterCheck: api_lbRosterCheck, api_lbRosterUse: api_lbRosterUse, api_sakuComment: api_sakuComment, api_sakuDelete: api_sakuDelete, api_sakuFix: api_sakuFix, api_sakuFixDel: api_sakuFixDel, api_sakuFriends: api_sakuFriends, api_sakuMine: api_sakuMine, api_sakuRead: api_sakuRead, api_sakuSave: api_sakuSave, api_sakuShare: api_sakuShare, api_sakuTeacher: api_sakuTeacher, api_sakuTeacherDelete: api_sakuTeacherDelete, api_save: api_save, api_setBunkai: api_setBunkai, api_setGates: api_setGates, api_setGrades: api_setGrades, api_setOrder: api_setOrder, api_setPointer: api_setPointer, api_setTests: api_setTests, api_setWriteLevel: api_setWriteLevel, api_teacherView: api_teacherView };
+  var API = { api_archiveAnonymize: api_archiveAnonymize, api_archiveSave: api_archiveSave, api_archiveView: api_archiveView, api_archiveYears: api_archiveYears, api_bunkai: api_bunkai, api_gates: api_gates, api_init: api_init, api_lbRosterCheck: api_lbRosterCheck, api_lbRosterUse: api_lbRosterUse, api_sakuComment: api_sakuComment, api_sakuDelete: api_sakuDelete, api_sakuFix: api_sakuFix, api_sakuFixDel: api_sakuFixDel, api_sakuFriends: api_sakuFriends, api_sakuMine: api_sakuMine, api_sakuRead: api_sakuRead, api_sakuSave: api_sakuSave, api_sakuShare: api_sakuShare, api_repStage: api_repStage, api_sakuTeacher: api_sakuTeacher, api_sakuTeacherDelete: api_sakuTeacherDelete, api_save: api_save, api_setBunkai: api_setBunkai, api_setGates: api_setGates, api_setGrades: api_setGrades, api_setOrder: api_setOrder, api_setPointer: api_setPointer, api_setTests: api_setTests, api_setWriteLevel: api_setWriteLevel, api_teacherView: api_teacherView };
   if (!Object.prototype.hasOwnProperty.call(API, String(name))) throw new Error('呼べない関数です: ' + name);
   return API[name].apply(null, Array.isArray(args) ? args : []);
 }
@@ -767,6 +767,7 @@ function sakuKlassCell_(v) {
 function sakuKlassText_(klass) { return "'" + klass; }
 function sakuOut_(w) { var o = Genko.normWork(w); return o; } // 行番号・メールを外して返す
 function sakuShare_(klass) { return String(setting_('sakuShare:' + klass)) === '1'; }
+function repStage_(klass) { return Genko.normStage(String(setting_('repStage:' + klass) || '')); }
 function sakuStudent_() {
   var me = begin_();
   if (me.role !== 'student') throw new Error('児童のアカウントではありません');
@@ -780,7 +781,7 @@ function api_sakuMine() {
   var me = sakuStudent_();
   var all = sakuAll_().filter(function (w) { return w.email === me.email; });
   // deleted: 消した作品の番号（端末に残っている控えを捨てさせる。先生が消した作品が 控えから送り直されて戻らないように）
-  return JSON.stringify({ share: sakuShare_(me.klass), works: all.filter(function (w) { return !w.del; }).map(sakuOut_), deleted: all.filter(function (w) { return w.del; }).map(function (w) { return w.id; }) });
+  return JSON.stringify({ share: sakuShare_(me.klass), repStage: repStage_(me.klass), works: all.filter(function (w) { return !w.del; }).map(sakuOut_), deleted: all.filter(function (w) { return w.del; }).map(function (w) { return w.id; }) });
 }
 // 児童: 作品を保存（新しい作品は行を足す）。見せる作品は1人1つ（利用者の指定）なので、見せるにしたら自分のほかの作品を外す
 function api_sakuSave(json) {
@@ -854,7 +855,7 @@ function api_sakuTeacher(klass) {
   requireClass_(klass);
   var kids = roster_().filter(function (x) { return x.klass === klass; }).sort(function (a, b) { return (Number(a.no) || 999) - (Number(b.no) || 999); });
   var by = {}; sakuRows_().forEach(function (w) { if (w.klass === klass) (by[w.email] = by[w.email] || []).push(sakuOut_(w)); });
-  return JSON.stringify({ share: sakuShare_(klass), students: kids.map(function (k) { return { no: k.no, name: k.name, works: (by[k.email] || []).sort(function (a, b) { return b.updated - a.updated; }) }; }) });
+  return JSON.stringify({ share: sakuShare_(klass), repStage: repStage_(klass), students: kids.map(function (k) { return { no: k.no, name: k.name, works: (by[k.email] || []).sort(function (a, b) { return b.updated - a.updated; }) }; }) });
 }
 // 先生: 段落（行番号）ごとのコメントを付ける・消す（text が空なら消す）。担当学級の作品だけ
 function api_sakuComment(klass, id, line, text) {
@@ -877,6 +878,13 @@ function api_sakuShare(klass, on) {
   requireClass_(klass);
   setSetting_('sakuShare:' + klass, on ? '1' : '');
   return !!on;
+}
+// 先生: レポートを書く の段階（写す・えらぶ・かえる・自由）を学級ごとに決める（§30。キー repStage:<学級>）
+function api_repStage(klass, stage) {
+  requireClass_(klass);
+  var v = Genko.normStage(String(stage || ''));
+  setSetting_('repStage:' + klass, v === 'free' ? '' : v);
+  return v;
 }
 // 先生: 修正案を足す（{ line, start, from, to }）。もとの字が いまの本文に無ければ足さない
 function api_sakuFix(klass, id, json) {
