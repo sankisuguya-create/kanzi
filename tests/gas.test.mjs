@@ -573,7 +573,7 @@ function makeBaseEnv(sheets, email, props = { KANZI_SS_ID: 'KANZI' }) {
   vm.runInContext("var LB_APP_COMMIT = '0123456789abcdef0123456789abcdef01234567', LB_APP_REPO = 'sankisuguya-create/kanzi'; Sched.VER = 'abc1234';", ctx);
   return ctx;
 }
-test('学習BASE: データは KANZI_SS_ID のスプレッドシート。一時保存の名前に kanzi: を付ける。単体の時は今まで通り', () => {
+test('学習BASE: データは台帳（無ければ KANZI_SS_ID）のスプレッドシート。一時保存の名前に kanzi: を付ける。単体の時は今まで通り', () => {
   const sheets = base();
   const ctx = makeBaseEnv(sheets, K1);
   const info = ctx.lbApi_('api_init', []);
@@ -584,7 +584,7 @@ test('学習BASE: データは KANZI_SS_ID のスプレッドシート。一時�
   assert.equal(ctx.lbReady_(), true);
   const none = makeBaseEnv(base(), K1, {});
   assert.equal(none.lbReady_(), false);
-  assert.throws(() => none.lbApi_('api_init', []), /KANZI_SS_ID/);
+  assert.throws(() => none.lbApi_('api_init', []), /app_sheets/);
   const alone = makeEnv(base(), K1);
   assert.equal(alone.inBase_(), false);
   assert.equal(alone.api_init().klass, '3-1', '単体では付いているスプレッドシート');

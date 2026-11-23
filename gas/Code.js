@@ -20,16 +20,21 @@ function doGet() {
 // ---- 学習BASE の中で動く時（learning-base の tools/bundle.cjs が、このファイルを関数に包んで LB_APP_COMMIT などを渡す）。
 // 単体の GAS（このスプレッドシートに付けたもの）では今まで通り。約束は learning-base の docs/add-app.md
 function inBase_() { return typeof LB_APP_COMMIT !== 'undefined'; }
-// データのスプレッドシート：単体では付いているもの。学習BASE の中では、スクリプトのプロパティ KANZI_SS_ID（今の漢字の森のスプレッドシートの ID）
+// データのスプレッドシート：単体では付いているもの。学習BASE の中では、BASEシートの台帳 app_sheets の kanzi の行（learning-base gas/Stores.gs）。
+// 台帳に無ければ前の形のスクリプトのプロパティ KANZI_SS_ID を読み、台帳に写す
 var SS_ = null;
+function kanziSheetId_(peek) {
+  if (typeof LbStores !== 'undefined') return LbStores.id('kanzi', '', { legacyProp: 'KANZI_SS_ID', peek: !!peek });
+  return String(PropertiesService.getScriptProperties().getProperty('KANZI_SS_ID') || '').trim();
+}
 function ss_() {
   if (SS_) return SS_;
   if (!inBase_()) return (SS_ = SpreadsheetApp.getActiveSpreadsheet());
-  var id = String(PropertiesService.getScriptProperties().getProperty('KANZI_SS_ID') || '').trim();
-  if (!id) throw new Error('漢字の森のデータの場所が決まっていません（スクリプトのプロパティ KANZI_SS_ID に、漢字の森のスプレッドシートの ID を入れてください）');
+  var id = kanziSheetId_(false);
+  if (!id) throw new Error('漢字の森のデータの場所が決まっていません（BASEシートの app_sheets に、アプリ「kanzi」・単元は空・スプレッドシートに漢字の森の URL の行を足してください）');
   return (SS_ = SpreadsheetApp.openById(id));
 }
-function lbReady_() { try { return !!String(PropertiesService.getScriptProperties().getProperty('KANZI_SS_ID') || '').trim(); } catch (e) { return false; } }
+function lbReady_() { try { return !!kanziSheetId_(true); } catch (e) { return false; } }
 // 一時保存：学習BASE の中では全アプリで1つの置き場を使うので、名前の頭に kanzi: を付ける
 function cache_() {
   var c = CacheService.getScriptCache();
