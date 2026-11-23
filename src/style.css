@@ -829,6 +829,10 @@ textarea.gk-ime { position: absolute; opacity: 0; width: 2px; height: 2px; paddi
 .gk-exbtns .gk-read[aria-pressed="true"] { border-color: var(--cat-1); border-width: 3px; background: var(--fill-a); font-weight: 700; }
 .gk-exmodel { font-size: 15px; line-height: 1.7; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; max-height: 50vh; overflow-y: auto; }
 .gk-exmodel p { margin: 0 0 4px; } .gk-exmodel p.h { font-weight: 700; margin-top: 6px; }
+.gk-hintbtn { min-height: 48px; width: 100%; border: 2px dashed var(--line); background: var(--card); border-radius: 10px; font-size: 16px; margin-bottom: 6px; }
+.gk-hintbtn[aria-expanded="true"] { border-style: solid; }
+.gk-exopt { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 8px 10px; border: 2px solid var(--line); border-radius: 10px; background: var(--card); }
+.gk-extxt { font-size: 14px; line-height: 1.6; font-weight: 400; color: var(--ink); }
 .gk-stagebox { display: flex; flex-direction: column; gap: 6px; }
 .gk-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .gk-seg.two { grid-template-columns: 1fr 1fr; }

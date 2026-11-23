@@ -1114,8 +1114,9 @@
   function repExText(ex, holes) { return Genko.exLines(ex, holes).join('\n'); }
   // 説明文（縦書き）と レポート（横書き・§30）で ちがう所
   function gkKind(R) {
-    var cp = R && repStage() === 'copy';
-    return R ? { title: K('レポートを [書|か]く'), rules: GK_RULES_YOKO, sample: cp ? Genko.reportCopyModel('', repSet()) : Genko.REPORT_SAMPLE, sampleName: cp ? repSet().title : '図書館の本のならべ方のくふう', tname: 'レポートを書く' }
+    // レポートのお手本は 酒づくりのレポート（作文例のア。利用者の指定）
+    var sk = Genko.exSet('free.sake');
+    return R ? { title: K('レポートを [書|か]く'), rules: GK_RULES_YOKO, sample: Genko.reportCopyModel('', sk), sampleName: sk.title, tname: 'レポートを書く' }
       : { title: K('[説|せつ][明|めい][文|ぶん]を [書|か]く'), rules: GK_RULES, sample: Genko.SAMPLE, sampleName: 'すがたをかえる葉っぱ', tname: '説明文を書く' };
   }
   function dateShort(t) { if (!t) return ''; var d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2); }
@@ -1170,7 +1171,7 @@
         '<button class="gk-btn" id="gk-orderdone">' + K('できた') + '</button></div>' +
       '<div class="gk-result" id="gk-result" aria-live="polite"></div>' +
       '<label class="gk-show"><input type="checkbox" id="gk-show"' + (w.show ? ' checked' : '') + '> ' + K('この[文|ぶん]を [友|とも]だちに [見|み]せる') + '</label>' +
-      (R && repStage() !== 'free' ? '<div id="gk-ex" class="gk-ex"></div>' : '') +
+      (R ? '<div id="gk-ex" class="gk-ex"></div>' : '') +
       '<div id="gk-fixes"></div><div id="gk-comments"></div>' +
       '<span class="gk-saved" id="gk-saved" aria-live="polite">' + (fresh ? '' : '✓ ほぞんしました') + '</span>' + KD.rules +
       '<details class="gk-del"><summary>' + K('この[文|ぶん]を [消|け]す') + '</summary><button class="gk-btn danger" id="gk-del">' + K('[消|け]す（もとに もどせません）') + '</button></details>' +
@@ -1209,20 +1210,26 @@
         changed(); paintFixes(); draw();
       }); });
     }
-    // レポートの段階（§30）: 写す＝見本を横に出す／えらぶ・かえる＝見出しごとに作文例を えらぶと 本文に入る
-    var picked = {};
+    // レポートの作文例（§30）: 見出しごとに「ヒントを見る」で かくしてあり、押すと出る（利用者の指定）。
+    //   写す＝その見出しの見本の文／えらぶ・かえる＝ア〜ウ（内容つき。押すと本文に入る）／自由＝ア〜ウの内容を読むだけ
+    var picked = {}, hintOpen = {};
     function paintEx() {
       var box = $('#gk-ex'); if (!box) return;
-      var st = repStage(), E = repSet();
-      if (st === 'copy') {
-        box.innerHTML = '<h3>' + K('[見|み][本|ほん]（これを [写|うつ]そう）') + '</h3><div class="gk-exmodel">' + Genko.reportCopyModel('', E).split('\n').slice(2).filter(function (l) { return l.replace(/[　 ]/g, ''); }).map(function (l) { return '<p' + (Genko.isHead(l) || l === Genko.BOOK ? ' class="h"' : '') + '>' + esc(l) + '</p>'; }).join('') + '</div>';
-        return;
-      }
-      box.innerHTML = '<h3>' + K(st === 'edit' ? '[作|さく][文|ぶん][例|れい]を えらんで、【　】を かえよう' : '[作|さく][文|ぶん][例|れい]から えらぼう') + '</h3>' + E.parts.map(function (list, i) {
-        return '<div class="gk-exg"><b>' + esc(Genko.REPORT_HEADS[i]) + '</b><div class="gk-exbtns">' + list.map(function (ex, j) {
-          return '<button class="gk-read" data-ex="' + i + ':' + j + '" aria-pressed="' + (picked[i] === ex.id) + '">' + String.fromCharCode(0x30A2 + j * 2) + '　' + esc(ex.label) + '</button>';
-        }).join('') + '</div></div>';
+      var st = repStage(), E = repSet(), canPick = st === 'pick' || st === 'edit';
+      var head = st === 'copy' ? '[見|み][本|ほん]を [写|うつ]そう' : st === 'edit' ? '[作|さく][文|ぶん][例|れい]を えらんで、【　】を かえよう' : st === 'pick' ? '[作|さく][文|ぶん][例|れい]から えらぼう' : 'こまったら ヒントを [見|み]よう';
+      box.innerHTML = '<h3>' + K(head) + '</h3>' + E.parts.map(function (list, i) {
+        var open = !!hintOpen[i], body = '';
+        if (open) {
+          if (st === 'copy') body = '<div class="gk-exmodel">' + list[0].lines.map(function (l) { return '<p' + (Genko.isSub(l) ? ' class="h"' : '') + '>' + esc(l.replace(/[【】]/g, '')) + '</p>'; }).join('') + '</div>';
+          else body = '<div class="gk-exbtns">' + list.map(function (ex, j) {
+            var txt = '<span class="gk-extxt">' + ex.lines.map(function (l) { return esc(st === 'edit' ? l : l.replace(/[【】]/g, '')); }).join('<br>') + '</span>';
+            var lab = '<b>' + String.fromCharCode(0x30A2 + j * 2) + '　' + esc(ex.label) + '</b>';
+            return canPick ? '<button class="gk-read gk-exopt" data-ex="' + i + ':' + j + '" aria-pressed="' + (picked[i] === ex.id) + '">' + lab + txt + '</button>' : '<div class="gk-exopt">' + lab + txt + '</div>';
+          }).join('') + '</div>';
+        }
+        return '<div class="gk-exg"><b>' + esc(Genko.REPORT_HEADS[i]) + '</b><button class="gk-hintbtn" data-hint="' + i + '" aria-expanded="' + open + '">' + K(open ? 'ヒントを とじる' : '💡 ヒントを [見|み]る') + '</button>' + body + '</div>';
       }).join('') + '<p class="gk-hint" id="gk-exmsg" aria-live="polite"></p>';
+      box.querySelectorAll('[data-hint]').forEach(function (b) { b.addEventListener('click', function () { var i = +b.dataset.hint; hintOpen[i] = !hintOpen[i]; paintEx(); }); });
       box.querySelectorAll('[data-ex]').forEach(function (b) { b.addEventListener('click', function () {
         var ij = b.dataset.ex.split(':'), i = +ij[0], ex = E.parts[i][+ij[1]];
         var t = Genko.setSection(ta.value, i, Genko.exLines(ex, repStage() === 'edit'));

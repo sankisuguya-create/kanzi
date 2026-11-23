@@ -105,6 +105,9 @@ await page.waitForSelector('#go-other'); await page.locator('#go-other').click()
 await page.locator('.chooser .big[data-id="report"]').click();
 await page.waitForSelector('.gk-stage');
 await page.locator('#gk-rep').click();
+await page.waitForSelector('[data-hint="0"]');
+check(await page.locator('[data-ex]').count() === 0, 'ヒント: はじめは 作文例が かくれている');
+for (const h of ['0', '2', '3']) await page.locator('[data-hint="' + h + '"]').click();
 await page.waitForSelector('[data-ex="0:1"]');
 await page.locator('[data-ex="0:1"]').click();
 await page.locator('[data-ex="2:2"]').click();
