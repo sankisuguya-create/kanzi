@@ -16,6 +16,8 @@
 
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function $(sel) { return app.querySelector(sel); }
+  // 待ちの表示：文の終わりの「…」（先頭の「… 」）を、回る点に置き換えて出す（設計書・- の ui-layout「待ちの表示」）
+  function setMsg(el, t) { if (!el) return; t = String(t); var w = /…$/.test(t) || /^… /.test(t); el.textContent = w ? t.replace(/…$/, '').replace(/^… /, '') : t; if (w) el.insertAdjacentHTML('beforeend', '<span class="ldots" aria-hidden="true"></span>'); }
   function on(sel, fn) { var e = $(sel); if (e) e.addEventListener('click', fn); }
   // 先生のおためしでは「1日すすめる」で日付をずらせる（S.dayOffset）。本番の児童は常に0
   function nowMs() { return Date.now() + (S.dayOffset || 0) * 86400000; }
@@ -196,7 +198,7 @@
       gateMsg('× 保存できませんでした。もう一度 押してください');
     });
   }
-  function gateMsg(t) { var m = document.getElementById('tb-msg'); if (m) m.textContent = t; }
+  function gateMsg(t) { var m = document.getElementById('tb-msg'); setMsg(m, t); }
   // 児童: メニュー・「どの字で やる？」を出すたびと、開いている間 30秒ごとに読み直す（授業中の切り替えを、開いたままの画面に届ける）
   var gateFetchedAt = 0;
   function watchGates() {
@@ -379,7 +381,7 @@
     function header(nav) {
       var done = items.filter(function (_, i) { return answered(i); }).length;
       return '<header class="bar tp-bar"><button class="back" id="back">もどる</button>' +
-        '<span class="prog" id="tp-prog">' + (revealing() ? K('[丸|まる]つけ[中|ちゅう]…') : st.result ? st.result.score + K('[点|てん]') + '（' + st.result.ok + ' / ' + units + '）' : (jk ? K('[二|に][文|も][字|じ] ') : K('れんしゅうプリント ')) + done + ' / ' + items.length) + '</span>' +
+        '<span class="prog" id="tp-prog">' + (revealing() ? K('[丸|まる]つけ[中|ちゅう]') + '<span class="ldots" aria-hidden="true"></span>' : st.result ? st.result.score + K('[点|てん]') + '（' + st.result.ok + ' / ' + units + '）' : (jk ? K('[二|に][文|も][字|じ] ') : K('れんしゅうプリント ')) + done + ' / ' + items.length) + '</span>' +
         '<span class="nav">' + (revealing() ? '' : (nav || '') + '<button id="tp-new">' + K('[新|あたら]しい プリント') + '</button>' + (st.result ? '' : (gateOff('t.hint') && !S.trial ? '' : '<button class="tp-hintbtn" id="tp-hint" data-gate="t.hint" aria-pressed="' + hintOn() + '">' + K('ヒント（2[画|かく]めまで）') + (hintOn() ? ' ✓' : '') + '</button>') + '<button class="primary" id="tp-grade">' + K('[丸|まる]つけ') + '</button>')) + '</span></header>';
     }
     function bindHeader() {
@@ -1117,7 +1119,7 @@
   function sakubunHome(R) {
     R = R === true; var KD = gkKind(R), home = function () { sakubunHome(R); };
     clearScreen();
-    app.innerHTML = '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + KD.title + '</span><span></span></header><main class="gk-home"><p>よみこみ中…</p></main>';
+    app.innerHTML = '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + KD.title + '</span><span></span></header><main class="gk-home"><p>よみこみ中<span class="ldots" aria-hidden="true"></span></p></main>';
     on('#back', otherMenu);
     var alive = true; cleanup.push(function () { alive = false; });
     Platform.sakuMine(S.info.email).then(function (r) {
@@ -1258,7 +1260,7 @@
         ta.value = t; picked[i] = ex.id; flags = null; changed(); paintEx(); paintFixes(); draw();
       }); });
     }
-    function status(t) { var e = $('#gk-saved'); if (e) e.textContent = t; }
+    function status(t) { setMsg($('#gk-saved'), t); }
     function changed() {
       w.text = ta.value; if (R) last = { v: ta.value, c: ta.selectionStart }; Platform.sakuDraft(w); dirty = true; flags = null; $('#gk-result').innerHTML = ''; status('… ほぞん中');
       clearTimeout(timer); timer = setTimeout(send, 3000);
@@ -1423,7 +1425,7 @@
     R = R === true; var KD = gkKind(R);
     clearScreen();
     document.body.classList.add('gk-screen'); cleanup.push(function () { document.body.classList.remove('gk-screen'); });
-    app.innerHTML = '<div class="gk-app"><aside class="gk-side"><button class="back" id="back">先生画面に もどる</button><h2>' + KD.tname + '（' + esc(klassLabel(klass)) + '）</h2><div id="gk-tside"><p>よみこみ中…</p></div></aside>' +
+    app.innerHTML = '<div class="gk-app"><aside class="gk-side"><button class="back" id="back">先生画面に もどる</button><h2>' + KD.tname + '（' + esc(klassLabel(klass)) + '）</h2><div id="gk-tside"><p>よみこみ中<span class="ldots" aria-hidden="true"></span></p></div></aside>' +
       '<main class="gk-main"><h2 id="gk-tname" class="gk-tname"></h2><nav class="gk-wtabs" id="gk-wtabs" role="tablist" aria-label="この児童の作品"></nav>' +
       '<div class="gk-scroll"><div class="gk-sheet" id="gk-sheet"></div></div><div id="gk-tc"></div></main></div>';
     on('#back', function () { teacher(klass, null, true); });
@@ -1496,7 +1498,7 @@
         (ks.length ? '<h3>コメント</h3><ol class="gk-clist">' + ks.map(function (kk) { var c = w.comments[kk]; return '<li><span class="meta">' + Genko.paraNo(w.text, Number(kk)) + '番目の段落' + (c.read ? '・児童が よんだ' : '・まだ よんでいない') + '</span>' + esc(c.t) + '</li>'; }).join('') + '</ol>' : '') +
         '<details class="gk-del"><summary>この作品を消す</summary><p class="hint">本文・コメント・修正案を消します。もとに戻せません（児童の画面からも消えます）。</p><button class="gk-btn danger" id="gk-tdel">「' + esc(Genko.title(w.text)) + '」を消す</button> <span id="gk-dmsg" aria-live="polite"></span></details>';
       on('#gk-tdel', function () {
-        $('#gk-dmsg').textContent = '消しています…';
+        setMsg($('#gk-dmsg'), '消しています…');
         Platform.sakuTeacherDelete(klass, w.id, trialEmail).then(function () {
           k.works = k.works.filter(function (x) { return x.id !== w.id; });
           var l = sorted(k); wid = l[0] ? l[0].id : null; pick = null; editLine = null; side(); main();
@@ -1508,14 +1510,14 @@
         var inp = $('#gk-fixto'); inp.focus(); inp.select();
         on('#gk-fixsave', function () {
           var ls = w.text.split('\n'), base = 0; for (var j = 0; j < pick.line; j++) base += ls[j].length + 1;
-          $('#gk-fmsg').textContent = '保存中…';
+          setMsg($('#gk-fmsg'), '保存中…');
           Platform.sakuFix(klass, w.id, { line: pick.line, start: pick.a - base, from: picked, to: inp.value }, trialEmail).then(function (fx) { w.fixes = Genko.normFixes(fx); pick = null; side(); main(); },
             function (e) { $('#gk-fmsg').textContent = '× ' + (e && e.message || '保存できませんでした'); });
         });
         on('#gk-fixcancel', function () { pick = null; main(); });
       } else if (editLine != null) {
         var tx = $('#gk-ctext'); tx.focus();
-        var put = function (text) { $('#gk-cmsg').textContent = '保存中…'; Platform.sakuComment(klass, w.id, editLine, text, trialEmail).then(function (c) { w.comments = c; editLine = null; main(); }, function () { $('#gk-cmsg').textContent = '× 保存できませんでした'; }); };
+        var put = function (text) { setMsg($('#gk-cmsg'), '保存中…'); Platform.sakuComment(klass, w.id, editLine, text, trialEmail).then(function (c) { w.comments = c; editLine = null; main(); }, function () { $('#gk-cmsg').textContent = '× 保存できませんでした'; }); };
         on('#gk-csave', function () { put(tx.value); });
         on('#gk-cdel', function () { put(''); });
         on('#gk-ccancel', function () { editLine = null; main(); });
@@ -2345,7 +2347,7 @@
       '<p><label>年度 <input id="arch-year" size="6" maxlength="4" inputmode="numeric" value="' + schoolYear() + '"></label> <button id="arch-save">この年度のデータを 残す</button> <span id="arch-msg" class="hint" aria-live="polite"></span></p>' +
       (years.length ? '<nav class="tabs t" id="arch-tabs">' + years.map(function (y) { return '<button class="atab" role="tab" data-y="' + y.year + '" aria-selected="false">' + y.year + '年度</button>'; }).join('') + '</nav><div id="arch-body"></div>' : '<p>まだ 過年度のデータは ありません。</p>');
     $('#arch-save').addEventListener('click', function () {
-      $('#arch-msg').textContent = '残しています…';
+      setMsg($('#arch-msg'), '残しています…');
       var year = $('#arch-year').value.trim();
       Platform.archiveSave(year).then(function () { S.arch = null; S.archV = {}; S.archY = String(year); loadArch(); }, function (e) { $('#arch-msg').textContent = (e && e.message) || '残せませんでした'; });
     });
@@ -2384,7 +2386,7 @@
       if (btn && wi) {
         wi.addEventListener('input', function () { btn.disabled = wi.value.trim() !== String(v.anonWord); });
         btn.addEventListener('click', function () {
-          $('#arch-msg2').textContent = '消しています…';
+          setMsg($('#arch-msg2'), '消しています…');
           Platform.archiveAnonymize(year, wi.value.trim()).then(function (r) {
             delete S.archV[year]; // 消した年度だけ控えを捨てて読み直す（一覧の消去済み表示も新しい値にする）
             // 残っている行があれば消去済みにしない（サーバーの remaining を見る。未完なら再開の案内が出る）
@@ -2395,7 +2397,7 @@
       }
     };
     if (S.archV[year]) { show(S.archV[year]); return; }
-    body.innerHTML = '<p class="hint">よみこみ中…</p>';
+    body.innerHTML = '<p class="hint">よみこみ中<span class="ldots" aria-hidden="true"></span></p>';
     Platform.archiveView(year).then(function (v) { S.archV[year] = v; show(v); }, function (e) { body.innerHTML = '<p class="hint">' + esc((e && e.message) || 'よめませんでした') + '</p>'; });
   }
   // 先生画面のデータは学級ごとに1回の通信で読み、学年タブの切り替えでは読み直さない（reuse）。
@@ -2405,7 +2407,7 @@
     klass = klass || S.klass || (S.info.classes || [])[0] || '';
     S.klass = klass;
     app.innerHTML = '<header class="top t">' + titleHtml('先生用') + '<p class="sub">' + esc(klassLabel(klass)) + (S.info.demo ? '（架空のデータ）' : '') + '</p>' +
-      '<button class="try" id="show">書き順を 大きく見せる</button><button class="try" id="try">児童画面を ためす</button></header><main class="teacher"><p>よみこみ中…</p></main>';
+      '<button class="try" id="show">書き順を 大きく見せる</button><button class="try" id="try">児童画面を ためす</button></header><main class="teacher"><p>よみこみ中<span class="ldots" aria-hidden="true"></span></p></main>';
     on('#try', function () { startTrial(klass); });
     on('#show', function () { showPick(); });
     if (!klass) {
@@ -2505,7 +2507,7 @@
           '</section><section class="tsets"><h2>レポートを書く</h2>' +
           '<p class="hint">児童は「その他 → レポートを書く」で、横書きの原稿用紙に書きます。題材は社会の「西宮の酒づくり」。はじめから見出しと〈使った本〉が入り、見出しごとのヒント（3段階）を児童が自分で開けます。練習は「その他 → レポートを組み立てる」（ふでばこの道具）。コメント・修正案・読み合い・印刷は 説明文を書く と同じです（読み合いの オン／オフも共通）。</p>' +
           '<p><button id="gk-open-rep">作品を見る・コメントする</button></p>' +
-          '</section><section class="tsets"><h2>過年度データ</h2><div id="arch"><p class="hint">よみこみ中…</p></div></section>';
+          '</section><section class="tsets"><h2>過年度データ</h2><div id="arch"><p class="hint">よみこみ中<span class="ldots" aria-hidden="true"></span></p></div></section>';
         app.querySelectorAll('details.tset').forEach(function (d) { d.addEventListener('toggle', function () { S.open[d.id] = d.open; }); });
         var sel = $('#klass'); if (sel) sel.addEventListener('change', function () { teacher(sel.value); });
         loadArch();
@@ -2575,7 +2577,7 @@
         // 保存は1つずつ順に送る。続けて押した時、先の保存の返事で 後の変更を上書きしない（字が消えたり もどったりした）
         var testSaving = false, testAgain = false;
         function saveTests() {
-          $('#test-msg').textContent = '保存中…';
+          setMsg($('#test-msg'), '保存中…');
           if (testSaving) { testAgain = true; return; }
           testSaving = true; testAgain = false;
           Platform.setTests(klass, JSON.parse(JSON.stringify(tests))).then(function (v) {
@@ -2641,14 +2643,14 @@
           cb.addEventListener('change', function () {
             var list = Array.from(app.querySelectorAll('.gchecks input')).filter(function (x) { return x.checked; }).map(function (x) { return tabKey(x.dataset.g); });
             if (!list.some(function (g) { return !isKana(g); })) { cb.checked = true; $('#gmsg').textContent = '× 1年〜6年から1つ以上 えらんでください'; return; }
-            $('#gmsg').textContent = '保存中…';
+            setMsg($('#gmsg'), '保存中…');
             // 学年を変えたら、いちばん上の学年を開く
             Platform.setGrades(klass, list).then(function () { view.grades = list; teacher(klass, 0, true); }, function () { cb.checked = !cb.checked; $('#gmsg').textContent = '× 保存できませんでした'; });
           });
         });
         on('#gate-try', function () { startTrial(klass); });
         on('#gate-reset', function () {
-          $('#gate-msg').textContent = '保存中…';
+          setMsg($('#gate-msg'), '保存中…');
           Platform.setGates(klass, []).then(function (v) { view.gates = v; teacher(klass, tgrade, true); }, function () { $('#gate-msg').textContent = '× 保存できませんでした'; });
         });
         // ---- ぶんかい: 問題ごとのまちがい集計・つくる画面・自作一覧 ----
@@ -2675,7 +2677,7 @@
             return '<tr><td>' + esc(x.t.id) + ' ' + rubyText(x.t.title) + '</td><td>' + esc(x.t.type) + '型・' + esc(x.t.level) + '</td><td>' + x.s + '人中 ' + x.b + '人（' + Math.round(x.r * 100) + '%）</td><td>' + x.e[0] + '</td><td>' + x.e[1] + '</td><td>' + x.e[2] + '</td></tr>';
           }).join('') + '</tbody></table>' : '<p>まだ データが ありません。</p>';
         // つくる画面: 文 → 空白で文節に分ける → 児童と同じ操作で 役割・係り先をつける → 登録
-        var bkMsg = function (t) { $('#bkmsg2').textContent = t; };
+        var bkMsg = function (t) { setMsg($('#bkmsg2'), t); };
         function paintBkList() {
           var list = Sched.normBunkai(view.bunkai);
           $('#d-bk-list-now').textContent = list.length ? list.length + '問' : 'なし';
@@ -2686,7 +2688,7 @@
           app.querySelectorAll('.bk-del').forEach(function (b) {
             b.addEventListener('click', function () {
               var next = Sched.normBunkai(view.bunkai).filter(function (p) { return p.id !== b.dataset.id; });
-              $('#bk-list').innerHTML = '<p class="hint">保存中…</p>';
+              $('#bk-list').innerHTML = '<p class="hint">保存中<span class="ldots" aria-hidden="true"></span></p>';
               Platform.setBunkai(klass, next).then(function (v) { view.bunkai = v; paintBkList(); }, function () { paintBkList(); });
             });
           });
@@ -2714,7 +2716,7 @@
         app.querySelectorAll('input[name="wlevel"]').forEach(function (r) {
           r.addEventListener('change', function () {
             var v = r.value, prev = view.writeLevel || '';
-            $('#wmsg').textContent = '保存中…';
+            setMsg($('#wmsg'), '保存中…');
             Platform.setWriteLevel(klass, v).then(function () {
               view.writeLevel = v; $('#d-write-now').textContent = v === 'easy' ? 'やさしい' : 'ふつう'; $('#wmsg').textContent = '✓ 保存しました';
             }, function () {

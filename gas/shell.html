@@ -862,11 +862,16 @@ textarea.gk-ime { position: absolute; opacity: 0; width: 2px; height: 2px; paddi
   .gk-pch.hang { writing-mode: horizontal-tb; transform: translate(34%, 8%) scale(.8); }
   .gk-pno { position: absolute; right: 12mm; bottom: 8mm; font-size: 4mm; color: #555; }
 }
+/* 待ちの表示：点を0〜3個で回す（正本は - の skills/ui-layout/SKILL.md「待ちの表示」） */
+.ldots{display:inline-block;width:1.6em;text-align:left}
+.ldots::after{content:'';animation:ldots 1.2s steps(1,end) infinite}
+@keyframes ldots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+@media (prefers-reduced-motion:reduce){.ldots::after{animation:none;content:'...'}}
 </style>
 <meta name="kanzi-ver" content="__KANZI_VER__">
 </head>
 <body lang="ja">
-<div id="app"><p>よみこみ中…</p></div>
+<div id="app"><p>よみこみ中<span class="ldots" aria-hidden="true"></span></p></div>
 <!--LB_SHIM-->
 <script src="src/data.js"></script>
 <script src="src/strokes.js"></script>
