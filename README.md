@@ -30,7 +30,7 @@
 
 ## 学校で使う（Google Apps Script）
 
-**学習BASE の中で動かす時**（learning-base が取り込む。更新はマージで反映）：学習BASE の GAS のスクリプトのプロパティ `KANZI_SS_ID` に、このスプレッドシートの ID を入れる。
+**学習BASE の中で動かす時**（learning-base が取り込む。更新はマージで反映）：BASEシートの台帳 `app_sheets` に、アプリ `kanzi`・単元は空・スプレッドシートにこのスプレッドシートの URL の行を書く（前の形のスクリプトのプロパティ `KANZI_SS_ID` があれば、学習BASE が台帳に写す）。
 画面は枠（`gas/shell.html`）だけを GAS が返し、プログラム（`src/*.js`）は jsDelivr から版で固定して読む。画面からの呼び出しは `gas/Code.js` の `lbApi_` の表にある `api_` だけ。下の手順は、単体の GAS として動かす時のもの。
 
 1. 新しいスプレッドシートを作り、「拡張機能 → Apps Script」を開く。
