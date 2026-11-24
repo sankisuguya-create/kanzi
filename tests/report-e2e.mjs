@@ -20,7 +20,7 @@ const BASE = `http://127.0.0.1:${server.address().port}/`;
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || '/opt/pw-browsers/chromium' });
 const page = await (await browser.newContext({ viewport: { width: 1366, height: 630 } })).newPage();
 const errors = [];
-page.on('pageerror', (e) => errors.push(String(e)));
+page.on('pageerror', (e) => errors.push(String(e.stack)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 const check = (cond, msg) => { if (!cond) { console.error('NG: ' + msg); process.exitCode = 1; } else console.log('ok: ' + msg); };
 const shot = (name) => page.screenshot({ path: path.join(SHOTS, name + '.png') });
@@ -65,9 +65,6 @@ const a = await page.evaluate(() => document.querySelector('textarea.gk-ime').se
 await page.locator('textarea.gk-ime').press('ArrowLeft');
 const b = await page.evaluate(() => document.querySelector('textarea.gk-ime').selectionStart);
 check(b === a - 1, '← で前の字（横書きの向き）');
-await page.locator('#gk-sample').click();
-await shot('report-3-sample');
-await page.locator('#gk-sample').click();
 await page.locator('#back').click();
 await page.waitForSelector('.gk-work');
 check(await page.locator('.gk-work').count() === 1, '一覧にレポートが出る');
@@ -87,5 +84,53 @@ await page.locator('#gk-printone').click();
 check(await page.locator('#gk-print .gk-pp.yoko').count() === 1, '印刷: 横書きの用紙');
 await page.setViewportSize({ width: 390, height: 800 });
 check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'スマホ幅: ページは横にはみ出さない');
+// ヒント（§30）: 見出しごとに 1→2→3 と自分で開く。ヒント3で酒づくりの文が本文に入る（【　】の穴つき）
+await page.setViewportSize({ width: 1366, height: 630 });
+await page.goto(BASE + '?demo');
+await page.waitForSelector('#go-other'); await page.locator('#go-other').click();
+await page.locator('.chooser .big[data-id="report"]').click();
+await page.waitForSelector('#gk-rep');
+check(await page.locator('#gk-sample').count() === 0, 'レポートの一覧に お手本ボタンは ない（ヒントが かわり）');
+await page.locator('#gk-rep').click();
+await page.waitForSelector('[data-hint="2"]');
+check(await page.locator('.gk-exopt').count() === 0, 'ヒント: はじめは かくれている');
+await page.locator('[data-hint="2"]').click();
+check(await page.locator('.gk-exopt').count() === 3 && await page.locator('.gk-extxt').count() === 0, 'ヒント1: ア〜ウの見出しだけ');
+await page.locator('[data-hint="2"]').click();
+check(await page.locator('.gk-extxt').count() === 3 && await page.locator('[data-ex]').count() === 0, 'ヒント2: 文が読める（まだ入れられない）');
+await page.locator('[data-hint="2"]').click();
+await page.locator('[data-ex="2:0"]').click();
+const v1 = await page.evaluate(() => document.querySelector('textarea.gk-ime').value);
+check(v1.includes('宮水') && /【[^】　]+】/.test(v1), 'ヒント3: 文が本文に入る（【　】の穴つき）');
+await shot('report-5-hint');
+const [pop] = await Promise.all([page.waitForEvent('popup'), page.locator('#gk-sampwin').click()]);
+await pop.waitForLoadState();
+check((await pop.textContent('body')).includes('宮水') && (await pop.title()).includes('見本'), '見本を べつの まどで ひらける');
+await pop.setViewportSize({ width: 560, height: 760 }); await pop.screenshot({ path: path.join(SHOTS, 'report-7-samplewin.png') }); await pop.close();
+// レポートを組み立てる: 判定 → 合わなければ えらびなおして 合うレポートに
+await page.goto(BASE + '?demo');
+await page.waitForSelector('#go-other'); await page.locator('#go-other').click();
+await page.locator('.chooser .big[data-id="kumi"]').click();
+await page.waitForSelector('#km-self');
+await page.locator('#km-self').click();
+await page.locator('#km-check').click();
+check(await page.locator('#km-res .ng').count() === 1, '自分で組み立てる: えらばないと たしかめられない');
+for (const x of ['0:2', '1:2', '2:2', '3:2']) await page.locator('[data-km="' + x + '"]').click();
+await page.locator('#km-check').click();
+check(await page.locator('#km-res .ok').count() === 1, '自分で組み立てる: 合う組み合わせで できあがり');
+await page.locator('#km-next').click();
+await page.waitForSelector('#km-ng');
+let fixed = false;
+for (let t = 0; t < 10 && !fixed; t++) {
+  await page.locator('#km-ng').click();
+  if (await page.locator('#km-check').count()) {
+    check(await page.locator('.gk-flag').count() > 0, '組み立てる: 合わない見出しに しるし');
+    for (const x of ['0:1', '1:1', '2:0', '3:0']) await page.locator('[data-km="' + x + '"]').click();
+    await page.locator('#km-check').click();
+    fixed = (await page.locator('#km-res .ok').count()) > 0;
+    await shot('report-6-kumi');
+  } else { await page.locator('#km-next').click(); }
+}
+check(fixed, '組み立てる: えらびなおして 合うレポートに できる');
 check(errors.length === 0, 'コンソールのエラーなし ' + errors.join(' / '));
 await browser.close(); server.close();

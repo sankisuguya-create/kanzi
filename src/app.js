@@ -135,7 +135,7 @@
   //   児童: オフのボタンは押せず、うすく見える（disabled。「選んだ漢字がない」時と同じ見た目）
   //   先生のおためし: ボタンの右上にチップを重ねる（ボタンの外にも中の文字にも場所を取らないので、並びは児童画面と同じ）
   var GATE_LABEL = { 'm.browse': 'ぜんぶ見る', 'm.read': '読む', 'm.write': '書く', 'm.fk': 'カード（漢字→読み）', 'm.fy': 'カード（読み→漢字）',
-    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': '一文の分解', 'o.setsumei': '説明文の分解', 'o.sakubun': '説明文を書く', 'o.report': 'レポートを書く', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
+    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': '一文の分解', 'o.setsumei': '説明文の分解', 'o.sakubun': '説明文を書く', 'o.report': 'レポートを書く', 'o.kumi': 'レポートを組み立てる', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
     's.sel': '出す字: 選んだ漢字', 's.rnd': '出す字: ランダム', 's.miss': '出す字: まちがいの多い漢字',
     't.p50': 'れんしゅうプリント50問', 't.p10': 'れんしゅうプリント10問', 't.hint': 'れんしゅうプリントのヒント', 't.paper': '紙で練習', 't.juku': '二文字モード' };
   var GATE_POLL_MS = 30000;
@@ -1106,7 +1106,8 @@
     '<li>人から聞いたことは「 」に入れたり、「〜そうです」と書いたりする。〈使った本〉に、書いた人・本の名前・出した会社・年・ページを書く。</li></ul></details>';
   // 説明文（縦書き）と レポート（横書き・§30）で ちがう所
   function gkKind(R) {
-    return R ? { title: K('レポートを [書|か]く'), rules: GK_RULES_YOKO, sample: Genko.REPORT_SAMPLE, sampleName: '図書館の本のならべ方のくふう', tname: 'レポートを書く' }
+    // レポートは お手本を まるごと見せない。見出しごとのヒント（段階的に開く）が お手本の かわり（§30）
+    return R ? { title: K('レポートを [書|か]く'), rules: GK_RULES_YOKO, sample: '', sampleName: '', tname: 'レポートを書く' }
       : { title: K('[説|せつ][明|めい][文|ぶん]を [書|か]く'), rules: GK_RULES, sample: Genko.SAMPLE, sampleName: 'すがたをかえる葉っぱ', tname: '説明文を書く' };
   }
   function dateShort(t) { if (!t) return ''; var d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2); }
@@ -1121,12 +1122,12 @@
     var alive = true; cleanup.push(function () { alive = false; });
     Platform.sakuMine(S.info.email).then(function (r) {
       if (!alive) return;
-      S.saku = r; var works = r.works.filter(function (w) { return Genko.isReport(w) === R; });
+      S.saku = r; var works = r.works.filter(function (w) { return Genko.isReport(w) === R; }); KD = gkKind(R);
       $('.gk-home').innerHTML =
-        (R ? '<div class="gk-new"><button class="big primary" id="gk-rep">' + K('レポートを [書|か]きはじめる') + '<span class="meta">' + K('[見|み][出|だ]し（１．[調|しら]べたきっかけや[理|り][由|ゆう] など）が [入|はい]っている') + '</span></button></div>'
+        (R ? '<div class="gk-new"><button class="big primary" id="gk-rep">' + K('[酒|さけ]づくりの レポートを [書|か]く') + '<span class="meta">' + K('こまったら、[見|み][出|だ]しごとの ヒントを [見|み]られるよ') + '</span></button></div>'
           : '<div class="gk-new"><button class="big primary" id="gk-tpl">' + K('テンプレートで [書|か]く') + '<span class="meta">' + K('[題|だい][名|めい]・はじめ・おわりが [入|はい]っている') + '</span></button>' +
         '<button class="big" id="gk-free">' + K('[白|はく][紙|し]に [書|か]く') + '<span class="meta">' + K('[自|じ][分|ぶん]で ぜんぶ [書|か]く') + '</span></button></div>') +
-        '<div class="gk-new"><button class="big" id="gk-sample">' + K('お[手|て][本|ほん]を [見|み]る') + '<span class="meta">' + KD.sampleName + '</span></button>' +
+        '<div class="gk-new">' + (R ? '' : '<button class="big" id="gk-sample">' + K('お[手|て][本|ほん]を [見|み]る') + '<span class="meta">' + KD.sampleName + '</span></button>') +
         (r.share ? '<button class="big" id="gk-friends">' + K('[友|とも]だちの[文|ぶん]を [読|よ]む') + '<span class="meta">' + K('[先|せん][生|せい]が ひらいているよ') + '</span></button>' : '') + '</div>' +
         (r.offline ? '<p class="hint">' + K('つうしんが できないので、この たんまつに [書|か]いたものだけ [出|だ]しているよ') + '</p>' : '') +
         (works.length ? '<h2>' + K(R ? '[書|か]いたレポート' : '[書|か]いた[文|ぶん]') + '</h2><div class="gk-works">' + works.map(function (w) {
@@ -1152,7 +1153,7 @@
     var order = false, selLine = null; w.remap = {}; w.fixDone = []; // fixDone＝児童が「なおす」「そのまま」で済ませた修正案（次の保存で先生の列から外す） // 段落の入れかえ: order＝入れかえ中、selLine＝えらんだ段落（改行で数えた番号）、w.remap＝まだ送っていないコメントの付け先の移し方
     app.innerHTML = '<div class="gk-app"><aside class="gk-side">' +
       '<button class="back" id="back">もどる</button>' +
-      '<button class="gk-btn" id="gk-sample" aria-pressed="false">' + K('📄 お[手|て][本|ほん]を [見|み]る') + '</button>' +
+      '<button class="gk-btn" id="gk-sample" aria-pressed="false"' + (R ? ' hidden' : '') + '>' + K('📄 お[手|て][本|ほん]を [見|み]る') + '</button>' +
       '<button class="gk-btn primary" id="gk-check">' + K('[見|み]なおす') + '</button>' +
       '<button class="gk-btn" id="gk-order" aria-pressed="false">' + K('↔ [段|だん][落|らく]の じゅんばんを かえる') + '</button>' +
       '<div class="gk-orderbox" id="gk-orderbox" hidden><p class="gk-hint" id="gk-orderhint">' + K('うごかしたい [段|だん][落|らく]を おしてね') + '</p>' +
@@ -1160,6 +1161,7 @@
         '<button class="gk-btn" id="gk-orderdone">' + K('できた') + '</button></div>' +
       '<div class="gk-result" id="gk-result" aria-live="polite"></div>' +
       '<label class="gk-show"><input type="checkbox" id="gk-show"' + (w.show ? ' checked' : '') + '> ' + K('この[文|ぶん]を [友|とも]だちに [見|み]せる') + '</label>' +
+      (R ? '<div id="gk-ex" class="gk-ex"></div>' : '') +
       '<div id="gk-fixes"></div><div id="gk-comments"></div>' +
       '<span class="gk-saved" id="gk-saved" aria-live="polite">' + (fresh ? '' : '✓ ほぞんしました') + '</span>' + KD.rules +
       '<details class="gk-del"><summary>' + K('この[文|ぶん]を [消|け]す') + '</summary><button class="gk-btn danger" id="gk-del">' + K('[消|け]す（もとに もどせません）') + '</button></details>' +
@@ -1182,7 +1184,7 @@
         return '<li tabindex="-1" id="gk-c-' + k + '"' + (c.read ? ' class="read"' : '') + '><span class="meta">' + (Number(k) + 1) + K('[行|ぎょう][目|め]の [段|だん][落|らく]') + '</span>' + esc(c.t) +
           (c.read ? '' : ' <button class="gk-read" data-k="' + k + '">' + K('よんだ') + '</button>') + '</li>';
       }).join('') + '</ul>' : '';
-      app.querySelectorAll('.gk-read').forEach(function (b) { b.addEventListener('click', function () {
+      app.querySelectorAll('.gk-read[data-k]').forEach(function (b) { b.addEventListener('click', function () {
         var k = b.dataset.k; w.comments[k].read = true; Platform.sakuRead(w.id, Number(k)); paintComments(); draw(); }); });
     }
     function paintFixes() {
@@ -1196,6 +1198,64 @@
         if (b.dataset.fix) { var t = Genko.applyFix(ta.value, f); if (t != null && (!R || Genko.headSig(t) === sig)) ta.value = t; }
         w.fixes = w.fixes.filter(function (x) { return x.id !== id; }); w.fixDone.push(id);
         changed(); paintFixes(); draw();
+      }); });
+    }
+    // レポートのヒント（§30）: 酒づくりの作文例を、見出しごとに 児童が自分で1段ずつ開く（はじめは かくしてある）
+    //   ヒント1＝何を書くか（ア〜ウの見出し）→ ヒント2＝文を読む → ヒント3＝文を本文に入れる（【　】は自分のことばに かえる穴）
+    var hintLv = {}, picked = {}, inlineSample = false;
+    // 見本（酒づくりの作文例のア）を別のまどで開く。見ながら打ちこめるように（利用者の指定）。
+    // まどが開けない時（ポップアップを止める設定など）は、左に見本を出す
+    function sampleHtml() {
+      var ls = Genko.reportCopyModel('', Genko.REPORT_EXAMPLES).split('\n'), body = '';
+      ls.forEach(function (l, i) {
+        if (i === 1 || !l.replace(/[　 ]/g, '')) return;
+        if (i === 0) body += '<h1>' + esc(l.replace(/^[　]+/, '')) + '</h1>';
+        else if (Genko.isHead(l) || l === Genko.BOOK) body += '<h2>' + esc(l) + '</h2>';
+        else if (Genko.isSub(l)) body += '<h3>' + esc(l) + '</h3>';
+        else body += '<p>' + esc(l.replace(/^[　]+/, '')) + '</p>'; // 1マスあけは text-indent で出す
+      });
+      return body;
+    }
+    function openSample() {
+      var wnd = null;
+      try { wnd = window.open('', 'kanzi-report-sample', 'width=560,height=760'); } catch (e) { wnd = null; }
+      try {
+        if (!wnd) throw new Error('blocked');
+        wnd.document.open();
+        wnd.document.write('<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>見本：西宮の酒づくりのくふう</title>' +
+          '<style>body{margin:0;padding:16px 20px;background:#fff;color:#222;font-family:"Noto Sans JP","Hiragino Sans",sans-serif;font-size:22px;line-height:1.9}' +
+          'h1{font-size:26px;margin:0 0 8px}h2{font-size:22px;margin:18px 0 4px;color:#0F5EA8}h3{font-size:21px;margin:8px 0 0}p{margin:0;text-indent:1em}.top{font-size:16px;color:#555;margin:0 0 10px}</style></head><body>' +
+          '<p class="top">見本（このまどを 横にならべて、見ながら 書こう）</p>' + sampleHtml() + '</body></html>');
+        wnd.document.close(); wnd.focus();
+        $('#gk-exmsg').innerHTML = K('[見|み][本|ほん]を べつの まどで ひらいたよ');
+      } catch (e) {
+        inlineSample = true; paintEx();
+        $('#gk-exmsg').innerHTML = K('べつの まどが ひらけないので、ここに [見|み][本|ほん]を [出|だ]したよ');
+      }
+    }
+    var HINT_NEXT = ['💡 ヒント1：[何|なに]を [書|か]くか', '💡 ヒント2：[文|ぶん]を [読|よ]む', '💡 ヒント3：[文|ぶん]を [入|い]れる'];
+    function paintEx() {
+      var box = $('#gk-ex'); if (!box) return;
+      var E = Genko.REPORT_EXAMPLES;
+      box.innerHTML = '<button class="gk-btn" id="gk-sampwin">' + K('📄 [見|み][本|ほん]を べつの まどで ひらく') + '</button>' +
+        (inlineSample ? '<div class="gk-exmodel gk-samp">' + sampleHtml() + '</div>' : '') +
+        '<h3>' + K('こまったら ヒントを [見|み]よう') + '</h3>' + E.parts.map(function (list, i) {
+        var lv = hintLv[i] || 0, body = '';
+        if (lv >= 1) body = '<div class="gk-exbtns">' + list.map(function (ex, j) {
+          var lab = '<b>' + String.fromCharCode(0x30A2 + j * 2) + '　' + esc(ex.label) + '</b>';
+          var txt = lv >= 2 ? '<span class="gk-extxt">' + ex.lines.map(function (l) { return esc(lv >= 3 ? l : l.replace(/[【】]/g, '')); }).join('<br>') + '</span>' : '';
+          return lv >= 3 ? '<button class="gk-read gk-exopt" data-ex="' + i + ':' + j + '" aria-pressed="' + (picked[i] === ex.id) + '">' + lab + txt + '</button>' : '<div class="gk-exopt">' + lab + txt + '</div>';
+        }).join('') + '</div>' + (lv >= 3 ? '<p class="gk-hint">' + K('おすと [文|ぶん]が [入|はい]るよ。【　】は [自|じ][分|ぶん]の ことばに かえよう') + '</p>' : '');
+        return '<div class="gk-exg"><b>' + esc(Genko.REPORT_HEADS[i]) + '</b>' + body +
+          (lv < 3 ? '<button class="gk-hintbtn" data-hint="' + i + '">' + K(HINT_NEXT[lv]) + '</button>' : '') + '</div>';
+      }).join('') + '<p class="gk-hint" id="gk-exmsg" aria-live="polite"></p>';
+      on('#gk-sampwin', openSample);
+      box.querySelectorAll('[data-hint]').forEach(function (b) { b.addEventListener('click', function () { var i = +b.dataset.hint; hintLv[i] = (hintLv[i] || 0) + 1; paintEx(); }); });
+      box.querySelectorAll('[data-ex]').forEach(function (b) { b.addEventListener('click', function () {
+        var ij = b.dataset.ex.split(':'), i = +ij[0], ex = E.parts[i][+ij[1]];
+        var t = Genko.setSection(ta.value, i, Genko.exLines(ex, true));
+        if (t == null || Genko.headSig(t) !== sig) { $('#gk-exmsg').innerHTML = K('[見|み][出|だ]しが [見|み]つからないので [入|い]れられないよ'); return; }
+        ta.value = t; picked[i] = ex.id; flags = null; changed(); paintEx(); paintFixes(); draw();
       }); });
     }
     function status(t) { var e = $('#gk-saved'); if (e) e.textContent = t; }
@@ -1302,7 +1362,7 @@
     on('#gk-del', function () { clearTimeout(timer); dirty = false; Platform.sakuDelete(w.id).then(home, home); });
     function resize() { gkSize(); draw(); }
     window.addEventListener('resize', resize); cleanup.push(function () { window.removeEventListener('resize', resize); });
-    paintComments(); paintFixes(); draw();
+    paintComments(); paintFixes(); paintEx(); draw();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if (sheet.isConnected) draw(); });
     if (fresh) { Platform.sakuDraft(w); send(); }
   }
@@ -1376,6 +1436,10 @@
     function side() {
       var kids = data.students || [];
       $('#gk-tside').innerHTML =
+        (R ? '<div class="gk-stagebox">' +
+          '<details class="gk-exall"><summary>ヒントの作文例（' + esc(Genko.REPORT_EXAMPLES.topic) + '）を見る</summary>' + Genko.REPORT_EXAMPLES.parts.map(function (list, i) {
+            return '<h3>' + esc(Genko.REPORT_HEADS[i]) + '</h3>' + list.map(function (ex, j) { return '<p><b>' + String.fromCharCode(0x30A2 + j * 2) + '　' + esc(ex.label) + '</b><br>' + esc(ex.lines.join('\n')).replace(/\n/g, '<br>') + '</p>'; }).join('');
+          }).join('') + '<p class="hint">児童は見出しごとに ヒント1（何を書くか）→ ヒント2（文を読む）→ ヒント3（文を入れる。【　】は自分のことばに変える穴）を自分で開きます。事実は地域教材にあるものだけです。</p></details></div>' : '') +
         '<p class="gk-share"><b>読み合う</b> <button class="gk-btn" id="gk-share" aria-pressed="' + data.share + '">' + (data.share ? '✓ ひらいている' : '✕ とじている') + '</button></p>' +
         '<p class="hint">ひらいている間、この学級の児童に「友だちの文」が出ます（各児童が「見せる」にした1作品の本文だけ。コメント・字数は見せません）。児童の画面には、メニューから入り直した時に とどきます。</p>' +
         '<p class="hint">' + kids.filter(function (k) { return k.works.length && !k.trial; }).length + '人 / ' + kids.filter(function (k) { return !k.trial; }).length + '人が書いています</p>' +
@@ -1487,6 +1551,78 @@
     load();
   }
 
+  // ================= レポートを組み立てる（その他画面から入る。§30）====================
+  // 練習「ふでばこの道具」の作文例（見出しごとに ア〜ウ）を組み合わせた レポートを見て、①「合う／合わない」を判定し、
+  // ②合わない所を えらびなおして 合うレポートに組み立てる。記録は残さない（練習）
+  function kumitate() {
+    clearScreen();
+    document.body.classList.add('gk-screen'); cleanup.push(function () { document.body.classList.remove('gk-screen'); });
+    var E = Genko.REPORT_FUDE, sel = [-1, -1, -1, -1], phase = 'start', flagged = [], done = 0;
+    app.innerHTML = '<div class="gk-app"><aside class="gk-side"><button class="back" id="back">もどる</button><h2>' + K('レポートを [組|く]み[立|た]てる') + '</h2>' +
+      '<div id="km-q" class="gk-ex"></div><div class="gk-result" id="km-res" aria-live="polite"></div><div id="km-cards" class="gk-ex"></div></aside>' +
+      '<main class="gk-main"><div class="gk-scroll"><div class="gk-sheet" id="gk-sheet"></div></div></main></div>';
+    on('#back', otherMenu);
+    function draw() {
+      var t = Genko.kumiText(sel, E), ls = t.split('\n'), fl = [];
+      flagged.forEach(function (i) { var h = ls.indexOf(Genko.REPORT_HEADS[i]); if (h >= 0) fl.push({ line: h, tag: '中みを 書く', msg: '' }); });
+      gkSize(); gkRender($('#gk-sheet'), t, { yoko: true, flags: fl });
+      if (fl.length) { var tg = $('.gk-flagtag'); if (tg) tg.textContent = K('▲ ここが [合|あ]わない'); }
+    }
+    function reasons(list) { return list.map(function (r) { return '<span class="ng">▲ ' + esc(r.msg) + '</span>'; }).join(''); }
+    function paint() {
+      if (phase === 'start') { // はじめ: 自分で えらんで組み立てる／組み合わせを見分ける もんだい
+        $('#km-res').innerHTML = ''; $('#km-cards').innerHTML = '';
+        $('#km-q').innerHTML = '<button class="gk-btn primary" id="km-self">' + K('[自|じ][分|ぶん]で えらんで [組|く]み[立|た]てる') + '</button><button class="gk-btn" id="km-quiz">' + K('[合|あ]っているか [見|み][分|わ]ける もんだい') + '</button>';
+        on('#km-self', function () { sel = [-1, -1, -1, -1]; flagged = []; phase = 'fix'; paintNext(); draw(); });
+        on('#km-quiz', function () { sel = Genko.kumiProblem(); flagged = []; phase = 'judge'; paint(); draw(); });
+        return;
+      }
+      var bad = Genko.kumiCheck(sel);
+      if (phase === 'judge') {
+        $('#km-q').innerHTML = '<p class="gk-hint">' + K('この レポートは、[文|ぶん]と[文|ぶん]が [合|あ]っているかな？') + '</p><div class="gk-two"><button class="gk-btn" id="km-ok">' + K('[合|あ]っている') + '</button><button class="gk-btn" id="km-ng">' + K('[合|あ]っていない') + '</button></div>';
+        $('#km-res').innerHTML = ''; $('#km-cards').innerHTML = '';
+        ['ok', 'ng'].forEach(function (k) { on('#km-' + k, function () {
+          var right = (k === 'ok') === !bad.length;
+          flagged = []; bad.forEach(function (r) { r.parts.forEach(function (i) { if (flagged.indexOf(i) < 0) flagged.push(i); }); });
+          $('#km-res').innerHTML = (right ? '<span class="ok">' + K('✓ せいかい！') + '</span>' : '<span class="ng">' + K('✕ ざんねん。') + '</span>') +
+            (bad.length ? reasons(bad) : '<span class="ok">' + K('きっかけ・[調|しら]べ[方|かた]・[分|わ]かったこと・まとめが つながっているね') + '</span>');
+          phase = bad.length ? 'fix' : 'next'; paintNext(); draw();
+        }); });
+        return;
+      }
+    }
+    function paintNext() {
+      var bad = Genko.kumiCheck(sel);
+      if (phase === 'next') {
+        $('#km-q').innerHTML = '<button class="gk-btn primary" id="km-next">' + K('[次|つぎ]の もんだい') + '</button><button class="gk-btn" id="km-self2">' + K('[自|じ][分|ぶん]で [組|く]み[立|た]てる') + '</button>';
+        on('#km-self2', function () { sel = [-1, -1, -1, -1]; flagged = []; phase = 'fix'; $('#km-res').innerHTML = ''; paintNext(); draw(); });
+        $('#km-cards').innerHTML = done ? '<p class="gk-hint">' + K('[組|く]み[立|た]てた [数|かず]: ') + done + '</p>' : '';
+        on('#km-next', function () { sel = Genko.kumiProblem(); phase = 'judge'; flagged = []; paint(); draw(); });
+        return;
+      }
+      // fix: 見出しごとに えらびなおす。合うようになったら できあがり
+      $('#km-q').innerHTML = '<p class="gk-hint">' + K(sel.indexOf(-1) >= 0 && !flagged.length ? '[見|み][出|だ]しごとに [文|ぶん]を えらんで、[合|あ]う レポートを [組|く]み[立|た]てよう' : '[合|あ]わない [所|ところ]を えらびなおして、[合|あ]う レポートに しよう') + '</p>';
+      $('#km-cards').innerHTML = E.parts.map(function (list, i) {
+        return '<div class="gk-exg"><b>' + esc(Genko.REPORT_HEADS[i]) + '</b><div class="gk-exbtns">' + list.map(function (ex, j) {
+          return '<button class="gk-read" data-km="' + i + ':' + j + '" aria-pressed="' + (sel[i] === j) + '">' + String.fromCharCode(0x30A2 + j * 2) + '　' + esc(ex.label) + '</button>';
+        }).join('') + '</div></div>';
+      }).join('') + '<button class="gk-btn primary" id="km-check">' + K('[合|あ]っているか たしかめる') + '</button>';
+      app.querySelectorAll('[data-km]').forEach(function (b) { b.addEventListener('click', function () {
+        var ij = b.dataset.km.split(':'); sel[+ij[0]] = +ij[1]; flagged = []; $('#km-res').innerHTML = ''; paintNext(); draw(); }); });
+      on('#km-check', function () {
+        if (sel.indexOf(-1) >= 0) { $('#km-res').innerHTML = '<span class="ng">' + K('▲ ぜんぶの [見|み][出|だ]しで [文|ぶん]を えらんでね') + '</span>'; return; }
+        var nb = Genko.kumiCheck(sel);
+        flagged = []; nb.forEach(function (r) { r.parts.forEach(function (i) { if (flagged.indexOf(i) < 0) flagged.push(i); }); });
+        if (!nb.length) { done++; phase = 'next'; $('#km-res').innerHTML = '<span class="ok">' + K('✓ できあがり！ [合|あ]う レポートに なったね') + '</span>'; paintNext(); }
+        else $('#km-res').innerHTML = reasons(nb);
+        draw();
+      });
+    }
+    window.addEventListener('resize', draw); cleanup.push(function () { window.removeEventListener('resize', draw); });
+    paint(); draw();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if ($('#gk-sheet')) draw(); });
+  }
+
   // その他画面: 今後の活動の入口を並べる chooser 型の画面
   function otherMenu() {
     clearScreen();
@@ -1495,7 +1631,8 @@
     var acts = [{ id: 'bunkai', label: K('[一|いち][文|ぶん]の [分|ぶん][解|かい]'), sub: 'ぶんを 5つの やくわりに わける' },
       { id: 'setsumei', label: K('[説|せつ][明|めい][文|ぶん]の [分|ぶん][解|かい]'), sub: K('はじめ・[中|なか]・おわりに わける') },
       { id: 'sakubun', label: K('[説|せつ][明|めい][文|ぶん]を [書|か]く'), sub: K('げんこう[用|よう][紙|し]に [書|か]く') },
-      { id: 'report', label: K('レポートを [書|か]く'), sub: K('[横|よこ][書|が]きで [調|しら]べたことを [書|か]く') }];
+      { id: 'report', label: K('レポートを [書|か]く'), sub: K('[横|よこ][書|が]きで [調|しら]べたことを [書|か]く') },
+      { id: 'kumi', label: K('レポートを [組|く]み[立|た]てる'), sub: K('[文|ぶん]を えらんで、[合|あ]うか たしかめる') }];
     app.innerHTML =
       '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + K('その[他|た]') + '</span><span></span></header>' +
       K('<main class="chooser"><h2>その[他|た]</h2>') + acts.map(function (a) {
@@ -1507,6 +1644,7 @@
         if (b.dataset.id === 'setsumei') return startSession('setsumei', Sched.setsumeiPick(KANZI_SETSUMEI, S.p));
         if (b.dataset.id === 'sakubun') return sakubunHome(false);
         if (b.dataset.id === 'report') return sakubunHome(true);
+        if (b.dataset.id === 'kumi') return kumitate();
         if (b.dataset.id !== 'bunkai') return;
         b.disabled = true;
         // 内蔵の問題集 + 学級の自作問題（取れなければ内蔵だけ）。1回5問
@@ -2365,7 +2503,7 @@
           '<p class="hint">児童は「その他 → 説明文を書く」で、原稿用紙に縦書きで書きます（1人いくつでも。友だちに見せるのは1人1つ）。作品を一覧して、段落ごとにコメントを付けられます。「読み合う」をひらくと、児童どうしで見せる作品を読めます。</p>' +
           '<p><button id="gk-open">作品を見る・コメントする</button></p>' +
           '</section><section class="tsets"><h2>レポートを書く</h2>' +
-          '<p class="hint">児童は「その他 → レポートを書く」で、横書きの原稿用紙に書きます。はじめから見出し（１．調べたきっかけや理由／２．調べ方／３．調べて分かったこと／４．まとめ）と〈使った本〉が入っています。コメント・修正案・読み合い・印刷は 説明文を書く と同じです（読み合いの オン／オフも共通）。</p>' +
+          '<p class="hint">児童は「その他 → レポートを書く」で、横書きの原稿用紙に書きます。題材は社会の「西宮の酒づくり」。はじめから見出しと〈使った本〉が入り、見出しごとのヒント（3段階）を児童が自分で開けます。練習は「その他 → レポートを組み立てる」（ふでばこの道具）。コメント・修正案・読み合い・印刷は 説明文を書く と同じです（読み合いの オン／オフも共通）。</p>' +
           '<p><button id="gk-open-rep">作品を見る・コメントする</button></p>' +
           '</section><section class="tsets"><h2>過年度データ</h2><div id="arch"><p class="hint">よみこみ中…</p></div></section>';
         app.querySelectorAll('details.tset').forEach(function (d) { d.addEventListener('toggle', function () { S.open[d.id] = d.open; }); });

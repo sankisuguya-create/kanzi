@@ -824,6 +824,25 @@ textarea.gk-ime { position: absolute; opacity: 0; width: 2px; height: 2px; paddi
 .gk-wtab .meta { font-size: 13px; color: var(--ink-sub); }
 .gk-flist .gk-two { display: inline-flex; gap: 6px; margin-left: 6px; }
 .gk-cedit input { display: block; width: 100%; font-size: 20px; min-height: 48px; margin-top: 4px; }
+/* ---- レポートを書く の段階（§30） */
+.gk-stage { margin: 0; padding: 10px 14px; border: 3px solid var(--cat-1); border-radius: 12px; background: var(--fill-a); font-size: 18px; font-weight: 700; }
+.gk-ex { display: flex; flex-direction: column; gap: 8px; }
+.gk-exg b { display: block; font-size: 16px; margin-bottom: 4px; }
+.gk-exbtns { display: flex; flex-direction: column; gap: 6px; }
+.gk-exbtns .gk-read { min-height: 48px; text-align: left; }
+.gk-exbtns .gk-read[aria-pressed="true"] { border-color: var(--cat-1); border-width: 3px; background: var(--fill-a); font-weight: 700; }
+.gk-exmodel { font-size: 15px; line-height: 1.7; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; max-height: 50vh; overflow-y: auto; }
+.gk-exmodel p { margin: 0 0 4px; } .gk-exmodel p.h { font-weight: 700; margin-top: 6px; }
+.gk-hintbtn { min-height: 48px; width: 100%; border: 2px dashed var(--line); background: var(--card); border-radius: 10px; font-size: 16px; margin-bottom: 6px; }
+.gk-hintbtn[aria-expanded="true"] { border-style: solid; }
+.gk-exopt { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 8px 10px; border: 2px solid var(--line); border-radius: 10px; background: var(--card); }
+.gk-extxt { font-size: 14px; line-height: 1.6; font-weight: 400; color: var(--ink); }
+.gk-samp h1 { font-size: 17px; margin: 0 0 4px; } .gk-samp h2 { font-size: 15px; margin: 8px 0 2px; } .gk-samp h3 { font-size: 15px; margin: 4px 0 0; } .gk-samp p { text-indent: 1em; }
+.gk-stagebox { display: flex; flex-direction: column; gap: 6px; }
+.gk-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.gk-seg.two { grid-template-columns: 1fr 1fr; }
+.gk-seg .gk-btn { min-height: 48px; font-size: 16px; padding: 4px; }
+.gk-exall { font-size: 15px; } .gk-exall h3 { font-size: 16px; margin: 8px 0 2px; } .gk-exall p { margin: 0 0 6px; line-height: 1.6; }
 /* ---- 説明文を書く: 印刷（B4 横・400字詰め）。画面には出さず、印刷の時だけ この部分だけを出す */
 #gk-print { display: none; }
 .gk-printone { margin-left: auto; min-height: 48px; font-size: 16px; }
@@ -844,7 +863,7 @@ textarea.gk-ime { position: absolute; opacity: 0; width: 2px; height: 2px; paddi
   .gk-pno { position: absolute; right: 12mm; bottom: 8mm; font-size: 4mm; color: #555; }
 }
 </style>
-<meta name="kanzi-ver" content="d475740">
+<meta name="kanzi-ver" content="e4f4aab">
 </head>
 <body lang="ja">
 <div id="app"><p>よみこみ中…</p></div>
@@ -1148,7 +1167,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   // ---- 児童画面のボタンのオン・オフ（学級ごと。先生がおためし画面で切り替える）
   // 持つのはオフにしたボタンのキーだけ。m.＝メニューのボタン、s.＝「どの字で やる？」の選び方（読む・書く・カードで共通）
   // 先生画面・児童画面・GAS サーバーが同じ一覧を使う（ここが唯一の定義）
-  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 'm.other', 'o.bunkai', 'o.setsumei', 'o.sakubun', 'o.report', 's.test', 's.due', 's.sel', 's.rnd', 's.miss', 't.p50', 't.p10', 't.hint', 't.paper', 't.juku'];
+  var GATE_KEYS = ['m.browse', 'm.read', 'm.write', 'm.fk', 'm.fy', 'm.test', 'm.seen', 'm.other', 'o.bunkai', 'o.setsumei', 'o.sakubun', 'o.report', 'o.kumi', 's.test', 's.due', 's.sel', 's.rnd', 's.miss', 't.p50', 't.p10', 't.hint', 't.paper', 't.juku'];
   // 配列・「,」区切りの文字列のどちらでも受け、知らないキー・重なりを除いて GATE_KEYS の順に並べる
   function normGates(v) {
     var list = Array.isArray(v) ? v.map(String) : String(v || '').split(',');
@@ -1412,6 +1431,106 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     return ls.join('\n');
   }
   function isHead(line) { return /^[１-９1-9][．.]/.test(String(line || '')); }
+  function isSub(line) { return /^[（(][１-９1-9][）)]/.test(String(line || '')); } // （１）などの小見出し（1マスあけを問わない）
+
+  // ---- 作文例。練習（ふでばこ）は「レポートを組み立てる」、本番（社会「西宮の酒づくり」・地域教材の事実だけ）は「レポートを書く」のヒント（§30）
+  //   見出しごとに 2〜3 つ。組み合わせは自由（３に合わない４も えらべる: 違和感に気づかせるため。利用者の指定）。
+  //   【 】＝ヒント3で本文に入れた時に穴になる所（自分のことばに かえる）。（１）で始まる行は小見出し（1マスあけない）
+  // 練習（ふでばこの道具）: 自分の道具を見れば すぐ調べられる題材。事実は一般に知られた製品のくふうだけ（出典は docs/features/report-writing.md）
+  var REPORT_FUDE = { id: 'fude', topic: 'ふでばこの道具（練習）', title: 'ふでばこの道具のくふう', parts: [
+    [{ id: '1a', label: 'えんぴつの形に気づいた', lines: ['毎日使っている【えんぴつ】をよく見ると、六角形になっていました。なぜまるくないのだろうと、ふしぎに思いました。そこで、ふでばこの道具のくふうについて調べることにしました。'] },
+     { id: '1b', label: '友だちとくらべた', lines: ['【友だち】とふでばこの中の道具をくらべていたら、形や色がいろいろあることに気づきました。どれにも、何かわけがあるのかなと思いました。そこで、ふでばこの道具のくふうについて調べることにしました。'] },
+     { id: '1c', label: '新しいふでばこ', lines: ['【三年生になって】、新しいふでばこを買ってもらいました。中の道具を一つずつ見ていると、小さなあなや切りこみがあることに気づきました。そこで、ふでばこの道具のくふうについて調べることにしました。'] }],
+    [{ id: '2a', label: '自分の道具を見た', lines: ['自分のふでばこの道具を、一つずつよく見ました。また、【友だちの道具】ともくらべました。'] },
+     { id: '2b', label: '本で調べた', lines: ['自分の道具をよく見てから、文ぼう具の本で、そのわけを調べました。'] },
+     { id: '2c', label: '人に聞いた', lines: ['自分の道具をよく見てから、【家の人】や先生に、そのわけを聞きました。'] }],
+    [{ id: '3a', label: '書く・消すくふう', lines: ['（１）えんぴつの形',
+        'えんぴつは、六角形になっています。六角形だと、つくえの上でころがりにくく、三本の指で持ちやすいそうです。',
+        '（２）消しゴムのケース',
+        '消しゴムの紙のケースには、【角に切りこみ】があります。本には、ケースのはしで消しゴムがおれにくくなるようにしていると書いてありました。'] },
+     { id: '3b', label: '正しく使うくふう', lines: ['（１）じょうぎの目もり',
+        'じょうぎの０の目もりは、はしから少しはなれた所にあります。はしがすりへっても、正しく長さをはかれるようにしているそうです。',
+        '（２）はさみの持つ所',
+        'はさみの持つ所は、【二つのあなの大きさ】がちがいます。小さいあなに親ゆび、大きいあなにほかのゆびを入れると、力を入れやすいそうです。'] },
+     { id: '3c', label: 'あんぜんのくふう', lines: ['（１）キャップのあな',
+        'ペンのキャップには、小さなあながあいています。先生に聞くと、「まちがえてのみこんでしまっても、いきができるようにするためです。」と教えてくれました。',
+        '（２）はさみの先',
+        '子ども用のはさみは、【刃の先がまるく】なっています。人にささったり、けがをしたりしにくいようにしているそうです。'] }],
+    [{ id: '4a', label: '書きやすさ', lines: ['いつも使っているえんぴつや消しゴムにも、書きやすく、使いやすくするくふうがあることが分かりました。とくに、【えんぴつが六角形なのにわけがあったこと】に、おどろきました。こんど、【ほかの文ぼう具】のくふうも見つけたいと思います。'] },
+     { id: '4b', label: '使う人のことを考えて', lines: ['ふでばこの道具は、使う人がまちがえずに使えるように考えてつくられていることが分かりました。とくに、【じょうぎの０の目もりの場所】に、おどろきました。こんど、【家にある道具】も、よく見てみたいと思います。'] },
+     { id: '4c', label: 'あんぜん', lines: ['ふでばこの道具には、使う人がけがをしないためのくふうがあることが分かりました。とくに、【キャップの小さなあな】に、おどろきました。こんど、【教室にあるほかの物】のあんぜんのくふうも、さがしてみたいと思います。'] }]] };
+  var REPORT_EXAMPLES = { id: 'sake', topic: '西宮の酒づくり（本番）', title: '西宮の酒づくりのくふう', parts: [
+    [{ id: '1a', label: '社会の学習で知った', lines: ['社会の学習で、西宮には日本酒をつくる工場が多いことを知りました。なぜ西宮で【酒づくりがさかんなのか】、ふしぎに思いました。そこで、酒づくりのくふうについて調べることにしました。'] },
+     { id: '1b', label: '酒ミュージアムで見た', lines: ['【家ぞくと】酒ミュージアムに行き、むかしの酒づくりで使った大きなたるを見ました。今はどのように酒をつくっているのか、気になりました。そこで、酒づくりのくふうについて調べることにしました。'] },
+     { id: '1c', label: '近くの酒工場', lines: ['【わたしの家の近く】には、酒工場があります。いつも【大きなタンク】を見ながら、中で何をしているのだろうと思っていました。そこで、酒づくりのくふうについて調べることにしました。'] }],
+    [{ id: '2a', label: '本で調べた', lines: ['地いきの学習の本を読んで、西宮の酒づくりについて調べました。また、本にのっている酒工場の方や杜氏の方の話を読みました。'] },
+     { id: '2b', label: 'ミュージアムを見学した', lines: ['酒ミュージアムを見学して、むかしの酒づくりの道具を見ました。それから、地いきの学習の本で、今の酒工場のようすを調べました。'] },
+     { id: '2c', label: '人に聞いた', lines: ['地いきの学習の本で調べてから、【家の人】に酒づくりについて話を聞きました。'] }],
+    [{ id: '3a', label: '水と米のくふう', lines: ['（１）水のくふう',
+        '本には、「酒づくりにとって、水はいちばん大切なものです。」と書いてありました。西宮では、宮水という水を、海がん近くのいどからくみあげて使っています。【わき出る量や水のせいしつがかわらないように】、いつも気をつけているそうです。',
+        '（２）米のくふう',
+        '西宮の酒工場では、山田錦という、酒づくりにてきした米を使っています。この米は、【近くの六甲山の北側あたり】でたくさんつくられて、西宮にはこばれてくるそうです。'] },
+     { id: '3b', label: '人と工場のくふう', lines: ['（１）人のぎじゅつ',
+        '西宮の酒は、杜氏を中心とした蔵人たちがつくっています。杜氏は、蔵の中で酒づくりのけいけんが一番ある人しかできません。杜氏の方は、「酒づくりで問題が起きたときに、蔵人から相談されたら解決の方法を教えています。」とおっしゃっていました。',
+        '（２）工場のくふう',
+        '今は、ほとんど機械で酒をつくっています。びんにつめる機械は、【１時間に数千本】の酒をびんづめできるそうです。また、工場で働いている人は、【工場の中のそうじ】に一番時間をかけているそうです。'] },
+     { id: '3c', label: 'これからのくふう', lines: ['（１）多くの人にのんでもらうくふう',
+        '酒工場の方は、日本酒をあまりのまなかった人にものんでもらえるように、【入れ物の色や形】をくふうしたり、ユニークな商品の名前を考えたりしているそうです。',
+        '（２）新しいものをつくるくふう',
+        '酒工場では、お酒を原料にした【けしょう品】や、日本酒とほかのざいりょうをまぜた新しいお酒もつくっているそうです。さいきんは、外国への輸出もふえていると書いてありました。'] }],
+    [{ id: '4a', label: '水・米・人のひみつ', lines: ['西宮の酒づくりには、よい水、よい米、すぐれたぎじゅつをもつ人という、いくつものひみつがあることが分かりました。とくに、【水の量やせいしつがかわらないように気をつけていること】に、おどろきました。こんど、【宮水のいど】を見に行きたいと思います。'] },
+     { id: '4b', label: 'のんでもらうくふう', lines: ['酒をつくる人たちは、おいしい酒をつくるだけでなく、多くの人にのんでもらうためのくふうもしていることが分かりました。とくに、【入れ物の色や形まで考えていること】に、おどろきました。こんど、【店で酒のびん】を見るときは、どんなくふうがあるか、さがしてみたいと思います。'] },
+     { id: '4c', label: 'むかしと今', lines: ['むかしは人の手で、今は機械で酒をつくっていますが、どちらも人のぎじゅつや気くばりが大切だと分かりました。とくに、【そうじに一番時間をかけていること】に、おどろきました。こんど、【酒ミュージアム】に行って、むかしの道具を見てみたいと思います。'] }]] };
+  // ---- レポートを組み立てる（§30。練習「ふでばこの道具」の作文例で、見出しごとに えらんで組み合わせ、合うかを判定する）
+  // sel: [1の番号, 2の番号, 3の番号, 4の番号]（0＝ア 1＝イ 2＝ウ）。返す: 合わない所 [{ parts: [見出しの番号…], msg }]（空なら合う）
+  //   ４↔３: まとめは ３の くふうの話でないと合わない（ア↔ア・イ↔イ・ウ↔ウ）
+  //   ２↔３: ３アは「本には」→ ２は本で調べた（イ）。３ウは「先生に聞くと」→ ２は人に聞いた（ウ）
+  //   １↔３: １アは「えんぴつ」がきっかけ → ３にえんぴつ（ア）。１ウは「あなや切りこみ」→ ３ア（切りこみ）か３ウ（あな）
+  var KUMI_3 = ['書く・消すくふう', '正しく使うくふう', 'あんぜんのくふう'];
+  function kumiCheck(sel) {
+    var a = sel[0], b = sel[1], c = sel[2], d = sel[3], out = [];
+    if (d !== c) out.push({ parts: [2, 3], msg: 'まとめは「' + KUMI_3[d] + '」の話なのに、３で書いたのは「' + KUMI_3[c] + '」です' });
+    if (c === 0 && b !== 1) out.push({ parts: [1, 2], msg: '３に「本には…書いてありました」とあるのに、２の調べ方に 本が 出てきません' });
+    if (c === 2 && b !== 2) out.push({ parts: [1, 2], msg: '３に「先生に聞くと」とあるのに、２の調べ方に 人に聞いたことが 出てきません' });
+    if (a === 0 && c !== 0) out.push({ parts: [0, 2], msg: 'えんぴつの形が きっかけなのに、３に えんぴつの話が ありません' });
+    if (a === 2 && c === 1) out.push({ parts: [0, 2], msg: 'あなや切りこみに 気づいたのが きっかけなのに、３に その話が ありません' });
+    return out;
+  }
+  function kumiText(sel, set) {
+    set = set || REPORT_FUDE;
+    var ls = [Z + Z + Z + set.title, nameLine('')];
+    REPORT_HEADS.forEach(function (h, i) { ls.push('', h); ls = ls.concat(sel[i] >= 0 ? exLines(set.parts[i][sel[i]], false) : [Z + '（まだ えらんでいない）']); });
+    return ls.join('\n');
+  }
+  // 問題: 半分くらいは合う組み合わせ（rnd は 0〜1 を返す関数。検査で決まった値を渡せる）
+  function kumiProblem(rnd) {
+    rnd = rnd || Math.random;
+    var all = []; for (var i = 0; i < 81; i++) all.push([Math.floor(i / 27), Math.floor(i / 9) % 3, Math.floor(i / 3) % 3, i % 3]);
+    var ok = all.filter(function (x) { return !kumiCheck(x).length; }), ng = all.filter(function (x) { return kumiCheck(x).length; });
+    var list = rnd() < 0.5 ? ok : ng;
+    return list[Math.floor(rnd() * list.length)].slice();
+  }
+  var REPORT_SETS = [REPORT_FUDE, REPORT_EXAMPLES];
+  function exLines(ex, holes) { // 本文に入れる行（段落は1マスあけ。小見出しはそのまま）
+    return ex.lines.map(function (l) { if (!holes) l = l.replace(/[【】]/g, ''); return isSub(l) ? l : Z + l; });
+  }
+  // 写す段階の見本（各見出しの1つ目。４ａは３ａに合う）
+  function reportCopyModel(name, set) {
+    set = set || REPORT_FUDE;
+    var ls = [Z + Z + Z + set.title, nameLine(name || '')];
+    REPORT_HEADS.forEach(function (h, i) { ls.push('', h); ls = ls.concat(exLines(set.parts[i][0], false)); });
+    ls.push(BOOK, Z);
+    return ls.join('\n');
+  }
+  // 見出し hi（0〜3）の下の本文を lines に入れかえる。見出しの行と直前の空き行はそのまま（headSig は変わらない）。見出しがなければ null
+  function setSection(text, hi, lines) {
+    var ls = String(text || '').split('\n'), h = ls.indexOf(REPORT_HEADS[hi]);
+    if (h < 0) return null;
+    var j = h + 1;
+    while (j < ls.length && !isHead(ls[j]) && ls[j] !== BOOK) j++;
+    var end = j; if (j < ls.length && isHead(ls[j]) && ls[j - 1] === '' && j - 1 > h) end = j - 1; // 次の見出しの前の空き行は残す
+    return ls.slice(0, h + 1).concat(lines, ls.slice(end)).join('\n');
+  }
   // 見出しの行は書きかえられない（利用者の指定）。見出しの行の並びと、直前の空き行を1つの文字列にして、変わったかどうかを比べる
   // （もとの作品に空き行がなくても、その作品の形のまま守る）
   function headSig(text) {
@@ -1453,7 +1572,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
     if (!bare(n) || /。/.test(n)) out.push({ line: 1, msg: '2行目に 名前を 書こう', tag: '名前' });
     for (var i = 2; i < lines.length; i++) {
       if (rep && bare(lines[i]) === bare(BOOK)) book = true;
-      if (rep && (book || isHead(lines[i]))) continue;
+      if (rep && (book || isHead(lines[i]) || isSub(lines[i]))) continue;
       if (bare(lines[i]) && lines[i][0] !== Z) out.push({ line: i, msg: paraNo(text, i) + '番目の 段落：はじめを 1マス あけよう', tag: '1マス あける' });
     }
     if (rep) lines.forEach(function (l, i) { // 見出しの下に まだ何も書いていない
@@ -1544,7 +1663,7 @@ var KANZI_STROKES = {"一":["M11,54.3c3.2,0.6,6.3,0.8,9.7,0.5c20.6-1.5,50.4-5.1,
   function newId() { return 'w' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
 
   var Genko = { Z: Z, ROWS: ROWS, COLS: COLS, HANG: HANG, OPEN: OPEN, SMALL: SMALL, MAX_CHARS: MAX_CHARS,
-    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
+    toZen: toZen, layout: layout, REPORT_HEADS: REPORT_HEADS, BOOK: BOOK, isReport: isReport, reportTemplate: reportTemplate, REPORT_SAMPLE: REPORT_SAMPLE, isHead: isHead, headSig: headSig, isSub: isSub, REPORT_EXAMPLES: REPORT_EXAMPLES, kumiCheck: kumiCheck, kumiText: kumiText, kumiProblem: kumiProblem, REPORT_SETS: REPORT_SETS, REPORT_FUDE: REPORT_FUDE, exLines: exLines, reportCopyModel: reportCopyModel, setSection: setSection, pages: pages, nameLine: nameLine, template: template, blank: blank, SAMPLE: SAMPLE,
     check: check, paraNo: paraNo, moveParagraph: moveParagraph, remapComments: remapComments, normFixes: normFixes, fixLocate: fixLocate, applyFix: applyFix, remapFixes: remapFixes, composeMap: composeMap, title: title, count: count, paragraphs: paragraphs, normWork: normWork, newId: newId };
   if (typeof module !== 'undefined' && module.exports) module.exports = Genko; else root.Genko = Genko;
 })(typeof globalThis !== "undefined" ? globalThis : this);
@@ -5869,7 +5988,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
   //   児童: オフのボタンは押せず、うすく見える（disabled。「選んだ漢字がない」時と同じ見た目）
   //   先生のおためし: ボタンの右上にチップを重ねる（ボタンの外にも中の文字にも場所を取らないので、並びは児童画面と同じ）
   var GATE_LABEL = { 'm.browse': 'ぜんぶ見る', 'm.read': '読む', 'm.write': '書く', 'm.fk': 'カード（漢字→読み）', 'm.fy': 'カード（読み→漢字）',
-    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': '一文の分解', 'o.setsumei': '説明文の分解', 'o.sakubun': '説明文を書く', 'o.report': 'レポートを書く', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
+    'm.test': 'テストの範囲を見る', 'm.seen': '選んだ漢字を見る', 'm.other': 'その他', 'o.bunkai': '一文の分解', 'o.setsumei': '説明文の分解', 'o.sakubun': '説明文を書く', 'o.report': 'レポートを書く', 'o.kumi': 'レポートを組み立てる', 's.test': '出す字: テストの範囲', 's.due': '出す字: おすすめ',
     's.sel': '出す字: 選んだ漢字', 's.rnd': '出す字: ランダム', 's.miss': '出す字: まちがいの多い漢字',
     't.p50': 'れんしゅうプリント50問', 't.p10': 'れんしゅうプリント10問', 't.hint': 'れんしゅうプリントのヒント', 't.paper': '紙で練習', 't.juku': '二文字モード' };
   var GATE_POLL_MS = 30000;
@@ -6840,7 +6959,8 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     '<li>人から聞いたことは「 」に入れたり、「〜そうです」と書いたりする。〈使った本〉に、書いた人・本の名前・出した会社・年・ページを書く。</li></ul></details>';
   // 説明文（縦書き）と レポート（横書き・§30）で ちがう所
   function gkKind(R) {
-    return R ? { title: K('レポートを [書|か]く'), rules: GK_RULES_YOKO, sample: Genko.REPORT_SAMPLE, sampleName: '図書館の本のならべ方のくふう', tname: 'レポートを書く' }
+    // レポートは お手本を まるごと見せない。見出しごとのヒント（段階的に開く）が お手本の かわり（§30）
+    return R ? { title: K('レポートを [書|か]く'), rules: GK_RULES_YOKO, sample: '', sampleName: '', tname: 'レポートを書く' }
       : { title: K('[説|せつ][明|めい][文|ぶん]を [書|か]く'), rules: GK_RULES, sample: Genko.SAMPLE, sampleName: 'すがたをかえる葉っぱ', tname: '説明文を書く' };
   }
   function dateShort(t) { if (!t) return ''; var d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2); }
@@ -6855,12 +6975,12 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     var alive = true; cleanup.push(function () { alive = false; });
     Platform.sakuMine(S.info.email).then(function (r) {
       if (!alive) return;
-      S.saku = r; var works = r.works.filter(function (w) { return Genko.isReport(w) === R; });
+      S.saku = r; var works = r.works.filter(function (w) { return Genko.isReport(w) === R; }); KD = gkKind(R);
       $('.gk-home').innerHTML =
-        (R ? '<div class="gk-new"><button class="big primary" id="gk-rep">' + K('レポートを [書|か]きはじめる') + '<span class="meta">' + K('[見|み][出|だ]し（１．[調|しら]べたきっかけや[理|り][由|ゆう] など）が [入|はい]っている') + '</span></button></div>'
+        (R ? '<div class="gk-new"><button class="big primary" id="gk-rep">' + K('[酒|さけ]づくりの レポートを [書|か]く') + '<span class="meta">' + K('こまったら、[見|み][出|だ]しごとの ヒントを [見|み]られるよ') + '</span></button></div>'
           : '<div class="gk-new"><button class="big primary" id="gk-tpl">' + K('テンプレートで [書|か]く') + '<span class="meta">' + K('[題|だい][名|めい]・はじめ・おわりが [入|はい]っている') + '</span></button>' +
         '<button class="big" id="gk-free">' + K('[白|はく][紙|し]に [書|か]く') + '<span class="meta">' + K('[自|じ][分|ぶん]で ぜんぶ [書|か]く') + '</span></button></div>') +
-        '<div class="gk-new"><button class="big" id="gk-sample">' + K('お[手|て][本|ほん]を [見|み]る') + '<span class="meta">' + KD.sampleName + '</span></button>' +
+        '<div class="gk-new">' + (R ? '' : '<button class="big" id="gk-sample">' + K('お[手|て][本|ほん]を [見|み]る') + '<span class="meta">' + KD.sampleName + '</span></button>') +
         (r.share ? '<button class="big" id="gk-friends">' + K('[友|とも]だちの[文|ぶん]を [読|よ]む') + '<span class="meta">' + K('[先|せん][生|せい]が ひらいているよ') + '</span></button>' : '') + '</div>' +
         (r.offline ? '<p class="hint">' + K('つうしんが できないので、この たんまつに [書|か]いたものだけ [出|だ]しているよ') + '</p>' : '') +
         (works.length ? '<h2>' + K(R ? '[書|か]いたレポート' : '[書|か]いた[文|ぶん]') + '</h2><div class="gk-works">' + works.map(function (w) {
@@ -6886,7 +7006,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     var order = false, selLine = null; w.remap = {}; w.fixDone = []; // fixDone＝児童が「なおす」「そのまま」で済ませた修正案（次の保存で先生の列から外す） // 段落の入れかえ: order＝入れかえ中、selLine＝えらんだ段落（改行で数えた番号）、w.remap＝まだ送っていないコメントの付け先の移し方
     app.innerHTML = '<div class="gk-app"><aside class="gk-side">' +
       '<button class="back" id="back">もどる</button>' +
-      '<button class="gk-btn" id="gk-sample" aria-pressed="false">' + K('📄 お[手|て][本|ほん]を [見|み]る') + '</button>' +
+      '<button class="gk-btn" id="gk-sample" aria-pressed="false"' + (R ? ' hidden' : '') + '>' + K('📄 お[手|て][本|ほん]を [見|み]る') + '</button>' +
       '<button class="gk-btn primary" id="gk-check">' + K('[見|み]なおす') + '</button>' +
       '<button class="gk-btn" id="gk-order" aria-pressed="false">' + K('↔ [段|だん][落|らく]の じゅんばんを かえる') + '</button>' +
       '<div class="gk-orderbox" id="gk-orderbox" hidden><p class="gk-hint" id="gk-orderhint">' + K('うごかしたい [段|だん][落|らく]を おしてね') + '</p>' +
@@ -6894,6 +7014,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
         '<button class="gk-btn" id="gk-orderdone">' + K('できた') + '</button></div>' +
       '<div class="gk-result" id="gk-result" aria-live="polite"></div>' +
       '<label class="gk-show"><input type="checkbox" id="gk-show"' + (w.show ? ' checked' : '') + '> ' + K('この[文|ぶん]を [友|とも]だちに [見|み]せる') + '</label>' +
+      (R ? '<div id="gk-ex" class="gk-ex"></div>' : '') +
       '<div id="gk-fixes"></div><div id="gk-comments"></div>' +
       '<span class="gk-saved" id="gk-saved" aria-live="polite">' + (fresh ? '' : '✓ ほぞんしました') + '</span>' + KD.rules +
       '<details class="gk-del"><summary>' + K('この[文|ぶん]を [消|け]す') + '</summary><button class="gk-btn danger" id="gk-del">' + K('[消|け]す（もとに もどせません）') + '</button></details>' +
@@ -6916,7 +7037,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
         return '<li tabindex="-1" id="gk-c-' + k + '"' + (c.read ? ' class="read"' : '') + '><span class="meta">' + (Number(k) + 1) + K('[行|ぎょう][目|め]の [段|だん][落|らく]') + '</span>' + esc(c.t) +
           (c.read ? '' : ' <button class="gk-read" data-k="' + k + '">' + K('よんだ') + '</button>') + '</li>';
       }).join('') + '</ul>' : '';
-      app.querySelectorAll('.gk-read').forEach(function (b) { b.addEventListener('click', function () {
+      app.querySelectorAll('.gk-read[data-k]').forEach(function (b) { b.addEventListener('click', function () {
         var k = b.dataset.k; w.comments[k].read = true; Platform.sakuRead(w.id, Number(k)); paintComments(); draw(); }); });
     }
     function paintFixes() {
@@ -6930,6 +7051,64 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
         if (b.dataset.fix) { var t = Genko.applyFix(ta.value, f); if (t != null && (!R || Genko.headSig(t) === sig)) ta.value = t; }
         w.fixes = w.fixes.filter(function (x) { return x.id !== id; }); w.fixDone.push(id);
         changed(); paintFixes(); draw();
+      }); });
+    }
+    // レポートのヒント（§30）: 酒づくりの作文例を、見出しごとに 児童が自分で1段ずつ開く（はじめは かくしてある）
+    //   ヒント1＝何を書くか（ア〜ウの見出し）→ ヒント2＝文を読む → ヒント3＝文を本文に入れる（【　】は自分のことばに かえる穴）
+    var hintLv = {}, picked = {}, inlineSample = false;
+    // 見本（酒づくりの作文例のア）を別のまどで開く。見ながら打ちこめるように（利用者の指定）。
+    // まどが開けない時（ポップアップを止める設定など）は、左に見本を出す
+    function sampleHtml() {
+      var ls = Genko.reportCopyModel('', Genko.REPORT_EXAMPLES).split('\n'), body = '';
+      ls.forEach(function (l, i) {
+        if (i === 1 || !l.replace(/[　 ]/g, '')) return;
+        if (i === 0) body += '<h1>' + esc(l.replace(/^[　]+/, '')) + '</h1>';
+        else if (Genko.isHead(l) || l === Genko.BOOK) body += '<h2>' + esc(l) + '</h2>';
+        else if (Genko.isSub(l)) body += '<h3>' + esc(l) + '</h3>';
+        else body += '<p>' + esc(l.replace(/^[　]+/, '')) + '</p>'; // 1マスあけは text-indent で出す
+      });
+      return body;
+    }
+    function openSample() {
+      var wnd = null;
+      try { wnd = window.open('', 'kanzi-report-sample', 'width=560,height=760'); } catch (e) { wnd = null; }
+      try {
+        if (!wnd) throw new Error('blocked');
+        wnd.document.open();
+        wnd.document.write('<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>見本：西宮の酒づくりのくふう</title>' +
+          '<style>body{margin:0;padding:16px 20px;background:#fff;color:#222;font-family:"Noto Sans JP","Hiragino Sans",sans-serif;font-size:22px;line-height:1.9}' +
+          'h1{font-size:26px;margin:0 0 8px}h2{font-size:22px;margin:18px 0 4px;color:#0F5EA8}h3{font-size:21px;margin:8px 0 0}p{margin:0;text-indent:1em}.top{font-size:16px;color:#555;margin:0 0 10px}</style></head><body>' +
+          '<p class="top">見本（このまどを 横にならべて、見ながら 書こう）</p>' + sampleHtml() + '</body></html>');
+        wnd.document.close(); wnd.focus();
+        $('#gk-exmsg').innerHTML = K('[見|み][本|ほん]を べつの まどで ひらいたよ');
+      } catch (e) {
+        inlineSample = true; paintEx();
+        $('#gk-exmsg').innerHTML = K('べつの まどが ひらけないので、ここに [見|み][本|ほん]を [出|だ]したよ');
+      }
+    }
+    var HINT_NEXT = ['💡 ヒント1：[何|なに]を [書|か]くか', '💡 ヒント2：[文|ぶん]を [読|よ]む', '💡 ヒント3：[文|ぶん]を [入|い]れる'];
+    function paintEx() {
+      var box = $('#gk-ex'); if (!box) return;
+      var E = Genko.REPORT_EXAMPLES;
+      box.innerHTML = '<button class="gk-btn" id="gk-sampwin">' + K('📄 [見|み][本|ほん]を べつの まどで ひらく') + '</button>' +
+        (inlineSample ? '<div class="gk-exmodel gk-samp">' + sampleHtml() + '</div>' : '') +
+        '<h3>' + K('こまったら ヒントを [見|み]よう') + '</h3>' + E.parts.map(function (list, i) {
+        var lv = hintLv[i] || 0, body = '';
+        if (lv >= 1) body = '<div class="gk-exbtns">' + list.map(function (ex, j) {
+          var lab = '<b>' + String.fromCharCode(0x30A2 + j * 2) + '　' + esc(ex.label) + '</b>';
+          var txt = lv >= 2 ? '<span class="gk-extxt">' + ex.lines.map(function (l) { return esc(lv >= 3 ? l : l.replace(/[【】]/g, '')); }).join('<br>') + '</span>' : '';
+          return lv >= 3 ? '<button class="gk-read gk-exopt" data-ex="' + i + ':' + j + '" aria-pressed="' + (picked[i] === ex.id) + '">' + lab + txt + '</button>' : '<div class="gk-exopt">' + lab + txt + '</div>';
+        }).join('') + '</div>' + (lv >= 3 ? '<p class="gk-hint">' + K('おすと [文|ぶん]が [入|はい]るよ。【　】は [自|じ][分|ぶん]の ことばに かえよう') + '</p>' : '');
+        return '<div class="gk-exg"><b>' + esc(Genko.REPORT_HEADS[i]) + '</b>' + body +
+          (lv < 3 ? '<button class="gk-hintbtn" data-hint="' + i + '">' + K(HINT_NEXT[lv]) + '</button>' : '') + '</div>';
+      }).join('') + '<p class="gk-hint" id="gk-exmsg" aria-live="polite"></p>';
+      on('#gk-sampwin', openSample);
+      box.querySelectorAll('[data-hint]').forEach(function (b) { b.addEventListener('click', function () { var i = +b.dataset.hint; hintLv[i] = (hintLv[i] || 0) + 1; paintEx(); }); });
+      box.querySelectorAll('[data-ex]').forEach(function (b) { b.addEventListener('click', function () {
+        var ij = b.dataset.ex.split(':'), i = +ij[0], ex = E.parts[i][+ij[1]];
+        var t = Genko.setSection(ta.value, i, Genko.exLines(ex, true));
+        if (t == null || Genko.headSig(t) !== sig) { $('#gk-exmsg').innerHTML = K('[見|み][出|だ]しが [見|み]つからないので [入|い]れられないよ'); return; }
+        ta.value = t; picked[i] = ex.id; flags = null; changed(); paintEx(); paintFixes(); draw();
       }); });
     }
     function status(t) { var e = $('#gk-saved'); if (e) e.textContent = t; }
@@ -7036,7 +7215,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     on('#gk-del', function () { clearTimeout(timer); dirty = false; Platform.sakuDelete(w.id).then(home, home); });
     function resize() { gkSize(); draw(); }
     window.addEventListener('resize', resize); cleanup.push(function () { window.removeEventListener('resize', resize); });
-    paintComments(); paintFixes(); draw();
+    paintComments(); paintFixes(); paintEx(); draw();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if (sheet.isConnected) draw(); });
     if (fresh) { Platform.sakuDraft(w); send(); }
   }
@@ -7110,6 +7289,10 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     function side() {
       var kids = data.students || [];
       $('#gk-tside').innerHTML =
+        (R ? '<div class="gk-stagebox">' +
+          '<details class="gk-exall"><summary>ヒントの作文例（' + esc(Genko.REPORT_EXAMPLES.topic) + '）を見る</summary>' + Genko.REPORT_EXAMPLES.parts.map(function (list, i) {
+            return '<h3>' + esc(Genko.REPORT_HEADS[i]) + '</h3>' + list.map(function (ex, j) { return '<p><b>' + String.fromCharCode(0x30A2 + j * 2) + '　' + esc(ex.label) + '</b><br>' + esc(ex.lines.join('\n')).replace(/\n/g, '<br>') + '</p>'; }).join('');
+          }).join('') + '<p class="hint">児童は見出しごとに ヒント1（何を書くか）→ ヒント2（文を読む）→ ヒント3（文を入れる。【　】は自分のことばに変える穴）を自分で開きます。事実は地域教材にあるものだけです。</p></details></div>' : '') +
         '<p class="gk-share"><b>読み合う</b> <button class="gk-btn" id="gk-share" aria-pressed="' + data.share + '">' + (data.share ? '✓ ひらいている' : '✕ とじている') + '</button></p>' +
         '<p class="hint">ひらいている間、この学級の児童に「友だちの文」が出ます（各児童が「見せる」にした1作品の本文だけ。コメント・字数は見せません）。児童の画面には、メニューから入り直した時に とどきます。</p>' +
         '<p class="hint">' + kids.filter(function (k) { return k.works.length && !k.trial; }).length + '人 / ' + kids.filter(function (k) { return !k.trial; }).length + '人が書いています</p>' +
@@ -7221,6 +7404,78 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     load();
   }
 
+  // ================= レポートを組み立てる（その他画面から入る。§30）====================
+  // 練習「ふでばこの道具」の作文例（見出しごとに ア〜ウ）を組み合わせた レポートを見て、①「合う／合わない」を判定し、
+  // ②合わない所を えらびなおして 合うレポートに組み立てる。記録は残さない（練習）
+  function kumitate() {
+    clearScreen();
+    document.body.classList.add('gk-screen'); cleanup.push(function () { document.body.classList.remove('gk-screen'); });
+    var E = Genko.REPORT_FUDE, sel = [-1, -1, -1, -1], phase = 'start', flagged = [], done = 0;
+    app.innerHTML = '<div class="gk-app"><aside class="gk-side"><button class="back" id="back">もどる</button><h2>' + K('レポートを [組|く]み[立|た]てる') + '</h2>' +
+      '<div id="km-q" class="gk-ex"></div><div class="gk-result" id="km-res" aria-live="polite"></div><div id="km-cards" class="gk-ex"></div></aside>' +
+      '<main class="gk-main"><div class="gk-scroll"><div class="gk-sheet" id="gk-sheet"></div></div></main></div>';
+    on('#back', otherMenu);
+    function draw() {
+      var t = Genko.kumiText(sel, E), ls = t.split('\n'), fl = [];
+      flagged.forEach(function (i) { var h = ls.indexOf(Genko.REPORT_HEADS[i]); if (h >= 0) fl.push({ line: h, tag: '中みを 書く', msg: '' }); });
+      gkSize(); gkRender($('#gk-sheet'), t, { yoko: true, flags: fl });
+      if (fl.length) { var tg = $('.gk-flagtag'); if (tg) tg.textContent = K('▲ ここが [合|あ]わない'); }
+    }
+    function reasons(list) { return list.map(function (r) { return '<span class="ng">▲ ' + esc(r.msg) + '</span>'; }).join(''); }
+    function paint() {
+      if (phase === 'start') { // はじめ: 自分で えらんで組み立てる／組み合わせを見分ける もんだい
+        $('#km-res').innerHTML = ''; $('#km-cards').innerHTML = '';
+        $('#km-q').innerHTML = '<button class="gk-btn primary" id="km-self">' + K('[自|じ][分|ぶん]で えらんで [組|く]み[立|た]てる') + '</button><button class="gk-btn" id="km-quiz">' + K('[合|あ]っているか [見|み][分|わ]ける もんだい') + '</button>';
+        on('#km-self', function () { sel = [-1, -1, -1, -1]; flagged = []; phase = 'fix'; paintNext(); draw(); });
+        on('#km-quiz', function () { sel = Genko.kumiProblem(); flagged = []; phase = 'judge'; paint(); draw(); });
+        return;
+      }
+      var bad = Genko.kumiCheck(sel);
+      if (phase === 'judge') {
+        $('#km-q').innerHTML = '<p class="gk-hint">' + K('この レポートは、[文|ぶん]と[文|ぶん]が [合|あ]っているかな？') + '</p><div class="gk-two"><button class="gk-btn" id="km-ok">' + K('[合|あ]っている') + '</button><button class="gk-btn" id="km-ng">' + K('[合|あ]っていない') + '</button></div>';
+        $('#km-res').innerHTML = ''; $('#km-cards').innerHTML = '';
+        ['ok', 'ng'].forEach(function (k) { on('#km-' + k, function () {
+          var right = (k === 'ok') === !bad.length;
+          flagged = []; bad.forEach(function (r) { r.parts.forEach(function (i) { if (flagged.indexOf(i) < 0) flagged.push(i); }); });
+          $('#km-res').innerHTML = (right ? '<span class="ok">' + K('✓ せいかい！') + '</span>' : '<span class="ng">' + K('✕ ざんねん。') + '</span>') +
+            (bad.length ? reasons(bad) : '<span class="ok">' + K('きっかけ・[調|しら]べ[方|かた]・[分|わ]かったこと・まとめが つながっているね') + '</span>');
+          phase = bad.length ? 'fix' : 'next'; paintNext(); draw();
+        }); });
+        return;
+      }
+    }
+    function paintNext() {
+      var bad = Genko.kumiCheck(sel);
+      if (phase === 'next') {
+        $('#km-q').innerHTML = '<button class="gk-btn primary" id="km-next">' + K('[次|つぎ]の もんだい') + '</button><button class="gk-btn" id="km-self2">' + K('[自|じ][分|ぶん]で [組|く]み[立|た]てる') + '</button>';
+        on('#km-self2', function () { sel = [-1, -1, -1, -1]; flagged = []; phase = 'fix'; $('#km-res').innerHTML = ''; paintNext(); draw(); });
+        $('#km-cards').innerHTML = done ? '<p class="gk-hint">' + K('[組|く]み[立|た]てた [数|かず]: ') + done + '</p>' : '';
+        on('#km-next', function () { sel = Genko.kumiProblem(); phase = 'judge'; flagged = []; paint(); draw(); });
+        return;
+      }
+      // fix: 見出しごとに えらびなおす。合うようになったら できあがり
+      $('#km-q').innerHTML = '<p class="gk-hint">' + K(sel.indexOf(-1) >= 0 && !flagged.length ? '[見|み][出|だ]しごとに [文|ぶん]を えらんで、[合|あ]う レポートを [組|く]み[立|た]てよう' : '[合|あ]わない [所|ところ]を えらびなおして、[合|あ]う レポートに しよう') + '</p>';
+      $('#km-cards').innerHTML = E.parts.map(function (list, i) {
+        return '<div class="gk-exg"><b>' + esc(Genko.REPORT_HEADS[i]) + '</b><div class="gk-exbtns">' + list.map(function (ex, j) {
+          return '<button class="gk-read" data-km="' + i + ':' + j + '" aria-pressed="' + (sel[i] === j) + '">' + String.fromCharCode(0x30A2 + j * 2) + '　' + esc(ex.label) + '</button>';
+        }).join('') + '</div></div>';
+      }).join('') + '<button class="gk-btn primary" id="km-check">' + K('[合|あ]っているか たしかめる') + '</button>';
+      app.querySelectorAll('[data-km]').forEach(function (b) { b.addEventListener('click', function () {
+        var ij = b.dataset.km.split(':'); sel[+ij[0]] = +ij[1]; flagged = []; $('#km-res').innerHTML = ''; paintNext(); draw(); }); });
+      on('#km-check', function () {
+        if (sel.indexOf(-1) >= 0) { $('#km-res').innerHTML = '<span class="ng">' + K('▲ ぜんぶの [見|み][出|だ]しで [文|ぶん]を えらんでね') + '</span>'; return; }
+        var nb = Genko.kumiCheck(sel);
+        flagged = []; nb.forEach(function (r) { r.parts.forEach(function (i) { if (flagged.indexOf(i) < 0) flagged.push(i); }); });
+        if (!nb.length) { done++; phase = 'next'; $('#km-res').innerHTML = '<span class="ok">' + K('✓ できあがり！ [合|あ]う レポートに なったね') + '</span>'; paintNext(); }
+        else $('#km-res').innerHTML = reasons(nb);
+        draw();
+      });
+    }
+    window.addEventListener('resize', draw); cleanup.push(function () { window.removeEventListener('resize', draw); });
+    paint(); draw();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if ($('#gk-sheet')) draw(); });
+  }
+
   // その他画面: 今後の活動の入口を並べる chooser 型の画面
   function otherMenu() {
     clearScreen();
@@ -7229,7 +7484,8 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
     var acts = [{ id: 'bunkai', label: K('[一|いち][文|ぶん]の [分|ぶん][解|かい]'), sub: 'ぶんを 5つの やくわりに わける' },
       { id: 'setsumei', label: K('[説|せつ][明|めい][文|ぶん]の [分|ぶん][解|かい]'), sub: K('はじめ・[中|なか]・おわりに わける') },
       { id: 'sakubun', label: K('[説|せつ][明|めい][文|ぶん]を [書|か]く'), sub: K('げんこう[用|よう][紙|し]に [書|か]く') },
-      { id: 'report', label: K('レポートを [書|か]く'), sub: K('[横|よこ][書|が]きで [調|しら]べたことを [書|か]く') }];
+      { id: 'report', label: K('レポートを [書|か]く'), sub: K('[横|よこ][書|が]きで [調|しら]べたことを [書|か]く') },
+      { id: 'kumi', label: K('レポートを [組|く]み[立|た]てる'), sub: K('[文|ぶん]を えらんで、[合|あ]うか たしかめる') }];
     app.innerHTML =
       '<header class="bar"><button class="back" id="back">もどる</button><span class="prog">' + K('その[他|た]') + '</span><span></span></header>' +
       K('<main class="chooser"><h2>その[他|た]</h2>') + acts.map(function (a) {
@@ -7241,6 +7497,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
         if (b.dataset.id === 'setsumei') return startSession('setsumei', Sched.setsumeiPick(KANZI_SETSUMEI, S.p));
         if (b.dataset.id === 'sakubun') return sakubunHome(false);
         if (b.dataset.id === 'report') return sakubunHome(true);
+        if (b.dataset.id === 'kumi') return kumitate();
         if (b.dataset.id !== 'bunkai') return;
         b.disabled = true;
         // 内蔵の問題集 + 学級の自作問題（取れなければ内蔵だけ）。1回5問
@@ -8099,7 +8356,7 @@ var KANZI_TPRINT = {"一":[["","いち","年生になる。",""],["りんごを"
           '<p class="hint">児童は「その他 → 説明文を書く」で、原稿用紙に縦書きで書きます（1人いくつでも。友だちに見せるのは1人1つ）。作品を一覧して、段落ごとにコメントを付けられます。「読み合う」をひらくと、児童どうしで見せる作品を読めます。</p>' +
           '<p><button id="gk-open">作品を見る・コメントする</button></p>' +
           '</section><section class="tsets"><h2>レポートを書く</h2>' +
-          '<p class="hint">児童は「その他 → レポートを書く」で、横書きの原稿用紙に書きます。はじめから見出し（１．調べたきっかけや理由／２．調べ方／３．調べて分かったこと／４．まとめ）と〈使った本〉が入っています。コメント・修正案・読み合い・印刷は 説明文を書く と同じです（読み合いの オン／オフも共通）。</p>' +
+          '<p class="hint">児童は「その他 → レポートを書く」で、横書きの原稿用紙に書きます。題材は社会の「西宮の酒づくり」。はじめから見出しと〈使った本〉が入り、見出しごとのヒント（3段階）を児童が自分で開けます。練習は「その他 → レポートを組み立てる」（ふでばこの道具）。コメント・修正案・読み合い・印刷は 説明文を書く と同じです（読み合いの オン／オフも共通）。</p>' +
           '<p><button id="gk-open-rep">作品を見る・コメントする</button></p>' +
           '</section><section class="tsets"><h2>過年度データ</h2><div id="arch"><p class="hint">よみこみ中…</p></div></section>';
         app.querySelectorAll('details.tset').forEach(function (d) { d.addEventListener('toggle', function () { S.open[d.id] = d.open; }); });
